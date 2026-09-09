@@ -712,8 +712,8 @@ export default function App() {
             }}
           />
 
-          {/* Active Section & Sticky Controls Bar */}
-          <div id="menu-items-section" className="sticky top-28 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 py-3 px-3 sm:px-6 shadow-2xs">
+          {/* Active Section & Controls Bar (non-sticky) */}
+          <div id="menu-items-section" className="bg-white/95 backdrop-blur-md border-b border-slate-200 py-3 px-3 sm:px-6 shadow-2xs">
             <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
               
               {/* Active Category Display & Reset */}
