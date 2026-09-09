@@ -11,6 +11,8 @@ export const SevenCheeseLogo: React.FC<SevenCheeseLogoProps> = ({
   className = '',
   height = 36,
 }) => {
+  const logoSrc = '/Screenshot_2026-09-09_210354-removebg-preview.png';
+
   if (variant === 'icon') {
     return (
       <div
@@ -18,7 +20,7 @@ export const SevenCheeseLogo: React.FC<SevenCheeseLogoProps> = ({
         style={{ height: `${height}px`, width: `${height}px` }}
       >
         <img
-          src="/logo-icon.svg"
+          src={logoSrc}
           alt="7 Cheese Pizza"
           className="w-full h-full object-contain"
         />
@@ -28,14 +30,17 @@ export const SevenCheeseLogo: React.FC<SevenCheeseLogoProps> = ({
 
   return (
     <div
-      className={`inline-flex items-center shrink-0 ${className}`}
+      className={`inline-flex items-center gap-2 shrink-0 ${className}`}
       style={{ height: `${height}px` }}
     >
       <img
-        src="/logo.svg"
+        src={logoSrc}
         alt="7 Cheese Pizza"
-        className="h-full w-auto object-contain max-w-[220px] sm:max-w-[260px]"
+        className="h-full w-auto object-contain"
       />
+      <span className="text-white font-black tracking-tight leading-none" style={{ fontSize: `${height * 0.42}px` }}>
+        7 CHEESE PIZZA
+      </span>
     </div>
   );
 };

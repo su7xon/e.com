@@ -68,11 +68,11 @@ export function uploadMenuImage(
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     if (!ALLOWED_TYPES.includes(file.type)) {
-      reject(new Error('Sirf JPG / PNG / WebP / GIF image allowed hai.'));
+      reject(new Error('Only JPG / PNG / WebP / GIF images are allowed.'));
       return;
     }
     if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
-      reject(new Error(`Image 5MB se chhoti honi chahiye. (milaa ${(file.size / 1024 / 1024).toFixed(1)}MB)`));
+      reject(new Error(`Image must be smaller than 5MB. (got ${(file.size / 1024 / 1024).toFixed(1)}MB)`));
       return;
     }
 
@@ -93,11 +93,11 @@ export function uploadMenuImage(
       reject(new Error(msg));
     };
 
-    // 60s me koi progress/error nahi → atka hua samjho, saaf wajah batao
+    // No progress/error within 60s → treat as stuck, explain the likely cause
     const timeoutId = setTimeout(() => {
       fail(
-        'Upload 60s se 0% pe atka hai. Iska matlab Storage bucket bana hi nahi ya net blocked hai. ' +
-          'Firebase console → Build → Storage → Get Started dabao, bucket banao, phir retry karo.'
+        'Upload stuck at 0% for 60s. This usually means the Storage bucket does not exist yet or the network is blocked. ' +
+          'In Firebase console go to Build → Storage → Get Started, create the bucket, then retry.'
       );
     }, 60000);
 
@@ -112,13 +112,13 @@ export function uploadMenuImage(
         settled = true;
         clearTimeout(timeoutId);
         if (err.code === 'storage/unauthorized') {
-          reject(new Error('Storage permission denied. Console → Storage → Security me allow read + allow write publish karo.'));
+          reject(new Error('Storage permission denied. In Console → Storage → Security, allow read + write to publish.'));
         } else if (err.code === 'storage/canceled') {
-          reject(new Error('Upload cancel ho gaya.'));
+          reject(new Error('Upload was cancelled.'));
         } else if (err.code === 'storage/bucket-not-found' || err.code === 'storage/project-not-found') {
-          reject(new Error('Storage bucket mila hi nahi. Console → Build → Storage → Get Started se bucket banao, phir retry karo.'));
+          reject(new Error('Storage bucket not found. In Console go to Build → Storage → Get Started to create the bucket, then retry.'));
         } else if (err.code === 'storage/retry-limit-exceeded' || err.code === 'storage/unknown') {
-          reject(new Error('Network/bucket issue. Pehle Storage bucket bana hai ye confirm karo (Get Started), phir chhoti image se retry karo.'));
+          reject(new Error('Network/bucket issue. First confirm the Storage bucket exists (Get Started), then retry with a smaller image.'));
         } else {
           reject(new Error(`Upload fail: ${err.code || err.message}`));
         }
@@ -131,7 +131,7 @@ export function uploadMenuImage(
           const url = await getDownloadURL(task.snapshot.ref);
           resolve(url);
         } catch (e) {
-          reject(e instanceof Error ? e : new Error('Download URL nahi mila.'));
+          reject(e instanceof Error ? e : new Error('Download URL not received.'));
         }
       }
     );
@@ -139,8 +139,8 @@ export function uploadMenuImage(
 }
 
 /**
- * Pehle se optimized Blob (200-300KB) ko Storage me daalo.
- * Bucket bana hona chahiye (Console → Build → Storage → Get Started).
+ * Upload an already-optimized Blob (200-300KB) to Storage.
+ * The bucket must exist (Console → Build → Storage → Get Started).
  */
 export function uploadImageBlob(
   blob: Blob,
@@ -164,7 +164,7 @@ export function uploadImageBlob(
       }
       reject(
         new Error(
-          'Upload 60s se atka hai. Console → Build → Storage → Get Started se bucket banao, phir retry karo.'
+          'Upload stuck for 60s. In Console go to Build → Storage → Get Started to create the bucket, then retry.'
         )
       );
     }, 60000);
@@ -179,13 +179,13 @@ export function uploadImageBlob(
         settled = true;
         clearTimeout(timeoutId);
         if (err.code === 'storage/unauthorized') {
-          reject(new Error('Storage permission denied. Console → Storage → Security me allow read + allow write publish karo.'));
+          reject(new Error('Storage permission denied. In Console → Storage → Security, allow read + write to publish.'));
         } else if (err.code === 'storage/canceled') {
-          reject(new Error('Upload cancel ho gaya.'));
+          reject(new Error('Upload was cancelled.'));
         } else if (err.code === 'storage/bucket-not-found' || err.code === 'storage/project-not-found') {
-          reject(new Error('Storage bucket mila hi nahi. Console → Build → Storage → Get Started se bucket banao.'));
+          reject(new Error('Storage bucket not found. In Console go to Build → Storage → Get Started to create the bucket.'));
         } else if (err.code === 'storage/retry-limit-exceeded' || err.code === 'storage/unknown') {
-          reject(new Error('Network/bucket issue. Storage bucket bana hai ye confirm karo, phir retry karo.'));
+          reject(new Error('Network/bucket issue. Confirm the Storage bucket exists, then retry.'));
         } else {
           reject(new Error(`Upload fail: ${err.code || err.message}`));
         }
@@ -197,14 +197,14 @@ export function uploadImageBlob(
         try {
           resolve(await getDownloadURL(task.snapshot.ref));
         } catch (e) {
-          reject(e instanceof Error ? e : new Error('Download URL nahi mila.'));
+          reject(e instanceof Error ? e : new Error('Download URL not received.'));
         }
       }
     );
   });
 }
 
-// ---------- Firestore: menuItems collection (sab devices pe same menu) ----------
+// ---------- Firestore: menuItems collection (same menu on all devices) ----------
 
 const MENU_COLLECTION = 'menuItems';
 

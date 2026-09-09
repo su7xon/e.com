@@ -31,7 +31,9 @@ import { DealsModal } from './components/DealsModal';
 import { BottomNav } from './components/BottomNav';
 import { BillingPage } from './components/BillingPage';
 import { AdminLayout } from './components/admin/AdminLayout';
+import { AdminLogin } from './components/admin/AdminLogin';
 import { AdminOrder, SEED_ADMIN_ORDERS } from './components/admin/adminData';
+import { Outlet, getOutletById, resolveOutletForOrder } from './components/admin/outlets';
 import {
   saveMenuItemToFirestore,
   deleteMenuItemFromFirestore,
@@ -61,6 +63,21 @@ export default function App() {
   const [orderType, setOrderType] = useState<OrderType>('DELIVERY');
   const [activeTab, setActiveTab] = useState<'menu' | 'reorder' | 'bigbig' | 'combos' | 'rewards'>('menu');
   const [currentView, setCurrentView] = useState<'home' | 'billing' | 'admin'>('home');
+
+  // Logged-in outlet (admin POS). Kept in sessionStorage so login survives refresh.
+  const [adminOutlet, setAdminOutlet] = useState<Outlet | null>(() => {
+    const saved = sessionStorage.getItem('seven_cheese_admin_outlet');
+    return saved ? getOutletById(saved) || null : null;
+  });
+
+  const handleAdminLogin = (outlet: Outlet) => {
+    sessionStorage.setItem('seven_cheese_admin_outlet', outlet.id);
+    setAdminOutlet(outlet);
+  };
+  const handleAdminLogout = () => {
+    sessionStorage.removeItem('seven_cheese_admin_outlet');
+    setAdminOutlet(null);
+  };
   
   // Live Menu Items State (Syncs with Admin)
   const [menuItems, setMenuItems] = useState<MenuItem[]>(() => {
@@ -73,12 +90,12 @@ export default function App() {
     }
   });
 
-  // Quota-safe save: device photos bade ho sakte hain, browser full ho to app crash na ho
+  // Quota-safe save: device photos can be large, so never let a full browser crash the app
   const safeSet = (key: string, value: string) => {
     try {
       localStorage.setItem(key, value);
     } catch {
-      // Quota full — memory me chalao, reload pe default wapas. Photo chhoti karke dobara try karo.
+      // Quota full — run in memory, fall back to defaults on reload.
     }
   };
 
@@ -86,7 +103,7 @@ export default function App() {
     safeSet('seven_cheese_menu_items', JSON.stringify(menuItems));
   }, [menuItems]);
 
-  // Boot: Firestore menu lao (sab devices pe same). Fail ho to local menu rakho.
+  // Boot: load Firestore menu (same on all devices). Fall back to local menu on failure.
   useEffect(() => {
     let cancelled = false;
     fetchMenuItemsFromFirestore()
@@ -370,10 +387,14 @@ export default function App() {
       riderPhone: '+91 98912 34567',
     };
 
+    // Assign nearest outlet (from customer GPS, else default Outlet 1)
+    const { outlet: orderOutlet } = resolveOutletForOrder(currentAddress.lat, currentAddress.lng);
+
     // Push into Admin live orders
     const newAdminOrder: AdminOrder = {
       id: `ord-${Date.now()}`,
       orderNumber: `#7C-${Math.floor(1000 + Math.random() * 9000)}`,
+      outletId: orderOutlet.id,
       customerName: currentAddress.label === 'Train' ? 'Train Passenger' : 'Customer (App Store)',
       customerPhone: '+91 98765 43210',
       orderType: orderType === 'DINE_IN' ? 'DINE_IN' : 'DELIVERY',
@@ -551,11 +572,24 @@ export default function App() {
     );
   }
 
+  // If we're on the Admin POS page, render login gate first, then AdminLayout
+  if (currentView === 'admin' && !adminOutlet) {
+    return (
+      <AdminLogin
+        onLogin={handleAdminLogin}
+        onBackToStore={() => setCurrentView('home')}
+      />
+    );
+  }
+
   // If we're on the Admin POS page, render AdminLayout
-  if (currentView === 'admin') {
+  if (currentView === 'admin' && adminOutlet) {
+    // Show only this outlet's orders (legacy orders without an outlet stay visible to all)
+    const outletOrders = adminOrders.filter((o) => !o.outletId || o.outletId === adminOutlet.id);
     return (
       <AdminLayout
-        orders={adminOrders}
+        outlet={adminOutlet}
+        orders={outletOrders}
         menuItems={menuItems}
         coupons={coupons}
         onUpdateOrderStatus={(id, status) => {
@@ -580,6 +614,7 @@ export default function App() {
           setCoupons((prev) => prev.filter((c) => c.code !== code));
         }}
         onBackToStore={() => setCurrentView('home')}
+        onLogout={handleAdminLogout}
       />
     );
   }

@@ -50,8 +50,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-[#121214] text-white shadow-lg border-b border-white/10">
-      {/* Top Utility Ribbon */}
-      <div className="bg-[#09090b] px-3 py-1.5 text-xs border-b border-white/5">
+      {/* Top Utility Ribbon — hidden on mobile (saves space), same on sm+ */}
+      <div className="hidden sm:block bg-[#09090b] px-3 py-1.5 text-xs border-b border-white/5">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1 text-amber-400 font-medium">

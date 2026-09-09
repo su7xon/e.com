@@ -4,18 +4,18 @@ const MAX_SIDE = 1000;
 const JPEG_QUALITY = 0.75;
 
 /**
- * Device photo → browser me resize (max 1000px, JPEG) → data URL.
- * Koi server / Firebase / net nahi chahiye. Turant save hota hai.
- * Output ~100-200KB, localStorage + Firestore dono me safe size.
+ * Device photo → resized in browser (max 1000px, JPEG) → data URL.
+ * No server / Firebase / network needed. Saves instantly.
+ * Output ~100-200KB, safe size for both localStorage + Firestore.
  */
 export function processLocalImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     if (!ALLOWED_TYPES.includes(file.type)) {
-      reject(new Error('Sirf JPG / PNG / WebP / GIF image allowed hai.'));
+      reject(new Error('Only JPG / PNG / WebP / GIF images are allowed.'));
       return;
     }
     if (file.size > MAX_INPUT_MB * 1024 * 1024) {
-      reject(new Error(`Photo 10MB se chhoti honi chahiye. (milaa ${(file.size / 1024 / 1024).toFixed(1)}MB)`));
+      reject(new Error(`Photo must be smaller than 10MB. (got ${(file.size / 1024 / 1024).toFixed(1)}MB)`));
       return;
     }
 
@@ -32,30 +32,30 @@ export function processLocalImage(file: File): Promise<string> {
         canvas.width = w;
         canvas.height = h;
         const ctx = canvas.getContext('2d');
-        if (!ctx) throw new Error('Browser me photo process nahi ho paya.');
+        if (!ctx) throw new Error('Could not process the photo in the browser.');
         ctx.drawImage(img, 0, 0, w, h);
         URL.revokeObjectURL(objUrl);
 
-        // GIF ko chhod ke sab JPEG me (size chhota). GIF/PNG transparency chahiye to original type rakho.
+        // Everything except GIF goes to JPEG (smaller size). Keep original type if GIF/PNG transparency is needed.
         const outType = file.type === 'image/gif' ? 'image/gif' : 'image/jpeg';
         const dataUrl = canvas.toDataURL(outType, JPEG_QUALITY);
         resolve(dataUrl);
       } catch (e) {
         URL.revokeObjectURL(objUrl);
-        reject(e instanceof Error ? e : new Error('Photo process fail ho gaya.'));
+        reject(e instanceof Error ? e : new Error('Photo processing failed.'));
       }
     };
 
     img.onerror = () => {
       URL.revokeObjectURL(objUrl);
-      reject(new Error('Ye file photo nahi lag rahi. Dusri image try karo.'));
+      reject(new Error('This file does not look like a photo. Please try a different image.'));
     };
 
     img.src = objUrl;
   });
 }
 
-/** Data URL hai ya remote link — badge ke liye. */
+/** Whether it is a data URL or a remote link — used for the badge. */
 export function isLocalPhoto(url: string | undefined): boolean {
   return !!url && url.startsWith('data:image');
 }

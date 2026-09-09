@@ -29,6 +29,7 @@ export interface AdminOrder {
   createdAt: string; // e.g. "10:14 PM"
   timeAgo: string;
   cookingNotes?: string;
+  outletId?: string; // which outlet owns the order (outlet-1 / outlet-2). Legacy orders without it are visible to all outlets.
 }
 
 export const SEED_ADMIN_ORDERS: AdminOrder[] = [];

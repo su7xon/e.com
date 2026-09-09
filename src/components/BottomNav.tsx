@@ -60,7 +60,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       )}
 
       {/* Bottom Nav Bar */}
-      <nav className="bg-[#121214] text-white border-t border-white/10 shadow-lg px-2 sm:px-6 py-2">
+      <nav className="bg-white text-slate-900 border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] px-2 sm:px-6 py-2">
         <div className="max-w-md sm:max-w-2xl mx-auto flex items-center justify-between">
           
           {/* Menu */}
@@ -68,7 +68,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             id="btn-tab-menu"
             onClick={() => setActiveTab('menu')}
             className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'menu' ? 'text-[#ED1C24]' : 'text-zinc-400 hover:text-white'
+              activeTab === 'menu' ? 'text-[#ED1C24]' : 'text-slate-400 hover:text-slate-900'
             }`}
           >
             <Pizza className={`w-5 h-5 ${activeTab === 'menu' ? 'stroke-[2.5]' : ''}`} />
@@ -80,7 +80,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             id="btn-tab-reorder"
             onClick={() => setActiveTab('reorder')}
             className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'reorder' ? 'text-[#ED1C24]' : 'text-zinc-400 hover:text-white'
+              activeTab === 'reorder' ? 'text-[#ED1C24]' : 'text-slate-400 hover:text-slate-900'
             }`}
           >
             <RotateCcw className={`w-5 h-5 ${activeTab === 'reorder' ? 'stroke-[2.5]' : ''}`} />
@@ -92,7 +92,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             id="btn-tab-bigbig"
             onClick={() => setActiveTab('bigbig')}
             className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl relative transition-all cursor-pointer ${
-              activeTab === 'bigbig' ? 'text-amber-400' : 'text-zinc-400 hover:text-white'
+              activeTab === 'bigbig' ? 'text-amber-500' : 'text-slate-400 hover:text-slate-900'
             }`}
           >
             <span className="absolute -top-1 bg-amber-400 text-slate-950 text-[8px] font-black px-1 rounded-full uppercase leading-tight">
@@ -107,7 +107,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             id="btn-tab-combos"
             onClick={() => setActiveTab('combos')}
             className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'combos' ? 'text-[#ED1C24]' : 'text-zinc-400 hover:text-white'
+              activeTab === 'combos' ? 'text-[#ED1C24]' : 'text-slate-400 hover:text-slate-900'
             }`}
           >
             <UtensilsCrossed className={`w-5 h-5 ${activeTab === 'combos' ? 'stroke-[2.5]' : ''}`} />

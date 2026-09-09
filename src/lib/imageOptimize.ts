@@ -22,7 +22,7 @@ function loadImage(file: File): Promise<HTMLImageElement> {
     };
     img.onerror = () => {
       URL.revokeObjectURL(objUrl);
-      reject(new Error('Ye file photo nahi lag rahi. Dusri image try karo.'));
+      reject(new Error('This file does not look like a photo. Please try a different image.'));
     };
     img.src = objUrl;
   });
@@ -41,11 +41,11 @@ function canvasToBlob(
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Browser me photo process nahi ho paya.');
+  if (!ctx) throw new Error('Could not process the photo in the browser.');
   ctx.drawImage(img, 0, 0, w, h);
   return new Promise((resolve, reject) => {
     canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error('Photo compress fail ho gaya.'))),
+      (b) => (b ? resolve(b) : reject(new Error('Photo compression failed.'))),
       type,
       quality
     );
@@ -53,31 +53,31 @@ function canvasToBlob(
 }
 
 /**
- * Photo ko 200-300KB band me optimize karo.
- * GIF: resize only (animation bachani ho to). Baaki: JPEG quality loop.
- * Returns compressed Blob + final size. Original file haath nahi lagata.
+ * Optimize a photo into the 200-300KB band.
+ * GIF: resize only (to preserve animation). Others: JPEG quality loop.
+ * Returns compressed Blob + final size. Original file is left untouched.
  */
 export async function optimizeImage(
   file: File,
   onStep?: (label: string) => void
 ): Promise<OptimizedImage> {
   if (!ALLOWED_TYPES.includes(file.type)) {
-    throw new Error('Sirf JPG / PNG / WebP / GIF image allowed hai.');
+    throw new Error('Only JPG / PNG / WebP / GIF images are allowed.');
   }
   if (file.size > MAX_INPUT_MB * 1024 * 1024) {
-    throw new Error(`Photo 10MB se chhoti honi chahiye. (milaa ${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+    throw new Error(`Photo must be smaller than 10MB. (got ${(file.size / 1024 / 1024).toFixed(1)}MB)`);
   }
 
-  // Pehle se 200-300KB ke andar → seedha use karo, quality loss nahi
+  // Already within 200-300KB → use as-is, no quality loss
   const kb = file.size / 1024;
   if (kb >= MIN_KB && kb <= TARGET_KB) {
     return { blob: file, sizeKB: Math.round(kb), width: 0, height: 0 };
   }
 
-  onStep?.('Photo chhoti kar rahe...');
+  onStep?.('Optimizing photo...');
   const img = await loadImage(file);
 
-  // GIF: sirf resize, dubara encode mat karo (animation toot jaati)
+  // GIF: resize only, do not re-encode (keeps animation)
   if (file.type === 'image/gif') {
     const blob = await canvasToBlob(img, START_MAX_SIDE, 1, 'image/gif');
     return { blob, sizeKB: Math.round(blob.size / 1024), width: img.width, height: img.height };
@@ -88,7 +88,7 @@ export async function optimizeImage(
   let quality = kb < MIN_KB ? 0.85 : 0.8;
   let best: Blob | null = null;
 
-  // Quality loop: 300KB se neeche lao, 200KB ke aas-paas best rakho
+  // Quality loop: bring under 300KB, keep close to 200KB
   for (let i = 0; i < 8; i++) {
     const blob = await canvasToBlob(img, side, quality, type);
     const sizeKB = blob.size / 1024;
@@ -96,7 +96,7 @@ export async function optimizeImage(
       return { blob, sizeKB: Math.round(sizeKB), width: img.width, height: img.height };
     }
     if (sizeKB <= TARGET_KB) {
-      best = blob; // 200 se neeche par acceptable — aur compress mat karo
+      best = blob; // Below 200KB but acceptable — stop compressing here
       break;
     }
     best = blob;
@@ -112,12 +112,12 @@ export async function optimizeImage(
   return { blob: final, sizeKB: Math.round(final.size / 1024), width: img.width, height: img.height };
 }
 
-/** Blob → data URL (Firestore doc me seedha save hota hai, 1MB doc limit ke andar). */
+/** Blob → data URL (saved directly in the Firestore doc, within the 1MB doc limit). */
 export function blobToDataURL(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error('Photo ready nahi ho payi.'));
+    reader.onerror = () => reject(new Error('Photo could not be prepared.'));
     reader.readAsDataURL(blob);
   });
 }

@@ -111,18 +111,18 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
     setIsUploading(true);
     setUploadPct(20);
     setUploadError(null);
-    setUploadNote('Photo 200-300KB me optimize ho rahi...');
+    setUploadNote('Optimizing photo to 200-300KB...');
     try {
-      // 200-300KB optimize (browser me, turant) → data URL → Firestore doc me save hoga
+      // Optimize to 200-300KB (in browser, instantly) → data URL → saved in the Firestore doc
       const optimized = await optimizeImage(file);
       setUploadPct(70);
-      setUploadNote(`Optimize done (${optimized.sizeKB}KB) — photo taiyaar...`);
+      setUploadNote(`Optimized (${optimized.sizeKB}KB) — photo ready...`);
       const dataUrl = await blobToDataURL(optimized.blob);
       setUploadPct(100);
-      setUploadNote(`Ready! ${optimized.sizeKB}KB — Publish dabate hi Firestore me save hoga.`);
+      setUploadNote(`Ready! ${optimized.sizeKB}KB — will be saved to Firestore on Publish.`);
       setFormData((prev) => ({ ...prev, image: dataUrl }));
     } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Photo add fail ho gaya.');
+      setUploadError(err instanceof Error ? err.message : 'Failed to add photo.');
       setUploadNote(null);
     } finally {
       setIsUploading(false);
@@ -334,7 +334,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
       <div className="md:hidden space-y-2.5">
         {filteredItems.length === 0 && (
           <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center text-xs text-slate-500">
-            Koi item nahi mila. Search ya category badlo.
+            No items found. Try a different search or category.
           </div>
         )}
         {filteredItems.map((item) => (
@@ -532,7 +532,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
               {/* Image Upload (device photo, no server) + URL & Presets */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Item Photo <span className="text-slate-400 font-medium">(auto 200-300KB, Firestore me save)</span>
+                  Item Photo <span className="text-slate-400 font-medium">(auto 200-300KB, saved to Firestore)</span>
                 </label>
 
                 {/* Live preview */}
@@ -560,7 +560,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                 ) : (
                   <div className="w-full h-24 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center gap-2 text-slate-400 mb-2">
                     <ImageIcon className="w-5 h-5" />
-                    <span className="text-[11px] font-bold">Koi photo nahi — upload karo ya URL dalo</span>
+                    <span className="text-[11px] font-bold">No photo — upload one or paste a URL</span>
                   </div>
                 )}
 
@@ -583,7 +583,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                     ) : (
                       <Upload className="w-3.5 h-3.5" />
                     )}
-                    <span>{isUploading ? 'Optimize...' : 'Device se Photo Lagao'}</span>
+                    <span>{isUploading ? 'Optimizing...' : 'Upload Photo from Device'}</span>
                   </button>
                   {isLocalPhoto(formData.image) && !isUploading && (
                     <span className="flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg shrink-0">
@@ -604,7 +604,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                   type="text"
                   value={formData.image || ''}
                   onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                  placeholder="https://... (ya upar se upload karo)"
+                  placeholder="https://... (or upload from above)"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#ED1C24] mb-2"
                 />
                 <div className="text-[10px] text-slate-400 mb-1">Or choose a high-quality preset photo:</div>

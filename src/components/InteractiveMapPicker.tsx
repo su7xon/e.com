@@ -51,7 +51,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
   const [roadArea, setRoadArea] = useState(currentAddress?.address || '');
   const [city, setCity] = useState(currentAddress?.city || 'Haldwani');
   const [pincode, setPincode] = useState(currentAddress?.pincode || '263139');
-  const [landmark, setLandmark] = useState(currentAddress?.landmark || '');
+  const [landmark, setLandmark] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<GeocodeResult[]>([]);
@@ -164,8 +164,8 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
       setGpsStatus('denied');
       setLocationError(
         err.code === 1
-          ? 'Location permission denied. Browser settings me location Allow karo, phir retry dabao.'
-          : 'Exact location nahi mili. HTTPS + location ON karke retry karo, ya search se area chuno.'
+          ? 'Location permission denied. Allow location in browser settings, then retry.'
+          : 'Exact location not found. Use HTTPS with location ON and retry, or pick an area via search.'
       );
       stopWatch(false);
     };
@@ -193,7 +193,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
         setIsLocating(false);
         setGpsStatus(gotFix ? 'locked' : 'fallback');
         if (!gotFix) {
-          setLocationError('GPS fix slow hai. Khule aasmaan ke paas jao ya search use karo.');
+          setLocationError('GPS fix is slow. Move near an open sky or use search.');
         }
       }
     }, 12000);
@@ -202,6 +202,8 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
   // Auto-detect exact location when modal opens
   useEffect(() => {
     if (!isOpen) return;
+    // Keep landmark blank on every open — user types it manually
+    setLandmark('');
     // If saved lat/lng exists, reverse geocode it; else auto GPS
     if (currentAddress?.lat && currentAddress?.lng) {
       setCoords({ lat: currentAddress.lat, lng: currentAddress.lng });
@@ -233,10 +235,10 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
         { headers: { 'Accept-Language': 'en' } }
       );
       const data: GeocodeResult[] = await res.json();
-      if (data.length === 0) setLocationError('Kuch nahi mila. Area / landmark alag naam se try karo.');
+      if (data.length === 0) setLocationError('Nothing found. Try the area / landmark with a different name.');
       setSearchResults(data);
     } catch {
-      setLocationError('Search fail ho gaya. Dobara try karo.');
+      setLocationError('Search failed. Please try again.');
     } finally {
       setIsSearching(false);
     }
@@ -302,7 +304,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
                 Select Exact Delivery Location
               </h2>
               <span className="text-[11px] text-blue-200 font-medium">
-                GPS se exact pin aayega • checkout me yahi address use hoga
+                GPS drops the exact pin • this address will be used at checkout
               </span>
             </div>
           </div>
@@ -325,7 +327,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search area, landmark ya society..."
+                placeholder="Search area, landmark or society..."
                 className="w-full pl-9 pr-3 py-2 bg-slate-100 hover:bg-slate-50 focus:bg-white text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580] transition-colors"
               />
               {searchQuery && (
@@ -374,8 +376,8 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
           )}
         </div>
 
-        {/* Map viewport — exact GPS pin, no Leaflet */}
-        <div className="relative flex-1 w-full bg-slate-100 min-h-[220px]">
+        {/* Map viewport — exact GPS pin, no Leaflet. Shrinks on small screens so Confirm stays visible. */}
+        <div className="relative flex-1 w-full bg-slate-100 min-h-[120px] sm:min-h-[220px] shrink">
           <iframe
             title="exact-location-map"
             src={mapEmbedSrc}
@@ -398,7 +400,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
               {gpsStatus === 'locating' ? (
                 <>
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>Exact GPS dhoondh rahe...</span>
+                  <span>Finding exact GPS...</span>
                 </>
               ) : gpsStatus === 'locked' ? (
                 <>
@@ -417,7 +419,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
             {isGeocoding && (
               <div className="mt-1.5 bg-slate-900/90 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-lg flex items-center gap-1.5 w-fit">
                 <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
-                <span>Address pehchan rahe...</span>
+                <span>Detecting address...</span>
               </div>
             )}
           </div>
@@ -463,8 +465,8 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
           </div>
         </div>
 
-        {/* Bottom confirm form */}
-        <div className="p-3.5 sm:p-4 bg-white border-t border-slate-200 shrink-0 z-10 space-y-3">
+        {/* Bottom confirm form — scrolls internally on short screens so button never clips */}
+        <div className="p-3.5 sm:p-4 bg-white border-t border-slate-200 shrink-0 z-10 space-y-3 overflow-y-auto max-h-[60vh]">
           <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-blue-50/80 border border-blue-200/80">
             <MapPin className="w-4 h-4 text-[#005580] shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">

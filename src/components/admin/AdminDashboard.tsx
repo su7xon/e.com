@@ -58,7 +58,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Banner / Filter Strip */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-amber-500 flex items-center justify-center text-white shadow-md shadow-red-500/20">
             <Sparkles className="w-5 h-5" />
@@ -111,108 +111,108 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       </div>
 
       {/* 4 Main KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* 1. Gross Revenue */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs relative overflow-hidden group hover:border-emerald-300 transition-all">
-          <div className="flex items-start justify-between">
-            <div>
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-5 shadow-xs relative overflow-hidden group hover:border-emerald-300 transition-all">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Gross Revenue
               </span>
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 mt-1">
+              <div className="text-xl sm:text-3xl font-black text-slate-900 mt-1">
                 ₹{grossRevenue.toLocaleString('en-IN')}
               </div>
               <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold mt-1.5">
-                <TrendingUp className="w-3.5 h-3.5" />
+                <TrendingUp className="w-3.5 h-3.5 shrink-0" />
                 <span>{orders.length > 0 ? '+14.8% vs last shift' : 'Live Shift Ready'}</span>
               </div>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
-              <DollarSign className="w-5 h-5" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+              <DollarSign className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2 text-xs text-slate-500">
             <span>Total Orders</span>
-            <span className="font-bold text-slate-800">{orders.length} orders</span>
+            <span className="font-bold text-slate-800 whitespace-nowrap">{orders.length} orders</span>
           </div>
         </div>
 
         {/* 2. Active Dine-in */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs relative overflow-hidden group hover:border-amber-300 transition-all">
-          <div className="flex items-start justify-between">
-            <div>
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-5 shadow-xs relative overflow-hidden group hover:border-amber-300 transition-all">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Active Dine-in
               </span>
-              <div className="text-2xl sm:text-3xl font-black text-amber-600 mt-1">
+              <div className="text-xl sm:text-3xl font-black text-amber-600 mt-1">
                 {activeDineIn} Tables
               </div>
               <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium mt-1.5">
                 <span>{dineInOrders.length} Total dine-in today</span>
               </div>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100">
-              <UtensilsCrossed className="w-5 h-5" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100">
+              <UtensilsCrossed className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2 text-xs text-slate-500">
             <span>Seated Capacity</span>
-            <span className="font-bold text-slate-800">{activeDineIn} / 8 Tables Full</span>
+            <span className="font-bold text-slate-800 whitespace-nowrap">{activeDineIn} / 8 Full</span>
           </div>
         </div>
 
         {/* 3. Active Delivery */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs relative overflow-hidden group hover:border-blue-300 transition-all">
-          <div className="flex items-start justify-between">
-            <div>
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-5 shadow-xs relative overflow-hidden group hover:border-blue-300 transition-all">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Active Delivery
               </span>
-              <div className="text-2xl sm:text-3xl font-black text-blue-600 mt-1">
+              <div className="text-xl sm:text-3xl font-black text-blue-600 mt-1">
                 {activeDelivery} Riders
               </div>
               <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium mt-1.5">
                 <span>{deliveryOrders.length} Total deliveries</span>
               </div>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
-              <Bike className="w-5 h-5" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
+              <Bike className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2 text-xs text-slate-500">
             <span>Avg Delivery Time</span>
-            <span className="font-bold text-emerald-600">{deliveryOrders.length > 0 ? '24 mins (Express)' : 'Ready for Dispatch'}</span>
+            <span className="font-bold text-emerald-600 whitespace-nowrap">{deliveryOrders.length > 0 ? '24 mins' : 'Ready'}</span>
           </div>
         </div>
 
         {/* 4. Avg Order Value */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs relative overflow-hidden group hover:border-purple-300 transition-all">
-          <div className="flex items-start justify-between">
-            <div>
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3 sm:p-5 shadow-xs relative overflow-hidden group hover:border-purple-300 transition-all">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                 Avg Order Value
               </span>
-              <div className="text-2xl sm:text-3xl font-black text-purple-600 mt-1">
+              <div className="text-xl sm:text-3xl font-black text-purple-600 mt-1">
                 ₹{avgOrderValue}
               </div>
               <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold mt-1.5">
-                <TrendingUp className="w-3.5 h-3.5" />
+                <TrendingUp className="w-3.5 h-3.5 shrink-0" />
                 <span>{orders.length > 0 ? `Avg ticket: ₹${avgOrderValue}` : 'Awaiting orders'}</span>
               </div>
             </div>
-            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-100">
-              <Receipt className="w-5 h-5" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center border border-purple-100">
+              <Receipt className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           </div>
-          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between gap-2 text-xs text-slate-500">
             <span>Per Order Margin</span>
-            <span className="font-bold text-slate-800">{orders.length > 0 ? '58% Gross Margin' : 'POS Online'}</span>
+            <span className="font-bold text-slate-800 whitespace-nowrap">{orders.length > 0 ? '58% Margin' : 'POS Online'}</span>
           </div>
         </div>
       </div>
 
       {/* Sales Breakdown 4 Small Strips */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-xs flex items-center justify-between">
           <div>
             <div className="text-[11px] font-semibold text-slate-500 uppercase">Total Gross Sales</div>
