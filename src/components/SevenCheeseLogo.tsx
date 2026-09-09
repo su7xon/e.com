@@ -38,7 +38,7 @@ export const SevenCheeseLogo: React.FC<SevenCheeseLogoProps> = ({
         alt="7 Cheese Pizza"
         className="h-full w-auto object-contain"
       />
-      <span className="text-white font-black tracking-tight leading-none" style={{ fontSize: `${height * 0.42}px` }}>
+      <span className="text-slate-900 font-black tracking-tight leading-none" style={{ fontSize: `${height * 0.42}px` }}>
         7 CHEESE PIZZA
       </span>
     </div>

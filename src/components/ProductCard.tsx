@@ -18,10 +18,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   quantityInCart,
   onUpdateQuantity,
 }) => {
+  const handleCardClick = () => {
+    if (item.isCustomizable) onOpenCustomize(item);
+    else onAddToCart(item);
+  };
+
   return (
     <div
       id={`product-card-${item.id}`}
-      className="group bg-white rounded-2xl border border-slate-200 hover:border-slate-300 shadow-xs hover:shadow-md transition-all flex flex-col overflow-hidden relative"
+      onClick={handleCardClick}
+      className="group bg-white rounded-2xl border border-slate-200 hover:border-slate-300 shadow-xs hover:shadow-md transition-all flex flex-col overflow-hidden relative cursor-pointer"
     >
       {/* Top Image Banner */}
       <div className="relative aspect-4/3 sm:aspect-16/10 w-full overflow-hidden bg-slate-100">
@@ -101,7 +107,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           {item.isCustomizable && (
             <button
               id={`btn-customize-link-${item.id}`}
-              onClick={() => onOpenCustomize(item)}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenCustomize(item);
+              }}
               className="mt-2 text-[11px] font-semibold text-slate-700 hover:text-[#005580] inline-flex items-center gap-1 border-b border-dashed border-slate-400 pb-0.5 transition-colors cursor-pointer"
             >
               <span>{item.defaultSize || 'Regular'} | {item.defaultCrust || 'New Hand Tossed'}</span>
@@ -137,7 +146,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 {item.isCustomizable ? (
                   <button
                     id={`btn-add-${item.id}`}
-                    onClick={() => onOpenCustomize(item)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenCustomize(item);
+                    }}
                     className="flex items-center gap-1 bg-[#e31837] hover:bg-[#c4122d] active:scale-95 text-white font-extrabold px-3.5 py-1.5 rounded-lg shadow-sm text-xs sm:text-sm tracking-wide transition-all cursor-pointer"
                   >
                     <span>Add</span>
@@ -146,7 +158,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 ) : (
                   <button
                     id={`btn-add-${item.id}`}
-                    onClick={() => onAddToCart(item)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddToCart(item);
+                    }}
                     className="flex items-center gap-1 bg-[#e31837] hover:bg-[#c4122d] active:scale-95 text-white font-extrabold px-3.5 py-1.5 rounded-lg shadow-sm text-xs sm:text-sm tracking-wide transition-all cursor-pointer"
                   >
                     <span>Add</span>
@@ -155,7 +170,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 )}
               </div>
             ) : (
-              <div className="flex items-center bg-[#e31837] text-white rounded-lg shadow-xs overflow-hidden">
+              <div
+                className="flex items-center bg-[#e31837] text-white rounded-lg shadow-xs overflow-hidden"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <button
                   id={`btn-decrease-${item.id}`}
                   onClick={() => onUpdateQuantity(item.id, -1)}

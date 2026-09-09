@@ -1,23 +1,24 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  MenuItem, 
-  CartItem, 
-  Coupon, 
-  UserAddress, 
-  OrderType, 
-  ActiveOrder, 
-  TrainBookingInfo 
+import {
+  MenuItem,
+  CartItem,
+  Coupon,
+  UserAddress,
+  OrderType,
+  ActiveOrder,
+  TrainBookingInfo,
+  CategoryItem
 } from './types';
-import { 
-  MENU_ITEMS, 
+import {
+  MENU_ITEMS,
   CRAVING_CATEGORIES,
-  DEFAULT_ADDRESSES, 
-  COUPONS, 
-  SIZE_PRICE_MODIFIERS, 
-  CRUST_PRICE_MODIFIERS 
+  DEFAULT_ADDRESSES,
+  COUPONS,
+  SIZE_PRICE_MODIFIERS,
+  CRUST_PRICE_MODIFIERS
 } from './data/mockData';
 import { Navbar } from './components/Navbar';
-import { HeroBanner } from './components/HeroBanner';
+import { HeroBanner, DEFAULT_SLIDES, BannerSlide } from './components/HeroBanner';
 import { CravingCategories } from './components/CravingCategories';
 import { CategoryMarquee } from './components/CategoryMarquee';
 import { ProductCard } from './components/ProductCard';
@@ -79,6 +80,37 @@ export default function App() {
     setAdminOutlet(null);
   };
   
+  // Store Images State (hero slides + categories, editable from Admin → Store Images)
+  const [heroSlides, setHeroSlides] = useState<BannerSlide[]>(() => {
+    const saved = localStorage.getItem('seven_cheese_hero_slides');
+    if (!saved) return DEFAULT_SLIDES;
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_SLIDES;
+    } catch {
+      return DEFAULT_SLIDES;
+    }
+  });
+
+  const [storeCategories, setStoreCategories] = useState<CategoryItem[]>(() => {
+    const saved = localStorage.getItem('seven_cheese_categories');
+    if (!saved) return CRAVING_CATEGORIES;
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : CRAVING_CATEGORIES;
+    } catch {
+      return CRAVING_CATEGORIES;
+    }
+  });
+
+  useEffect(() => {
+    safeSet('seven_cheese_hero_slides', JSON.stringify(heroSlides));
+  }, [heroSlides]);
+
+  useEffect(() => {
+    safeSet('seven_cheese_categories', JSON.stringify(storeCategories));
+  }, [storeCategories]);
+
   // Live Menu Items State (Syncs with Admin)
   const [menuItems, setMenuItems] = useState<MenuItem[]>(() => {
     const saved = localStorage.getItem('seven_cheese_menu_items');
@@ -615,6 +647,14 @@ export default function App() {
         }}
         onBackToStore={() => setCurrentView('home')}
         onLogout={handleAdminLogout}
+        slides={heroSlides}
+        onUpdateSlideImage={(id, image) => {
+          setHeroSlides((prev) => prev.map((s) => (s.id === id ? { ...s, image } : s)));
+        }}
+        categories={storeCategories}
+        onUpdateCategoryImage={(id, image) => {
+          setStoreCategories((prev) => prev.map((c) => (c.id === id ? { ...c, image } : c)));
+        }}
       />
     );
   }
@@ -646,12 +686,14 @@ export default function App() {
         <main className="w-full">
           {/* Hero Banner with 7 Cheese Pizza carousel promotions */}
           <HeroBanner
+            slides={heroSlides}
             onSelectFeatured={handleSelectFeatured}
             onOpenDeals={() => setIsDealsModalOpen(true)}
           />
 
           {/* Browse Our Category - Moving Marquee */}
           <CategoryMarquee
+            categories={storeCategories}
             onSelectCategory={(key) => {
               setSelectedCategory(key);
               const el = document.getElementById('menu-items-section');
@@ -662,6 +704,7 @@ export default function App() {
           {/* Craving Categories Grid */}
           <CravingCategories
             selectedCategory={selectedCategory}
+            categories={storeCategories}
             onSelectCategory={(key) => {
               setSelectedCategory(key);
               const el = document.getElementById('menu-items-section');
@@ -680,7 +723,7 @@ export default function App() {
                   <span className="text-sm sm:text-base font-black text-slate-900 capitalize">
                     {selectedCategory === 'all'
                       ? 'Full Menu'
-                      : CRAVING_CATEGORIES.find((c) => c.filterKey === selectedCategory)?.name || selectedCategory}
+                      : storeCategories.find((c) => c.filterKey === selectedCategory)?.name || selectedCategory}
                   </span>
                   <span className="text-xs font-bold text-slate-500 font-mono">
                     ({filteredProducts.length})

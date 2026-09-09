@@ -1,13 +1,15 @@
 import React from 'react';
 import { CRAVING_CATEGORIES } from '../data/mockData';
+import { CategoryItem } from '../types';
 
 interface CategoryMarqueeProps {
   onSelectCategory: (filterKey: string) => void;
+  categories?: CategoryItem[];
 }
 
-export const CategoryMarquee: React.FC<CategoryMarqueeProps> = ({ onSelectCategory }) => {
+export const CategoryMarquee: React.FC<CategoryMarqueeProps> = ({ onSelectCategory, categories = CRAVING_CATEGORIES }) => {
   // Double the items for seamless infinite scroll
-  const items = [...CRAVING_CATEGORIES.filter(c => c.filterKey !== 'all'), ...CRAVING_CATEGORIES.filter(c => c.filterKey !== 'all')];
+  const items = [...categories.filter(c => c.filterKey !== 'all'), ...categories.filter(c => c.filterKey !== 'all')];
 
   return (
     <section className="bg-white py-6 sm:py-8 border-b border-slate-200 overflow-hidden">

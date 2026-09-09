@@ -5,9 +5,10 @@ import { MenuItem } from '../types';
 interface HeroBannerProps {
   onSelectFeatured: (productId: string) => void;
   onOpenDeals: () => void;
+  slides?: BannerSlide[];
 }
 
-interface BannerSlide {
+export interface BannerSlide {
   id: string;
   badge: string;
   titlePart1: string;
@@ -24,7 +25,7 @@ interface BannerSlide {
   productId: string;
 }
 
-const SLIDES: BannerSlide[] = [
+export const DEFAULT_SLIDES: BannerSlide[] = [
   {
     id: 'slide-7cheese-signature',
     badge: 'HOUSE SIGNATURE • 7 ARTISANAL CHEESES',
@@ -89,19 +90,21 @@ const SLIDES: BannerSlide[] = [
   },
 ];
 
-export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpenDeals }) => {
+export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpenDeals, slides = DEFAULT_SLIDES }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+
+  const safeSlides = slides.length > 0 ? slides : DEFAULT_SLIDES;
 
   useEffect(() => {
     if (isPaused) return;
     const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % SLIDES.length);
+      setCurrentSlide((prev) => (prev + 1) % safeSlides.length);
     }, 5000);
     return () => clearInterval(interval);
-  }, [isPaused]);
+  }, [isPaused, safeSlides.length]);
 
-  const slide = SLIDES[currentSlide];
+  const slide = safeSlides[currentSlide % safeSlides.length];
 
   return (
     <div className="w-full">
@@ -209,7 +212,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpen
         {/* Carousel Arrows */}
         <button
           id="btn-hero-prev"
-          onClick={() => setCurrentSlide((prev) => (prev === 0 ? SLIDES.length - 1 : prev - 1))}
+            onClick={() => setCurrentSlide((prev) => (prev === 0 ? safeSlides.length - 1 : prev - 1))}
           className="absolute left-1 sm:left-4 top-1/2 -translate-y-1/2 w-6 h-6 sm:w-10 sm:h-10 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-xs transition-colors z-20"
           aria-label="Previous Offer"
         >
@@ -217,7 +220,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpen
         </button>
         <button
           id="btn-hero-next"
-          onClick={() => setCurrentSlide((prev) => (prev + 1) % SLIDES.length)}
+            onClick={() => setCurrentSlide((prev) => (prev + 1) % safeSlides.length)}
           className="absolute right-1 sm:right-4 top-1/2 -translate-y-1/2 w-6 h-6 sm:w-10 sm:h-10 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-xs transition-colors z-20"
           aria-label="Next Offer"
         >
@@ -227,10 +230,10 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpen
         {/* Slide Counter & Dots */}
         <div className="absolute bottom-1.5 sm:bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 sm:gap-2 z-20 bg-black/50 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full backdrop-blur-xs">
           <span className="text-[9px] sm:text-[11px] font-bold text-slate-200">
-            {currentSlide + 1}/{SLIDES.length}
+              {currentSlide + 1}/{safeSlides.length}
           </span>
           <div className="flex items-center gap-1 sm:gap-1.5">
-            {SLIDES.map((s, idx) => (
+              {safeSlides.map((s, idx) => (
               <button
                 key={s.id}
                 onClick={() => setCurrentSlide(idx)}

@@ -1,31 +1,34 @@
 import React, { useState } from 'react';
-import { 
-  LayoutDashboard, 
-  ShoppingBag, 
-  UtensilsCrossed, 
-  Tag, 
-  FileText, 
-  ArrowLeft, 
-  Volume2, 
-  VolumeX, 
-  RefreshCw, 
-  Bell, 
-  LogOut, 
-  Menu as MenuIcon, 
-  X, 
-  Sparkles, 
+import {
+  LayoutDashboard,
+  ShoppingBag,
+  UtensilsCrossed,
+  Tag,
+  FileText,
+  ArrowLeft,
+  Volume2,
+  VolumeX,
+  RefreshCw,
+  Bell,
+  LogOut,
+  Menu as MenuIcon,
+  X,
+  Sparkles,
   Store,
   CheckCircle,
-  Settings
+  Settings,
+  Image as ImageIcon
 } from 'lucide-react';
-import { MenuItem, Coupon } from '../../types';
+import { MenuItem, Coupon, CategoryItem } from '../../types';
 import { AdminOrder } from './adminData';
 import { Outlet } from './outlets';
+import { BannerSlide } from '../HeroBanner';
 import { AdminDashboard } from './AdminDashboard';
 import { AdminLiveOrders } from './AdminLiveOrders';
 import { AdminMenuManager } from './AdminMenuManager';
 import { AdminCouponManager } from './AdminCouponManager';
 import { AdminReports } from './AdminReports';
+import { AdminStoreImages } from './AdminStoreImages';
 import { playPosChime } from './audioAlert';
 
 interface AdminLayoutProps {
@@ -41,6 +44,10 @@ interface AdminLayoutProps {
   onDeleteCoupon: (code: string) => void;
   onBackToStore: () => void;
   onLogout: () => void;
+  slides: BannerSlide[];
+  onUpdateSlideImage: (id: string, image: string) => void;
+  categories: CategoryItem[];
+  onUpdateCategoryImage: (id: string, image: string) => void;
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
@@ -55,9 +62,13 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   onAddCoupon,
   onDeleteCoupon,
   onBackToStore,
-  onLogout
+  onLogout,
+  slides,
+  onUpdateSlideImage,
+  categories,
+  onUpdateCategoryImage
 }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'live-orders' | 'menu' | 'coupons'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'live-orders' | 'menu' | 'coupons' | 'images'>('dashboard');
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isAlertSoundOn, setIsAlertSoundOn] = useState(true);
@@ -150,6 +161,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               { id: 'live-orders', label: 'Live Orders & KOT', icon: ShoppingBag, badge: activeOrdersCount > 0 ? activeOrdersCount : undefined, badgeColor: 'bg-red-500 text-white' },
               { id: 'menu', label: 'Menu Catalog', icon: UtensilsCrossed, badge: menuItems.length, badgeColor: 'bg-slate-100 text-slate-600' },
               { id: 'coupons', label: 'Offers & Coupons', icon: Tag, badge: coupons.length, badgeColor: 'bg-emerald-50 text-emerald-700' },
+              { id: 'images', label: 'Store Images', icon: ImageIcon, badge: slides.length + categories.length, badgeColor: 'bg-violet-50 text-violet-700' },
             ].map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -370,6 +382,15 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               coupons={coupons}
               onAddCoupon={onAddCoupon}
               onDeleteCoupon={onDeleteCoupon}
+            />
+          )}
+
+          {activeTab === 'images' && (
+            <AdminStoreImages
+              slides={slides}
+              onUpdateSlideImage={onUpdateSlideImage}
+              categories={categories}
+              onUpdateCategoryImage={onUpdateCategoryImage}
             />
           )}
         </div>

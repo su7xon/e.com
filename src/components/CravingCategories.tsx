@@ -5,11 +5,13 @@ import { CategoryItem } from '../types';
 interface CravingCategoriesProps {
   selectedCategory: string;
   onSelectCategory: (filterKey: string) => void;
+  categories?: CategoryItem[];
 }
 
 export const CravingCategories: React.FC<CravingCategoriesProps> = ({
   selectedCategory,
   onSelectCategory,
+  categories = CRAVING_CATEGORIES,
 }) => {
   return (
     <section className="bg-white py-5 px-3 sm:px-6 border-b border-slate-200">
@@ -30,7 +32,7 @@ export const CravingCategories: React.FC<CravingCategoriesProps> = ({
 
         {/* Categories Horizontal Scroll / Multi-row on Mobile */}
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-3 sm:gap-4">
-          {CRAVING_CATEGORIES.map((cat) => {
+          {categories.map((cat) => {
             const isSelected = selectedCategory === cat.filterKey;
             return (
               <button

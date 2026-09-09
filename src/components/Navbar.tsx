@@ -49,27 +49,27 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAdmin,
 }) => {
   return (
-    <header className="sticky top-0 z-40 bg-[#121214] text-white shadow-lg border-b border-white/10">
+    <header className="sticky top-0 z-40 bg-white text-slate-900 shadow-md border-b border-slate-200">
       {/* Top Utility Ribbon — hidden on mobile (saves space), same on sm+ */}
-      <div className="hidden sm:block bg-[#09090b] px-3 py-1.5 text-xs border-b border-white/5">
+      <div className="hidden sm:block bg-slate-50 px-3 py-1.5 text-xs border-b border-slate-200">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1 text-amber-400 font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="flex items-center gap-1 text-amber-600 font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               7 Cheese Pizza Express: 30 Mins Guarantee
             </span>
-            <span className="hidden md:inline text-zinc-600">|</span>
-            <span className="hidden md:inline text-zinc-300">Free delivery on orders above ₹99 • Authentic 7-Cheese Blend</span>
+            <span className="hidden md:inline text-slate-300">|</span>
+            <span className="hidden md:inline text-slate-500">Free delivery on orders above ₹99 • Authentic 7-Cheese Blend</span>
           </div>
 
           {onOpenAdmin && (
             <button
               id="btn-top-admin-pos"
               onClick={onOpenAdmin}
-              className="flex items-center gap-1 text-[11px] font-bold text-amber-300 hover:text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 px-2.5 py-0.5 rounded-md border border-amber-400/30 transition-all cursor-pointer shadow-xs"
+              className="flex items-center gap-1 text-[11px] font-bold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 px-2.5 py-0.5 rounded-md border border-amber-300 transition-all cursor-pointer shadow-xs"
               title="Open Live POS & Kitchen Admin Panel"
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
               <span>Admin POS</span>
             </button>
           )}
@@ -98,21 +98,21 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               id="btn-address-selector"
               onClick={onOpenAddressModal}
-              className="flex items-center gap-2 text-left bg-white/5 hover:bg-white/10 px-2.5 py-1.5 rounded-xl transition-colors border border-white/10 max-w-[180px] sm:max-w-[320px] truncate"
+              className="flex items-center gap-2 text-left bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-xl transition-colors border border-slate-200 max-w-[180px] sm:max-w-[320px] truncate"
             >
-              <div className="hidden sm:flex flex-col items-center justify-center bg-zinc-800 px-1.5 py-1 rounded text-[11px] font-bold text-amber-400 shrink-0 border border-amber-400/20">
+              <div className="hidden sm:flex flex-col items-center justify-center bg-slate-900 px-1.5 py-1 rounded text-[11px] font-bold text-amber-400 shrink-0">
                 <span>{currentAddress.distanceKm ?? '1.8'} km</span>
-                <span className="text-[9px] text-zinc-400 uppercase">OUTLET</span>
+                <span className="text-[9px] text-slate-400 uppercase">OUTLET</span>
               </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-1 text-xs font-bold text-white">
+                <div className="flex items-center gap-1 text-xs font-bold text-slate-900">
                   <span className="truncate">
                     {orderType === 'DELIVERY' ? 'Deliver to:' : orderType === 'TAKEAWAY' ? 'Takeaway from:' : 'Dine-In Table:'}
                   </span>
-                  <span className="text-amber-400">{currentAddress.label}</span>
-                  <ChevronDown className="w-3.5 h-3.5 shrink-0 text-white/80" />
+                  <span className="text-amber-600">{currentAddress.label}</span>
+                  <ChevronDown className="w-3.5 h-3.5 shrink-0 text-slate-400" />
                 </div>
-                <p className="text-[11px] text-zinc-300 truncate font-normal">
+                <p className="text-[11px] text-slate-500 truncate font-normal">
                   {currentAddress.address}, {currentAddress.city}
                 </p>
               </div>
@@ -120,14 +120,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Mode Switcher Tabs */}
-          <div className="hidden lg:flex items-center bg-[#1f1f23] p-1 rounded-xl border border-white/10 text-xs font-semibold">
+          <div className="hidden lg:flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold">
             <button
               id="tab-mode-delivery"
               onClick={() => setOrderType('DELIVERY')}
               className={`px-3 py-1.5 rounded-lg transition-all ${
                 orderType === 'DELIVERY'
                   ? 'bg-[#ED1C24] text-white shadow-md font-bold'
-                  : 'text-zinc-300 hover:text-white hover:bg-white/5'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-white'
               }`}
             >
               🛵 Delivery (30m)
@@ -138,7 +138,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               className={`px-3 py-1.5 rounded-lg transition-all ${
                 orderType === 'TAKEAWAY'
                   ? 'bg-[#ED1C24] text-white shadow-md font-bold'
-                  : 'text-zinc-300 hover:text-white hover:bg-white/5'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-white'
               }`}
             >
               🛍️ Takeaway
@@ -149,7 +149,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               className={`px-3 py-1.5 rounded-lg transition-all ${
                 orderType === 'DINE_IN'
                   ? 'bg-[#ED1C24] text-white shadow-md font-bold'
-                  : 'text-zinc-300 hover:text-white hover:bg-white/5'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-white'
               }`}
             >
               🍽️ Dine-in
@@ -182,7 +182,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               id="btn-nav-profile"
               onClick={onOpenRewards}
-              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 flex items-center justify-center transition-colors text-white"
+              className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 flex items-center justify-center transition-colors text-slate-600"
               title="User Account"
             >
               <User className="w-4 h-4" />
@@ -193,10 +193,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 id="btn-nav-admin-action"
                 onClick={onOpenAdmin}
-                className="flex items-center gap-1 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/40 text-amber-300 px-2 sm:px-2.5 py-1.5 rounded-xl transition-all font-bold text-xs cursor-pointer shadow-xs"
+                className="flex items-center gap-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-700 px-2 sm:px-2.5 py-1.5 rounded-xl transition-all font-bold text-xs cursor-pointer shadow-xs"
                 title="Open 7 Cheese Admin POS Panel"
               >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
                 <span className="hidden sm:inline">Admin POS</span>
               </button>
             )}
@@ -217,11 +217,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all border whitespace-nowrap cursor-pointer ${
                 vegOnly
                   ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
-                  : 'bg-zinc-800/80 text-zinc-300 border-zinc-700 hover:bg-zinc-800'
+                  : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
               }`}
             >
-              <span className="w-3.5 h-3.5 rounded-xs border border-white flex items-center justify-center bg-white/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span className="w-3.5 h-3.5 rounded-xs border border-slate-400 flex items-center justify-center bg-white">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               </span>
               <span>Veg Only</span>
             </button>
@@ -235,10 +235,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all border whitespace-nowrap cursor-pointer ${
                 nonVegOnly
                   ? 'bg-red-700 text-white border-red-600 shadow-sm'
-                  : 'bg-zinc-800/80 text-zinc-300 border-zinc-700 hover:bg-zinc-800'
+                  : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
               }`}
             >
-              <span className="w-3.5 h-3.5 rounded-xs border border-white flex items-center justify-center bg-white/20">
+              <span className="w-3.5 h-3.5 rounded-xs border border-slate-400 flex items-center justify-center bg-white">
                 <span className="w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-b-[5px] border-b-red-400" />
               </span>
               <span>Non-Veg</span>
@@ -247,27 +247,27 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Search Input - on mobile occupies right space of veg/non-veg; on desktop sm: occupies left */}
           <div className="relative flex-1 min-w-0 order-2 sm:order-1">
-            <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-400 absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               id="input-search-pizza"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search pizza..."
-              className="w-full bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-500 text-xs sm:text-sm pl-8 sm:pl-9 pr-7 sm:pr-8 py-1.5 sm:py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner font-medium sm:hidden"
+              className="w-full bg-slate-100 border border-slate-200 text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm pl-8 sm:pl-9 pr-7 sm:pr-8 py-1.5 sm:py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner font-medium sm:hidden"
             />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search 7 Cheese Special, Farmhouse, Tandoori Chicken, Wraps, Burgers..."
-              className="w-full bg-zinc-900 border border-white/10 text-white placeholder:text-zinc-500 text-xs sm:text-sm pl-8 sm:pl-9 pr-7 sm:pr-8 py-1.5 sm:py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner font-medium hidden sm:block"
+              className="w-full bg-slate-100 border border-slate-200 text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm pl-8 sm:pl-9 pr-7 sm:pr-8 py-1.5 sm:py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner font-medium hidden sm:block"
             />
             {searchQuery && (
               <button
                 id="btn-clear-search"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
