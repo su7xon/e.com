@@ -14,8 +14,7 @@ import {
 } from 'lucide-react';
 import { MenuItem, MenuCategoryType } from '../../types';
 import { PRESET_PIZZA_IMAGES } from './adminData';
-import { optimizeImage } from '../../lib/imageOptimize';
-import { uploadImageBlob } from '../../lib/firebase';
+import { optimizeImage, blobToDataURL } from '../../lib/imageOptimize';
 import { isLocalPhoto } from '../../lib/imageUpload';
 
 interface AdminMenuManagerProps {
@@ -110,26 +109,18 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
     setIsUploading(true);
-    setUploadPct(5);
+    setUploadPct(20);
     setUploadError(null);
     setUploadNote('Photo 200-300KB me optimize ho rahi...');
     try {
-      // Step 1: 200-300KB optimize (browser me, turant)
+      // 200-300KB optimize (browser me, turant) → data URL → Firestore doc me save hoga
       const optimized = await optimizeImage(file);
-      setUploadNote(`Optimize done (${optimized.sizeKB}KB) — Firebase pe bhej rahe...`);
-      setUploadPct(25);
-      // Step 2: Firebase Storage upload
-      const contentType = optimized.blob.type || 'image/jpeg';
-      const ext = contentType === 'image/png' ? 'png' : contentType === 'image/webp' ? 'webp' : contentType === 'image/gif' ? 'gif' : 'jpg';
-      const url = await uploadImageBlob(
-        optimized.blob,
-        `${file.name.replace(/\.[^.]+$/, '')}.${ext}`,
-        contentType,
-        (pct) => setUploadPct(25 + Math.round(pct * 0.75))
-      );
+      setUploadPct(70);
+      setUploadNote(`Optimize done (${optimized.sizeKB}KB) — photo taiyaar...`);
+      const dataUrl = await blobToDataURL(optimized.blob);
       setUploadPct(100);
-      setUploadNote(`Live! ${optimized.sizeKB}KB photo Firebase pe.`);
-      setFormData((prev) => ({ ...prev, image: url }));
+      setUploadNote(`Ready! ${optimized.sizeKB}KB — Publish dabate hi Firestore me save hoga.`);
+      setFormData((prev) => ({ ...prev, image: dataUrl }));
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Photo add fail ho gaya.');
       setUploadNote(null);
@@ -541,7 +532,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
               {/* Image Upload (device photo, no server) + URL & Presets */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Item Photo <span className="text-slate-400 font-medium">(auto 200-300KB + Firebase live)</span>
+                  Item Photo <span className="text-slate-400 font-medium">(auto 200-300KB, Firestore me save)</span>
                 </label>
 
                 {/* Live preview */}
@@ -592,18 +583,12 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                     ) : (
                       <Upload className="w-3.5 h-3.5" />
                     )}
-                    <span>{isUploading ? 'Optimize + Upload...' : 'Device se Photo Lagao'}</span>
+                    <span>{isUploading ? 'Optimize...' : 'Device se Photo Lagao'}</span>
                   </button>
-                  {formData.image?.includes('firebasestorage') && !isUploading && (
+                  {isLocalPhoto(formData.image) && !isUploading && (
                     <span className="flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg shrink-0">
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      Firebase Live
-                    </span>
-                  )}
-                  {isLocalPhoto(formData.image) && !isUploading && (
-                    <span className="flex items-center gap-1 text-[10px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded-lg shrink-0">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      Device Photo
+                      Firestore Ready
                     </span>
                   )}
                 </div>

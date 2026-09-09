@@ -111,3 +111,13 @@ export async function optimizeImage(
   const final = best ?? (await canvasToBlob(img, MIN_SIDE, 0.6, type));
   return { blob: final, sizeKB: Math.round(final.size / 1024), width: img.width, height: img.height };
 }
+
+/** Blob → data URL (Firestore doc me seedha save hota hai, 1MB doc limit ke andar). */
+export function blobToDataURL(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Photo ready nahi ho payi.'));
+    reader.readAsDataURL(blob);
+  });
+}
