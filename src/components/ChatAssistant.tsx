@@ -119,11 +119,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
   const [unread, setUnread] = useState(0);
   const [msgs, setMsgs] = useState<UiMsg[]>(() => {
     try {
-      const saved = localStorage.getItem(STORE_KEY);
-      if (saved) {
-        const p = JSON.parse(saved);
-        if (Array.isArray(p) && p.length) return p;
-      }
+      localStorage.removeItem(STORE_KEY);
     } catch {}
     return [
       {
@@ -137,9 +133,6 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(msgs.slice(-30)));
-    } catch {}
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     if (open) setUnread(0);
   }, [msgs, open]);
