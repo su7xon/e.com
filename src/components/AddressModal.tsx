@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, MapPin, Plus, Check, Home, Briefcase, Navigation, Train, Compass } from 'lucide-react';
+import { X, MapPin, Plus, Check, Home, Briefcase, Navigation, Compass } from 'lucide-react';
 import { UserAddress } from '../types';
 import { InteractiveMapPicker } from './InteractiveMapPicker';
 
@@ -15,7 +15,6 @@ interface AddressModalProps {
 const getAddressIcon = (label: string) => {
   if (label === 'Home') return Home;
   if (label === 'Work') return Briefcase;
-  if (label === 'Train') return Train;
   return MapPin;
 };
 

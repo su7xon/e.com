@@ -139,7 +139,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                 Live Tracking
               </span>
               <span className="text-xs text-blue-100 block mt-1 font-mono">
-                {order.orderType === 'TRAIN' ? 'Platform Berth' : 'Hot & Fresh'}
+                Hot & Fresh
               </span>
             </div>
           </div>

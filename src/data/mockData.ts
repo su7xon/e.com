@@ -2150,17 +2150,6 @@ export const DEFAULT_ADDRESSES: UserAddress[] = [
     lat: 29.199,
     lng: 79.518,
   },
-  {
-    id: 'addr-3',
-    label: 'Train',
-    address: 'Kathgodam / Haldwani Railway Junction - Coach Delivery',
-    city: 'Haldwani',
-    pincode: '263126',
-    landmark: 'Platform 1 - Coach Berth Express',
-    distanceKm: 3.5,
-    lat: 29.2671,
-    lng: 79.5459,
-  },
 ];
 
 export const SIZE_PRICE_MODIFIERS: Record<string, number> = {

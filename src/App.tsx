@@ -6,7 +6,6 @@ import {
   UserAddress,
   OrderType,
   ActiveOrder,
-  TrainBookingInfo,
   CategoryItem
 } from './types';
 import {
@@ -25,7 +24,6 @@ import { ProductCard } from './components/ProductCard';
 import { CustomizeModal } from './components/CustomizeModal';
 import { CartDrawer } from './components/CartDrawer';
 import { OrderTrackerModal } from './components/OrderTrackerModal';
-import { TrainDeliveryModal } from './components/TrainDeliveryModal';
 import { AddressModal } from './components/AddressModal';
 import { RewardsModal } from './components/RewardsModal';
 import { DealsModal } from './components/DealsModal';
@@ -209,10 +207,18 @@ export default function App() {
     safeSet('seven_cheese_admin_orders', JSON.stringify(adminOrders));
   }, [adminOrders]);
   
-  // Addresses
+  // Addresses (legacy 'Train' addresses are dropped — train delivery removed)
+  const dropTrainAddresses = (list: UserAddress[]): UserAddress[] =>
+    (Array.isArray(list) ? list : []).filter((a) => (a.label as string) !== 'Train');
   const [addresses, setAddresses] = useState<UserAddress[]>(() => {
     const saved = localStorage.getItem('seven_cheese_addresses') || localStorage.getItem('dominos_addresses');
-    return saved ? JSON.parse(saved) : DEFAULT_ADDRESSES;
+    if (!saved) return DEFAULT_ADDRESSES;
+    try {
+      const parsed = dropTrainAddresses(JSON.parse(saved));
+      return parsed.length > 0 ? parsed : DEFAULT_ADDRESSES;
+    } catch {
+      return DEFAULT_ADDRESSES;
+    }
   });
   const [currentAddress, setCurrentAddress] = useState<UserAddress>(() => addresses[0] || DEFAULT_ADDRESSES[0]);
 
@@ -308,7 +314,6 @@ export default function App() {
   const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isOrderTrackerOpen, setIsOrderTrackerOpen] = useState(false);
-  const [isTrainModalOpen, setIsTrainModalOpen] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isRewardsModalOpen, setIsRewardsModalOpen] = useState(false);
   const [isDealsModalOpen, setIsDealsModalOpen] = useState(false);
@@ -457,7 +462,7 @@ export default function App() {
       id: `ord-${Date.now()}`,
       orderNumber: `#7C-${Math.floor(1000 + Math.random() * 9000)}`,
       outletId: orderOutlet.id,
-      customerName: currentAddress.label === 'Train' ? 'Train Passenger' : 'Customer (App Store)',
+      customerName: 'Customer (App Store)',
       customerPhone: '+91 98765 43210',
       orderType: orderType === 'DINE_IN' ? 'DINE_IN' : 'DELIVERY',
       address: `${currentAddress.address}, ${currentAddress.city}`,
@@ -499,21 +504,6 @@ export default function App() {
     // Award loyalty points: 10 points per ₹100 spent
     const earnedPts = Math.floor(finalTotal / 10);
     setPoints((prev) => Math.min(600, prev + earnedPts));
-  };
-
-  const handleConfirmTrainDelivery = (trainInfo: TrainBookingInfo) => {
-    setOrderType('TRAIN');
-    const trainAddress: UserAddress = {
-      id: `train-${Date.now()}`,
-      label: 'Train',
-      address: `${trainInfo.trainName} • Coach ${trainInfo.coach}, Berth ${trainInfo.seat}`,
-      city: trainInfo.station,
-      pincode: '263126',
-      landmark: `PNR: ${trainInfo.pnr}`,
-      distanceKm: 8.2,
-    };
-    setCurrentAddress(trainAddress);
-    setAddresses((prev) => [trainAddress, ...prev.filter((a) => a.id !== trainAddress.id)]);
   };
 
   const handleRedeemReward = (rewardTitle: string, discountVal: number) => {
@@ -1248,12 +1238,6 @@ export default function App() {
             setActiveOrder({ ...activeOrder, status: nextStatus });
           }
         }}
-      />
-
-      <TrainDeliveryModal
-        isOpen={isTrainModalOpen}
-        onClose={() => setIsTrainModalOpen(false)}
-        onConfirmTrainDelivery={handleConfirmTrainDelivery}
       />
 
       <AddressModal

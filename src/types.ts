@@ -85,11 +85,11 @@ export interface Coupon {
   tag?: string;
 }
 
-export type OrderType = 'DELIVERY' | 'TAKEAWAY' | 'DINE_IN' | 'TRAIN';
+export type OrderType = 'DELIVERY' | 'TAKEAWAY' | 'DINE_IN';
 
 export interface UserAddress {
   id: string;
-  label: 'Home' | 'Work' | 'Other' | 'Train';
+  label: 'Home' | 'Work' | 'Other';
   address: string;
   city: string;
   pincode: string;
@@ -100,21 +100,11 @@ export interface UserAddress {
   lng?: number;
 }
 
-export interface TrainBookingInfo {
-  pnr: string;
-  trainNumber: string;
-  trainName: string;
-  station: string;
-  coach: string;
-  seat: string;
-}
-
 export interface ActiveOrder {
   orderId: string;
   items: CartItem[];
   orderType: OrderType;
   address: string;
-  trainInfo?: TrainBookingInfo;
   subtotal: number;
   deliveryFee: number;
   tax: number;
