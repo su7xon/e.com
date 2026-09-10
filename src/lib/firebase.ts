@@ -250,7 +250,10 @@ export async function updateOrderStatusInFirestore(
 }
 
 /** Live subscription for the admin screen. Returns unsubscribe. Never throws. */
-export function subscribeToFirestoreOrders(onOrders: (orders: AdminOrder[]) => void): () => void {
+export function subscribeToFirestoreOrders(
+  onOrders: (orders: AdminOrder[]) => void,
+  onError?: (message: string) => void
+): () => void {
   try {
     return onSnapshot(
       collection(db, ORDERS_COLLECTION),
@@ -261,8 +264,9 @@ export function subscribeToFirestoreOrders(onOrders: (orders: AdminOrder[]) => v
         });
         onOrders(list);
       },
-      () => {
-        // Offline / permission denied: stay on local orders silently.
+      (err) => {
+        // Offline / permission denied: stay on local orders, report status.
+        onError?.(err.code || err.message);
       }
     );
   } catch {

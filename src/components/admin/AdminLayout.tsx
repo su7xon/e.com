@@ -34,6 +34,7 @@ import { playPosChime, playNewOrderAlert, unlockAudio } from './audioAlert';
 interface AdminLayoutProps {
   outlet: Outlet;
   orders: AdminOrder[];
+  syncStatus: 'connecting' | 'live' | 'error';
   menuItems: MenuItem[];
   coupons: Coupon[];
   onUpdateOrderStatus: (orderId: string, newStatus: AdminOrder['status']) => void;
@@ -53,6 +54,7 @@ interface AdminLayoutProps {
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
   outlet,
   orders,
+  syncStatus,
   menuItems,
   coupons,
   onUpdateOrderStatus,
@@ -73,6 +75,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isAlertSoundOn, setIsAlertSoundOn] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [orderScope, setOrderScope] = useState<'all' | 'mine'>('all');
   const [notifPerm, setNotifPerm] = useState<string>(
     () => (typeof Notification !== 'undefined' ? Notification.permission : 'unsupported')
   );
@@ -80,7 +83,39 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const titleFlashTimer = useRef<number | null>(null);
   const baseTitle = useRef(document.title);
 
-  const activeOrdersCount = orders.filter(o => o.status === 'NEW' || o.status === 'KITCHEN').length;
+  const visibleOrders =
+    orderScope === 'all' ? orders : orders.filter((o) => !o.outletId || o.outletId === outlet.id);
+  const mineCount = orders.filter((o) => !o.outletId || o.outletId === outlet.id).length;
+
+  const activeOrdersCount = visibleOrders.filter(o => o.status === 'NEW' || o.status === 'KITCHEN').length;
+
+  const SyncBadge: React.FC<{ compact?: boolean }> = ({ compact }) => (
+    <span
+      title={
+        syncStatus === 'live'
+          ? 'Connected to Firestore — orders arrive live from all devices'
+          : syncStatus === 'error'
+            ? 'Cannot reach Firestore (rules/offline?) — showing this device only'
+            : 'Connecting to live order sync…'
+      }
+      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-black border shrink-0 ${
+        syncStatus === 'live'
+          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+          : syncStatus === 'error'
+            ? 'bg-red-50 text-red-700 border-red-200 animate-pulse'
+            : 'bg-slate-100 text-slate-500 border-slate-200'
+      }`}
+    >
+      <span
+        className={`w-2 h-2 rounded-full ${
+          syncStatus === 'live' ? 'bg-emerald-500 animate-pulse' : syncStatus === 'error' ? 'bg-red-500' : 'bg-slate-400'
+        }`}
+      />
+      {!compact && (
+        <span>{syncStatus === 'live' ? 'Live sync' : syncStatus === 'error' ? 'Sync error' : 'Connecting…'}</span>
+      )}
+    </span>
+  );
 
   const stopTitleFlash = () => {
     if (titleFlashTimer.current !== null) {
@@ -368,6 +403,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
+          <SyncBadge compact />
           {activeOrdersCount > 0 && (
             <span className="ml-auto bg-[#ED1C24] text-white px-2.5 py-1 rounded-full text-[10px] font-black animate-pulse shrink-0">
               {activeOrdersCount} LIVE
@@ -437,6 +473,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
 
+            <SyncBadge />
+
             <span className="text-slate-200 mx-1">|</span>
 
             {/* Back to Store / Log Out */}
@@ -462,9 +500,33 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
         {/* Dynamic Page Views */}
         <div className="p-4 sm:p-6 max-w-7xl w-full mx-auto">
+          {/* Outlet scope: never lose an order to the wrong login again */}
+          <div className="flex items-center gap-2 mb-4">
+            <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200 text-xs font-bold">
+              <button
+                id="btn-scope-all"
+                onClick={() => setOrderScope('all')}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  orderScope === 'all' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                All outlets ({orders.length})
+              </button>
+              <button
+                id="btn-scope-mine"
+                onClick={() => setOrderScope('mine')}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  orderScope === 'mine' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                {outlet.shortName} only ({mineCount})
+              </button>
+            </div>
+          </div>
+
           {activeTab === 'dashboard' && (
             <AdminDashboard
-              orders={orders}
+              orders={visibleOrders}
               onNavigateTab={(t) => {
                 if (t === 'reports') setIsShiftModalOpen(true);
                 else setActiveTab(t);
@@ -475,7 +537,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
           {activeTab === 'live-orders' && (
             <AdminLiveOrders
-              orders={orders}
+              orders={visibleOrders}
               onUpdateOrderStatus={onUpdateOrderStatus}
             />
           )}
@@ -510,7 +572,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
       {/* Shift Z-Report Modal */}
       <AdminReports
-        orders={orders}
+        orders={visibleOrders}
         isOpen={isShiftModalOpen}
         onClose={() => setIsShiftModalOpen(false)}
       />

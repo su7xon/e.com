@@ -159,21 +159,27 @@ export default function App() {
 
   // Live: admin screen subscribes to Firestore orders (all devices, all outlets).
   // Merged by id — Firestore wins on conflicts, local-only orders are kept.
+  const [orderSyncStatus, setOrderSyncStatus] = useState<'connecting' | 'live' | 'error'>('connecting');
   useEffect(() => {
     if (currentView !== 'admin' || !adminOutlet) return;
-    const unsub = subscribeToFirestoreOrders((remote) => {
-      if (!remote.length) return;
-      setAdminOrders((prev) => {
-        const remoteById = new Map(remote.map((o) => [o.id, o]));
-        const prevIds = new Set(prev.map((o) => o.id));
-        const mergedPrev = prev.map((o) =>
-          remoteById.has(o.id) ? ({ ...o, ...remoteById.get(o.id) } as AdminOrder) : o
-        );
-        const fresh = remote.filter((r) => !prevIds.has(r.id));
-        if (!fresh.length && mergedPrev.every((o, i) => o === prev[i])) return prev;
-        return [...fresh, ...mergedPrev];
-      });
-    });
+    setOrderSyncStatus('connecting');
+    const unsub = subscribeToFirestoreOrders(
+      (remote) => {
+        setOrderSyncStatus('live');
+        if (!remote.length) return;
+        setAdminOrders((prev) => {
+          const remoteById = new Map(remote.map((o) => [o.id, o]));
+          const prevIds = new Set(prev.map((o) => o.id));
+          const mergedPrev = prev.map((o) =>
+            remoteById.has(o.id) ? ({ ...o, ...remoteById.get(o.id) } as AdminOrder) : o
+          );
+          const fresh = remote.filter((r) => !prevIds.has(r.id));
+          if (!fresh.length && mergedPrev.every((o, i) => o === prev[i])) return prev;
+          return [...fresh, ...mergedPrev];
+        });
+      },
+      () => setOrderSyncStatus('error')
+    );
     return unsub;
   }, [currentView, adminOutlet]);
 
@@ -649,14 +655,14 @@ export default function App() {
   }
 
   // If we're on the Admin POS page, render AdminLayout
+  // All orders are passed; AdminLayout offers an outlet scope toggle (default: all).
   if (currentView === 'admin' && adminOutlet) {
-    // Show only this outlet's orders (legacy orders without an outlet stay visible to all)
-    const outletOrders = adminOrders.filter((o) => !o.outletId || o.outletId === adminOutlet.id);
     return (
       <>
       <AdminLayout
         outlet={adminOutlet}
-        orders={outletOrders}
+        orders={adminOrders}
+        syncStatus={orderSyncStatus}
         menuItems={menuItems}
         coupons={coupons}
         onUpdateOrderStatus={(id, status) => {
