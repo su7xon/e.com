@@ -19,3 +19,12 @@ h1, h2, h3, h4, h5, h6, p, span, a, button, input, select, textarea {
 .font-display {
   font-family: 'Playfair Display', Georgia, serif !important;
 }
+
+/* Hide scrollbars but keep scroll (used in chatbot panel) */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

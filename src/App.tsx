@@ -29,6 +29,7 @@ import { RewardsModal } from './components/RewardsModal';
 import { DealsModal } from './components/DealsModal';
 import { BottomNav } from './components/BottomNav';
 import { BillingPage } from './components/BillingPage';
+import { ChatAssistant } from './components/ChatAssistant';
 import { PwaInstallBanner, PwaOfflineBadge, PwaUpdatePrompt } from './components/PwaManager';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminLogin } from './components/admin/AdminLogin';
@@ -645,6 +646,12 @@ export default function App() {
         <PwaOfflineBadge />
         <PwaUpdatePrompt />
         <PwaInstallBanner />
+        <ChatAssistant
+          menuItems={menuItems}
+          coupons={coupons}
+          onAddToCart={handleSimpleAddToCart}
+          onOpenCart={() => setIsCartOpen(true)}
+        />
       </>
     );
   }
@@ -1284,6 +1291,19 @@ export default function App() {
         }}
         appliedCouponCode={appliedCoupon?.code}
         coupons={coupons}
+      />
+
+      {/* Floating pizza assistant (Groq) */}
+      <ChatAssistant
+        menuItems={menuItems}
+        coupons={coupons}
+        onAddToCart={handleSimpleAddToCart}
+        onOpenCart={() => setIsCartOpen(true)}
+        onSelectCategory={(key) => {
+          setSelectedCategory(key);
+          const el = document.getElementById('menu-items-section');
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }}
       />
 
       {/* Bottom Sticky Navigation */}
