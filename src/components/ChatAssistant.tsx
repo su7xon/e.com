@@ -234,7 +234,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
             <div className="flex-1 min-w-0">
               <p className="text-sm font-black leading-tight">Cheesy — Pizza Assistant</p>
               <p className="text-[11px] text-white/80 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" /> Online • Groq fast model
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" /> Online
               </p>
             </div>
             <button
