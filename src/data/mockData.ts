@@ -2136,6 +2136,8 @@ export const DEFAULT_ADDRESSES: UserAddress[] = [
     landmark: 'Near TVS Showroom / 7 Cheese Flagship',
     distanceKm: 0.8,
     isDefault: true,
+    lat: 29.2145,
+    lng: 79.5285,
   },
   {
     id: 'addr-2',
@@ -2145,6 +2147,8 @@ export const DEFAULT_ADDRESSES: UserAddress[] = [
     pincode: '263139',
     landmark: 'Opposite State Bank ATM',
     distanceKm: 2.1,
+    lat: 29.199,
+    lng: 79.518,
   },
   {
     id: 'addr-3',
@@ -2154,6 +2158,8 @@ export const DEFAULT_ADDRESSES: UserAddress[] = [
     pincode: '263126',
     landmark: 'Platform 1 - Coach Berth Express',
     distanceKm: 3.5,
+    lat: 29.2671,
+    lng: 79.5459,
   },
 ];
 
