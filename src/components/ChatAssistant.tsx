@@ -240,7 +240,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
             <button
               id="btn-chat-clear"
               onClick={() => {
-                setMsgs([{ role: 'assistant', content: 'Chat clear ho gaya! Naya sawal pucho 🍕', addId: null }]);
+                setMsgs([{ role: 'assistant', content: 'Namaste! Main Cheesy hoon 🍕 Batao, kaunsi pizza khaane ka mood hai?', addId: null }]);
                 try { localStorage.removeItem(STORE_KEY); } catch {}
               }}
               aria-label="Clear chat"
