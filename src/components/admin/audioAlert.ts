@@ -1,4 +1,62 @@
 // Web Audio API based POS alert chimes without external asset dependencies
+
+let unlockedCtx: AudioContext | null = null;
+
+/** Call once on user gesture so alerts can play in background tabs later. */
+export const unlockAudio = () => {
+  try {
+    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    if (!unlockedCtx) unlockedCtx = new AudioContextClass();
+    if (unlockedCtx.state === 'suspended') void unlockedCtx.resume();
+  } catch {
+    // ignore
+  }
+};
+
+function urgentBurst(ctx: AudioContext, at: number) {
+  // Two-tone urgent siren (880Hz <-> 660Hz), ~0.9s
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(880, at);
+  osc.frequency.setValueAtTime(660, at + 0.22);
+  osc.frequency.setValueAtTime(880, at + 0.44);
+  osc.frequency.setValueAtTime(660, at + 0.66);
+  gain.gain.setValueAtTime(0.0001, at);
+  gain.gain.exponentialRampToValueAtTime(0.22, at + 0.05);
+  gain.gain.setValueAtTime(0.22, at + 0.8);
+  gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.9);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(at);
+  osc.stop(at + 0.95);
+}
+
+/** Loud repeating new-order alarm for ~durationMs (default 4s). */
+export const playNewOrderAlert = (durationMs = 4000) => {
+  try {
+    unlockAudio();
+    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = unlockedCtx ?? new AudioContextClass();
+    const bursts = Math.max(1, Math.round(durationMs / 1000));
+    const now = ctx.currentTime + 0.05;
+    for (let i = 0; i < bursts; i++) {
+      urgentBurst(ctx, now + i * 1.0);
+    }
+    setTimeout(() => {
+      try {
+        void ctx.close();
+      } catch {
+        // ignore
+      }
+      if (ctx === unlockedCtx) unlockedCtx = null;
+    }, durationMs + 800);
+  } catch {
+    // Audio context may be blocked before first user gesture
+  }
+};
 export const playPosChime = (durationMs = 1500) => {
   try {
     const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;

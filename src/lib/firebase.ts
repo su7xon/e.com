@@ -7,10 +7,12 @@ import {
   setDoc,
   deleteDoc,
   getDocs,
+  onSnapshot,
   type Firestore,
 } from 'firebase/firestore';
 import { getAnalytics, isSupported as isAnalyticsSupported, type Analytics } from 'firebase/analytics';
 import type { MenuItem } from '../types';
+import type { AdminOrder } from '../components/admin/adminData';
 
 // Config: VITE_ env vars first, fallback to project defaults so upload works out of the box.
 const firebaseConfig = {
@@ -208,7 +210,7 @@ export function uploadImageBlob(
 
 const MENU_COLLECTION = 'menuItems';
 
-function toPlain(item: MenuItem): Record<string, unknown> {
+function toPlain(item: unknown): Record<string, unknown> {
   return JSON.parse(JSON.stringify(item)) as Record<string, unknown>;
 }
 
@@ -228,6 +230,44 @@ export async function fetchMenuItemsFromFirestore(): Promise<MenuItem[] | null> 
     items.push({ ...(d.data() as MenuItem), id: d.id });
   });
   return items;
+}
+
+// ---------- Firestore: orders collection (customer device -> admin device, live) ----------
+
+const ORDERS_COLLECTION = 'orders';
+
+/** Customer places order: mirror it to Firestore so the admin screen gets it live. */
+export async function saveOrderToFirestore(order: AdminOrder): Promise<void> {
+  await setDoc(doc(db, ORDERS_COLLECTION, order.id), toPlain(order));
+}
+
+/** Admin changes status: sync back so customer/other screens stay consistent. */
+export async function updateOrderStatusInFirestore(
+  orderId: string,
+  status: AdminOrder['status']
+): Promise<void> {
+  await setDoc(doc(db, ORDERS_COLLECTION, orderId), { status }, { merge: true });
+}
+
+/** Live subscription for the admin screen. Returns unsubscribe. Never throws. */
+export function subscribeToFirestoreOrders(onOrders: (orders: AdminOrder[]) => void): () => void {
+  try {
+    return onSnapshot(
+      collection(db, ORDERS_COLLECTION),
+      (snap) => {
+        const list: AdminOrder[] = [];
+        snap.forEach((d) => {
+          list.push({ ...((d.data() as AdminOrder) ?? {}), id: d.id } as AdminOrder);
+        });
+        onOrders(list);
+      },
+      () => {
+        // Offline / permission denied: stay on local orders silently.
+      }
+    );
+  } catch {
+    return () => {};
+  }
 }
 
 export { app };

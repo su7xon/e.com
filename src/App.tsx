@@ -31,6 +31,7 @@ import { RewardsModal } from './components/RewardsModal';
 import { DealsModal } from './components/DealsModal';
 import { BottomNav } from './components/BottomNav';
 import { BillingPage } from './components/BillingPage';
+import { PwaInstallBanner, PwaOfflineBadge, PwaUpdatePrompt } from './components/PwaManager';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminLogin } from './components/admin/AdminLogin';
 import { AdminOrder, SEED_ADMIN_ORDERS } from './components/admin/adminData';
@@ -39,6 +40,9 @@ import {
   saveMenuItemToFirestore,
   deleteMenuItemFromFirestore,
   fetchMenuItemsFromFirestore,
+  saveOrderToFirestore,
+  updateOrderStatusInFirestore,
+  subscribeToFirestoreOrders,
 } from './lib/firebase';
 import { 
   Filter, 
@@ -152,6 +156,26 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  // Live: admin screen subscribes to Firestore orders (all devices, all outlets).
+  // Merged by id — Firestore wins on conflicts, local-only orders are kept.
+  useEffect(() => {
+    if (currentView !== 'admin' || !adminOutlet) return;
+    const unsub = subscribeToFirestoreOrders((remote) => {
+      if (!remote.length) return;
+      setAdminOrders((prev) => {
+        const remoteById = new Map(remote.map((o) => [o.id, o]));
+        const prevIds = new Set(prev.map((o) => o.id));
+        const mergedPrev = prev.map((o) =>
+          remoteById.has(o.id) ? ({ ...o, ...remoteById.get(o.id) } as AdminOrder) : o
+        );
+        const fresh = remote.filter((r) => !prevIds.has(r.id));
+        if (!fresh.length && mergedPrev.every((o, i) => o === prev[i])) return prev;
+        return [...fresh, ...mergedPrev];
+      });
+    });
+    return unsub;
+  }, [currentView, adminOutlet]);
 
   // Live Coupons State (Syncs with Admin)
   const [coupons, setCoupons] = useState<Coupon[]>(() => {
@@ -456,6 +480,8 @@ export default function App() {
     };
 
     setAdminOrders((prev) => [newAdminOrder, ...prev]);
+    // Mirror to Firestore so the admin screen rings live on any device.
+    saveOrderToFirestore(newAdminOrder).catch(() => {});
     setActiveOrder(newOrder);
     setPastOrders((prev) => [newOrder, ...prev]);
     setCartItems([]);
@@ -600,6 +626,10 @@ export default function App() {
             }
           }}
         />
+
+        <PwaOfflineBadge />
+        <PwaUpdatePrompt />
+        <PwaInstallBanner />
       </>
     );
   }
@@ -607,10 +637,14 @@ export default function App() {
   // If we're on the Admin POS page, render login gate first, then AdminLayout
   if (currentView === 'admin' && !adminOutlet) {
     return (
-      <AdminLogin
-        onLogin={handleAdminLogin}
-        onBackToStore={() => setCurrentView('home')}
-      />
+      <>
+        <AdminLogin
+          onLogin={handleAdminLogin}
+          onBackToStore={() => setCurrentView('home')}
+        />
+        <PwaOfflineBadge />
+        <PwaUpdatePrompt />
+      </>
     );
   }
 
@@ -619,6 +653,7 @@ export default function App() {
     // Show only this outlet's orders (legacy orders without an outlet stay visible to all)
     const outletOrders = adminOrders.filter((o) => !o.outletId || o.outletId === adminOutlet.id);
     return (
+      <>
       <AdminLayout
         outlet={adminOutlet}
         orders={outletOrders}
@@ -626,6 +661,7 @@ export default function App() {
         coupons={coupons}
         onUpdateOrderStatus={(id, status) => {
           setAdminOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+          updateOrderStatusInFirestore(id, status).catch(() => {});
         }}
         onAddItem={(item) => {
           setMenuItems((prev) => [item, ...prev]);
@@ -656,6 +692,9 @@ export default function App() {
           setStoreCategories((prev) => prev.map((c) => (c.id === id ? { ...c, image } : c)));
         }}
       />
+        <PwaOfflineBadge />
+        <PwaUpdatePrompt />
+      </>
     );
   }
 
@@ -1249,6 +1288,11 @@ export default function App() {
         cartTotal={cartTotal}
         onOpenCart={() => setIsCartOpen(true)}
       />
+
+      {/* PWA: install prompt, update prompt, offline badge */}
+      <PwaOfflineBadge />
+      <PwaUpdatePrompt />
+      <PwaInstallBanner />
 
     </div>
   );

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -29,7 +29,7 @@ import { AdminMenuManager } from './AdminMenuManager';
 import { AdminCouponManager } from './AdminCouponManager';
 import { AdminReports } from './AdminReports';
 import { AdminStoreImages } from './AdminStoreImages';
-import { playPosChime } from './audioAlert';
+import { playPosChime, playNewOrderAlert, unlockAudio } from './audioAlert';
 
 interface AdminLayoutProps {
   outlet: Outlet;
@@ -73,8 +73,98 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isAlertSoundOn, setIsAlertSoundOn] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [notifPerm, setNotifPerm] = useState<string>(
+    () => (typeof Notification !== 'undefined' ? Notification.permission : 'unsupported')
+  );
+  const knownOrderIds = useRef<Set<string> | null>(null);
+  const titleFlashTimer = useRef<number | null>(null);
+  const baseTitle = useRef(document.title);
 
   const activeOrdersCount = orders.filter(o => o.status === 'NEW' || o.status === 'KITCHEN').length;
+
+  const stopTitleFlash = () => {
+    if (titleFlashTimer.current !== null) {
+      window.clearInterval(titleFlashTimer.current);
+      titleFlashTimer.current = null;
+      document.title = baseTitle.current;
+    }
+  };
+
+  const flashTitle = (text: string) => {
+    stopTitleFlash();
+    let on = false;
+    titleFlashTimer.current = window.setInterval(() => {
+      on = !on;
+      document.title = on ? text : baseTitle.current;
+    }, 1000);
+  };
+
+  const handleEnableAlerts = async () => {
+    unlockAudio();
+    playPosChime(800);
+    try {
+      if ('Notification' in window && Notification.permission === 'default') {
+        const perm = await Notification.requestPermission();
+        setNotifPerm(perm);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  // Unlock audio on first interaction so background-tab alarms are allowed.
+  useEffect(() => {
+    const unlock = () => unlockAudio();
+    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
+    const onFocus = () => stopTitleFlash();
+    const onVis = () => {
+      if (!document.hidden) stopTitleFlash();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVis);
+      stopTitleFlash();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto alarm on every genuinely NEW incoming order (sound ~4s + title + notification).
+  useEffect(() => {
+    if (knownOrderIds.current === null) {
+      knownOrderIds.current = new Set(orders.map((o) => o.id));
+      return;
+    }
+    const fresh = orders.filter(
+      (o) => !knownOrderIds.current!.has(o.id) && (o.status === 'NEW' || o.status === 'KITCHEN')
+    );
+    knownOrderIds.current = new Set(orders.map((o) => o.id));
+    if (!fresh.length) return;
+    const latest = fresh[0];
+    const itemCount = latest.items.reduce((n, it) => n + (it.quantity || 1), 0);
+    if (isAlertSoundOn) playNewOrderAlert(4000);
+    flashTitle(`🔔 NEW ORDER ${latest.orderNumber} — ₹${latest.total}`);
+    try {
+      if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+        const n = new Notification('🔔 New Order Received', {
+          body: `${latest.orderNumber} • ${itemCount} items • ₹${latest.total} • ${latest.orderType}`,
+          icon: '/pwa-192x192.png',
+          tag: latest.id,
+        });
+        n.onclick = () => {
+          window.focus();
+          n.close();
+        };
+      }
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders]);
 
   const handleTestAlert = () => {
     if (isAlertSoundOn) {
@@ -261,6 +351,15 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             <Bell className="w-3.5 h-3.5 text-amber-600" />
             <span>Test Sound</span>
           </button>
+          {notifPerm !== 'granted' && notifPerm !== 'unsupported' && (
+            <button
+              onClick={() => void handleEnableAlerts()}
+              className="flex items-center gap-1.5 bg-blue-50 text-blue-800 border border-blue-300 px-3 py-1.5 rounded-xl text-[11px] font-bold cursor-pointer animate-pulse"
+            >
+              <Bell className="w-3.5 h-3.5 text-blue-600" />
+              <span>Enable Alerts</span>
+            </button>
+          )}
           <button
             onClick={handleRefresh}
             className="p-2 rounded-xl bg-white text-slate-700 border border-slate-200 cursor-pointer"
@@ -315,6 +414,19 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               <Bell className="w-3.5 h-3.5 text-amber-600" />
               <span>Test 3s Alert</span>
             </button>
+
+            {/* Enable browser notifications + background audio */}
+            {notifPerm !== 'granted' && notifPerm !== 'unsupported' && (
+              <button
+                id="btn-enable-alerts"
+                onClick={() => void handleEnableAlerts()}
+                className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer animate-pulse"
+                title="Allow sound + popup alerts when this tab is in background"
+              >
+                <Bell className="w-3.5 h-3.5 text-blue-600" />
+                <span>Enable Alerts</span>
+              </button>
+            )}
 
             {/* Refresh */}
             <button
