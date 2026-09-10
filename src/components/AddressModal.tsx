@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, MapPin, Plus, Check, Home, Briefcase, Navigation, Compass } from 'lucide-react';
+import { X, MapPin, Plus, Check, Home, Briefcase, Navigation, Compass, Pencil, Trash2 } from 'lucide-react';
 import { UserAddress } from '../types';
 import { InteractiveMapPicker } from './InteractiveMapPicker';
 
@@ -10,6 +10,8 @@ interface AddressModalProps {
   currentAddress: UserAddress;
   onSelectAddress: (addr: UserAddress) => void;
   onAddNewAddress: (addr: UserAddress) => void;
+  onUpdateAddress: (addr: UserAddress) => void;
+  onDeleteAddress: (id: string) => void;
 }
 
 const getAddressIcon = (label: string) => {
@@ -25,8 +27,11 @@ export const AddressModal: React.FC<AddressModalProps> = ({
   currentAddress,
   onSelectAddress,
   onAddNewAddress,
+  onUpdateAddress,
+  onDeleteAddress,
 }) => {
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
   const [label, setLabel] = useState<'Home' | 'Work' | 'Other'>('Home');
   const [addressLine, setAddressLine] = useState('');
@@ -36,23 +41,63 @@ export const AddressModal: React.FC<AddressModalProps> = ({
 
   if (!isOpen) return null;
 
+  const resetForm = () => {
+    setLabel('Home');
+    setAddressLine('');
+    setCity('Haldwani');
+    setPincode('263139');
+    setLandmark('');
+    setEditingId(null);
+    setShowAddForm(false);
+  };
+
+  const startEdit = (addr: UserAddress) => {
+    setLabel(addr.label);
+    setAddressLine(addr.address);
+    setCity(addr.city);
+    setPincode(addr.pincode);
+    setLandmark(addr.landmark || '');
+    setEditingId(addr.id);
+    setShowAddForm(true);
+  };
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!addressLine.trim()) return;
 
-    const newAddr: UserAddress = {
-      id: `addr-${Date.now()}`,
-      label,
-      address: addressLine,
-      city,
-      pincode,
-      landmark,
-      distanceKm: 2.8,
-    };
-    onAddNewAddress(newAddr);
-    onSelectAddress(newAddr);
-    setShowAddForm(false);
+    if (editingId) {
+      const existing = addresses.find((a) => a.id === editingId);
+      const updated: UserAddress = {
+        ...(existing ?? { id: editingId, distanceKm: 2.8 }),
+        id: editingId,
+        label,
+        address: addressLine,
+        city,
+        pincode,
+        landmark,
+      };
+      onUpdateAddress(updated);
+      if (currentAddress.id === editingId) onSelectAddress(updated);
+    } else {
+      const newAddr: UserAddress = {
+        id: `addr-${Date.now()}`,
+        label,
+        address: addressLine,
+        city,
+        pincode,
+        landmark,
+        distanceKm: 2.8,
+      };
+      onAddNewAddress(newAddr);
+      onSelectAddress(newAddr);
+    }
+    resetForm();
     onClose();
+  };
+
+  const handleDelete = (id: string) => {
+    if (!window.confirm('Delete this saved address?')) return;
+    onDeleteAddress(id);
   };
 
   const handleMapAddressSelect = (newAddr: UserAddress) => {
@@ -125,20 +170,22 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                     const Icon = getAddressIcon(addr.label);
 
                     return (
-                      <button
+                      <div
                         key={addr.id}
-                        id={`btn-select-addr-${addr.id}`}
-                        onClick={() => {
-                          onSelectAddress(addr);
-                          onClose();
-                        }}
-                        className={`w-full p-3 rounded-2xl border text-left flex items-start justify-between gap-3 transition-all cursor-pointer ${
+                        className={`w-full p-3 rounded-2xl border flex items-start justify-between gap-2 transition-all ${
                           isSelected
                             ? 'border-[#005580] bg-blue-50/70 ring-2 ring-[#005580]'
-                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                            : 'border-slate-200 bg-white'
                         }`}
                       >
-                        <div className="flex items-start gap-3 min-w-0">
+                        <button
+                          id={`btn-select-addr-${addr.id}`}
+                          onClick={() => {
+                            onSelectAddress(addr);
+                            onClose();
+                          }}
+                          className="flex-1 flex items-start gap-3 min-w-0 text-left cursor-pointer"
+                        >
                           <div
                             className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
                               isSelected ? 'bg-[#005580] text-white' : 'bg-slate-100 text-slate-600'
@@ -166,12 +213,32 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                               </p>
                             )}
                           </div>
-                        </div>
+                        </button>
 
-                        {isSelected && (
-                          <Check className="w-4 h-4 text-[#005580] shrink-0 mt-1" />
-                        )}
-                      </button>
+                        <div className="flex flex-col gap-1 shrink-0">
+                          {isSelected && (
+                            <Check className="w-4 h-4 text-[#005580] self-center" />
+                          )}
+                          <button
+                            id={`btn-edit-addr-${addr.id}`}
+                            onClick={() => startEdit(addr)}
+                            title="Edit address"
+                            aria-label="Edit address"
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-blue-100 text-slate-500 hover:text-[#005580] transition-colors cursor-pointer"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            id={`btn-delete-addr-${addr.id}`}
+                            onClick={() => handleDelete(addr.id)}
+                            title="Delete address"
+                            aria-label="Delete address"
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-[#ED1C24] transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
@@ -198,7 +265,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
             ) : (
               <form onSubmit={handleSave} className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700">Add New Address</span>
+                  <span className="text-xs font-bold text-slate-700">{editingId ? 'Edit Address' : 'Add New Address'}</span>
                   <button
                     type="button"
                     onClick={() => setIsMapPickerOpen(true)}
@@ -287,7 +354,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                 <div className="flex gap-2 pt-2">
                   <button
                     type="button"
-                    onClick={() => setShowAddForm(false)}
+                    onClick={resetForm}
                     className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl text-xs cursor-pointer"
                   >
                     Cancel
@@ -297,7 +364,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                     id="btn-save-new-address"
                     className="flex-1 bg-[#ED1C24] hover:bg-[#c91430] text-white font-black py-2.5 rounded-xl text-xs shadow-md cursor-pointer"
                   >
-                    Save & Use Address
+                    {editingId ? 'Save Changes' : 'Save & Use Address'}
                   </button>
                 </div>
               </form>

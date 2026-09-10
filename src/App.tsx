@@ -416,6 +416,23 @@ export default function App() {
     setAppliedCoupon(null);
   };
 
+  const handleUpdateAddress = (updated: UserAddress) => {
+    setAddresses((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+    setCurrentAddress((prev) => (prev.id === updated.id ? updated : prev));
+  };
+
+  const handleDeleteAddress = (id: string) => {
+    setAddresses((prev) => {
+      const next = prev.filter((a) => a.id !== id);
+      return next.length > 0 ? next : DEFAULT_ADDRESSES;
+    });
+    setCurrentAddress((prev) => {
+      if (prev.id !== id) return prev;
+      const remaining = addresses.filter((a) => a.id !== id);
+      return remaining[0] || DEFAULT_ADDRESSES[0];
+    });
+  };
+
   const handlePlaceOrder = (notes: string, paymentMethod?: string) => {
     const subtotal = cartTotal;
     const isFreeDel = subtotal >= 99 || appliedCoupon?.code === 'FREEDEL';
@@ -610,6 +627,8 @@ export default function App() {
           currentAddress={currentAddress}
           onSelectAddress={(addr) => setCurrentAddress(addr)}
           onAddNewAddress={(newAddr) => setAddresses((prev) => [newAddr, ...prev])}
+          onUpdateAddress={handleUpdateAddress}
+          onDeleteAddress={handleDeleteAddress}
         />
 
         <OrderTrackerModal
