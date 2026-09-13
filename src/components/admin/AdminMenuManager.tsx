@@ -51,7 +51,11 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
     image: PRESET_PIZZA_IMAGES[0].url,
     badge: 'NEW',
     isCustomizable: true,
+    sizePrices: { Regular: 299, Medium: 449, Large: 599 },
   });
+
+  const isPizzaCategory = (cat?: string) =>
+    cat === 'signature-7-cheese' || cat === 'veg-pizza' || cat === 'non-veg-pizza';
 
   const categories: { id: string; label: string }[] = [
     { id: 'all', label: 'All Items' },
@@ -94,6 +98,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
       image: PRESET_PIZZA_IMAGES[0].url,
       badge: 'NEW',
       isCustomizable: true,
+      sizePrices: { Regular: 299, Medium: 449, Large: 599 },
     });
     setIsAddModalOpen(true);
   };
@@ -101,7 +106,10 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
   const handleOpenEdit = (item: MenuItem) => {
     setEditingItem(item);
     resetUploadState();
-    setFormData(item);
+    setFormData({
+      ...item,
+      sizePrices: item.sizePrices ?? { Regular: item.price, Medium: item.price + 150, Large: item.price + 300 },
+    });
     setIsAddModalOpen(true);
   };
 
@@ -134,11 +142,24 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
     e.preventDefault();
     if (!formData.name?.trim() || !formData.price) return;
 
+    const isPizza = isPizzaCategory(formData.category);
+    const sizePrices = isPizza
+      ? {
+          Regular: Number(formData.sizePrices?.Regular || formData.price),
+          Medium: Number(formData.sizePrices?.Medium || formData.price),
+          Large: Number(formData.sizePrices?.Large || formData.price),
+        }
+      : undefined;
+    // Base price = Small/Regular price taaki store listing sahi dikhe
+    const basePrice = isPizza ? Number(sizePrices!.Regular) : Number(formData.price);
+
     if (editingItem) {
       // Update existing
       onUpdateItem({
         ...editingItem,
         ...formData,
+        price: basePrice,
+        sizePrices,
       } as MenuItem);
     } else {
       // Add new
@@ -147,7 +168,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
         name: formData.name.trim(),
         category: (formData.category || 'signature-7-cheese') as MenuCategoryType,
         isVeg: formData.isVeg ?? true,
-        price: Number(formData.price),
+        price: basePrice,
         originalPrice: formData.originalPrice ? Number(formData.originalPrice) : undefined,
         description: formData.description?.trim() || 'Delicious artisanal preparation made fresh with authentic ingredients.',
         image: formData.image || PRESET_PIZZA_IMAGES[0].url,
@@ -155,6 +176,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
         isCustomizable: formData.isCustomizable ?? true,
         defaultSize: 'Medium',
         defaultCrust: 'New Hand Tossed',
+        sizePrices,
       };
       onAddItem(newItem);
     }
@@ -442,7 +464,16 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-1">Category *</label>
                   <select
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value as MenuCategoryType })}
+                    onChange={(e) => {
+                      const cat = e.target.value as MenuCategoryType;
+                      setFormData((prev) => ({
+                        ...prev,
+                        category: cat,
+                        ...(isPizzaCategory(cat) && !prev.sizePrices
+                          ? { sizePrices: { Regular: prev.price || 299, Medium: (prev.price || 299) + 150, Large: (prev.price || 299) + 300 } }
+                          : {}),
+                      }));
+                    }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#ED1C24]"
                   >
                     <option value="signature-7-cheese">7 Cheese Special</option>
@@ -507,6 +538,50 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                   />
                 </div>
               </div>
+
+              {/* Pizza Size Prices — Small / Medium / Large */}
+              {isPizzaCategory(formData.category) && (
+                <div className="bg-red-50/60 border border-red-100 rounded-xl p-3">
+                  <label className="block text-xs font-black text-slate-800 mb-1">
+                    Pizza Size Prices (₹) *
+                  </label>
+                  <p className="text-[11px] text-slate-500 mb-2">
+                    Small = Regular size. Yehi price customer ko Customize me dikhega.
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(
+                      [
+                        { key: 'Regular', label: 'Small', hint: '8" • Serves 1' },
+                        { key: 'Medium', label: 'Medium', hint: '10" • Serves 2' },
+                        { key: 'Large', label: 'Large', hint: '12" • Serves 4' },
+                      ] as const
+                    ).map((s) => (
+                      <div key={s.key}>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                          {s.label} <span className="text-slate-400 font-medium">({s.hint})</span>
+                        </label>
+                        <input
+                          type="number"
+                          required
+                          min={1}
+                          value={formData.sizePrices?.[s.key] || ''}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setFormData((prev) => ({
+                              ...prev,
+                              sizePrices: { ...prev.sizePrices, [s.key]: val },
+                              // Small wala price base price bhi bane
+                              ...(s.key === 'Regular' ? { price: val } : {}),
+                            }));
+                          }}
+                          placeholder={s.key === 'Regular' ? '299' : s.key === 'Medium' ? '449' : '599'}
+                          className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#ED1C24]"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Badge */}
               <div>
