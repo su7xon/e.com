@@ -10,6 +10,8 @@ import {
 } from './types';
 import {
   MENU_ITEMS,
+  MENU_VERSION,
+  REMOVED_MENU_IDS,
   CRAVING_CATEGORIES,
   DEFAULT_ADDRESSES,
   COUPONS,
@@ -96,6 +98,8 @@ export default function App() {
   });
 
   const [storeCategories, setStoreCategories] = useState<CategoryItem[]>(() => {
+    // Brochure menu upgrade: stale cached categories (drinks/combos/7cheese) drop karo
+    if (localStorage.getItem('seven_cheese_menu_version') !== MENU_VERSION) return CRAVING_CATEGORIES;
     const saved = localStorage.getItem('seven_cheese_categories');
     if (!saved) return CRAVING_CATEGORIES;
     try {
@@ -116,6 +120,8 @@ export default function App() {
 
   // Live Menu Items State (Syncs with Admin)
   const [menuItems, setMenuItems] = useState<MenuItem[]>(() => {
+    // Brochure menu upgrade: purana cached menu (drinks/combos/7cheese) poora replace
+    if (localStorage.getItem('seven_cheese_menu_version') !== MENU_VERSION) return MENU_ITEMS;
     const saved = localStorage.getItem('seven_cheese_menu_items');
     if (!saved) return MENU_ITEMS;
     try {
@@ -141,12 +147,32 @@ export default function App() {
   // Boot: load Firestore menu (same on all devices). Fall back to local menu on failure.
   useEffect(() => {
     let cancelled = false;
+    // One-time brochure upgrade: version stamp set karo + stale Firestore docs delete karo
+    // taaki removed items (drinks/combos/7cheese/extra desserts) kisi device pe wapas na aaye.
+    if (localStorage.getItem('seven_cheese_menu_version') !== MENU_VERSION) {
+      try {
+        localStorage.setItem('seven_cheese_menu_version', MENU_VERSION);
+      } catch { /* ignore */ }
+      setMenuItems(MENU_ITEMS);
+      setStoreCategories(CRAVING_CATEGORIES);
+      REMOVED_MENU_IDS.forEach((id) => {
+        deleteMenuItemFromFirestore(id).catch(() => {});
+      });
+    }
     fetchMenuItemsFromFirestore()
       .then((remote) => {
         if (cancelled || !remote) return;
         setMenuItems((prev) => {
           const byId = new Map(prev.map((m) => [m.id, m]));
-          remote.forEach((m) => byId.set(m.id, { ...m, image: fixImg(m.image) }));
+          remote.forEach((m) => {
+            if (REMOVED_MENU_IDS.includes(m.id)) {
+              byId.delete(m.id);
+              return;
+            }
+            byId.set(m.id, { ...m, image: fixImg(m.image) });
+          });
+          // Safety: local me bachi hui stale ids bhi nikalo
+          REMOVED_MENU_IDS.forEach((id) => byId.delete(id));
           return Array.from(byId.values());
         });
       })
@@ -864,6 +890,8 @@ export default function App() {
                     ? 'Fresh Veg Pizzas'
                     : selectedCategory === 'chicken-pizza'
                     ? 'Hot & Spicy Chicken Pizzas'
+                    : selectedCategory === 'non-veg-pizza'
+                    ? 'Hot & Spicy Non-Veg Pizzas'
                     : selectedCategory === 'pan-pizza'
                     ? 'Crispy Pan Pizzas'
                     : selectedCategory === 'burgers'
@@ -1109,7 +1137,7 @@ export default function App() {
               <button
                 id="btn-order-7cheese-tab"
                 onClick={() => {
-                  const item = MENU_ITEMS.find((m) => m.id === 'p-7cheese-signature');
+                  const item = MENU_ITEMS.find((m) => m.id === 'p-veg-supreme');
                   if (item) handleOpenCustomize(item);
                 }}
                 className="mt-6 bg-[#ED1C24] hover:bg-[#c91430] text-white font-black px-8 py-3.5 rounded-full text-base shadow-lg transition-all cursor-pointer"

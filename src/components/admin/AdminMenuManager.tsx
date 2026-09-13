@@ -55,7 +55,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
   });
 
   const isPizzaCategory = (cat?: string) =>
-    cat === 'signature-7-cheese' || cat === 'veg-pizza' || cat === 'non-veg-pizza';
+    cat === 'signature-7-cheese' || cat === 'veg-pizza' || cat === 'non-veg-pizza' || cat === 'chicken-pizza';
 
   const categories: { id: string; label: string }[] = [
     { id: 'all', label: 'All Items' },

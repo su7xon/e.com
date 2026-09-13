@@ -1,10 +1,9 @@
 import React from 'react';
-import { 
-  Pizza, 
-  RotateCcw, 
-  Sparkles, 
-  UtensilsCrossed, 
-  ShoppingBag, 
+import {
+  Pizza,
+  RotateCcw,
+  Sparkles,
+  ShoppingBag,
   ArrowRight,
   Layers
 } from 'lucide-react';
@@ -100,18 +99,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             </span>
             <Layers className={`w-5 h-5 ${activeTab === 'bigbig' ? 'stroke-[2.5]' : ''}`} />
             <span className="text-[10px] sm:text-[11px] font-bold">7 Cheese</span>
-          </button>
-
-          {/* Combos */}
-          <button
-            id="btn-tab-combos"
-            onClick={() => setActiveTab('combos')}
-            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'combos' ? 'text-[#ED1C24]' : 'text-slate-400 hover:text-slate-900'
-            }`}
-          >
-            <UtensilsCrossed className={`w-5 h-5 ${activeTab === 'combos' ? 'stroke-[2.5]' : ''}`} />
-            <span className="text-[10px] sm:text-[11px] font-bold">Combos</span>
           </button>
         </div>
       </nav>
