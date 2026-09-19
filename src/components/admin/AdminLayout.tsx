@@ -12,6 +12,7 @@ import {
   Bell,
   LogOut,
   Menu as MenuIcon,
+  Receipt,
   X,
   Sparkles,
   Store,
@@ -25,6 +26,7 @@ import { Outlet } from './outlets';
 import { BannerSlide } from '../HeroBanner';
 import { AdminDashboard } from './AdminDashboard';
 import { AdminLiveOrders } from './AdminLiveOrders';
+import { RushdaBilling } from './RushdaBilling';
 import { AdminMenuManager } from './AdminMenuManager';
 import { AdminCouponManager } from './AdminCouponManager';
 import { AdminReports } from './AdminReports';
@@ -41,6 +43,7 @@ interface AdminLayoutProps {
   onAddItem: (item: MenuItem) => void;
   onUpdateItem: (item: MenuItem) => void;
   onDeleteItem: (itemId: string) => void;
+  onCreateOrder: (order: AdminOrder) => void;
   onAddCoupon: (coupon: Coupon) => void;
   onDeleteCoupon: (code: string) => void;
   onBackToStore: () => void;
@@ -61,6 +64,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   onAddItem,
   onUpdateItem,
   onDeleteItem,
+  onCreateOrder,
   onAddCoupon,
   onDeleteCoupon,
   onBackToStore,
@@ -70,7 +74,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   categories,
   onUpdateCategoryImage
 }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'live-orders' | 'menu' | 'coupons' | 'images'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'live-orders' | 'rushda' | 'menu' | 'coupons' | 'images'>('dashboard');
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isAlertSoundOn, setIsAlertSoundOn] = useState(true);
@@ -284,6 +288,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             {[
               { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
               { id: 'live-orders', label: 'Live Orders & KOT', icon: ShoppingBag, badge: activeOrdersCount > 0 ? activeOrdersCount : undefined, badgeColor: 'bg-red-500 text-white' },
+              { id: 'rushda', label: 'Counter Billing', icon: Receipt, badge: undefined, badgeColor: 'bg-slate-100 text-slate-600' },
               { id: 'menu', label: 'Menu Catalog', icon: UtensilsCrossed, badge: menuItems.length, badgeColor: 'bg-slate-100 text-slate-600' },
               { id: 'coupons', label: 'Offers & Coupons', icon: Tag, badge: coupons.length, badgeColor: 'bg-emerald-50 text-emerald-700' },
               { id: 'images', label: 'Store Images', icon: ImageIcon, badge: slides.length + categories.length, badgeColor: 'bg-violet-50 text-violet-700' },
@@ -539,6 +544,18 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             <AdminLiveOrders
               orders={visibleOrders}
               onUpdateOrderStatus={onUpdateOrderStatus}
+            />
+          )}
+
+          {activeTab === 'rushda' && (
+            <RushdaBilling
+              outlet={outlet}
+              orders={visibleOrders}
+              menuItems={menuItems}
+              onCreateOrder={onCreateOrder}
+              onAddItem={onAddItem}
+              onUpdateItem={onUpdateItem}
+              onDeleteItem={onDeleteItem}
             />
           )}
 

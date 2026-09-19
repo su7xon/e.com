@@ -91,7 +91,14 @@ export default function App() {
     if (!saved) return DEFAULT_SLIDES;
     try {
       const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_SLIDES;
+      if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_SLIDES;
+      // Merge: new default slides (e.g. lunch special) auto-appear,
+      // admin-customised images for existing ids stay preserved.
+      const savedById = new Map(parsed.map((s: BannerSlide) => [s.id, s]));
+      return DEFAULT_SLIDES.map((d) => {
+        const s = savedById.get(d.id) as BannerSlide | undefined;
+        return s?.image ? { ...d, image: s.image } : d;
+      });
     } catch {
       return DEFAULT_SLIDES;
     }
@@ -722,6 +729,10 @@ export default function App() {
         onDeleteItem={(id) => {
           setMenuItems((prev) => prev.filter((it) => it.id !== id));
           deleteMenuItemFromFirestore(id).catch(() => {});
+        }}
+        onCreateOrder={(order) => {
+          setAdminOrders((prev) => [order, ...prev]);
+          saveOrderToFirestore(order).catch(() => {});
         }}
         onAddCoupon={(coupon) => {
           setCoupons((prev) => [coupon, ...prev]);

@@ -23,6 +23,7 @@ export interface BannerSlide {
   bgGradient: string;
   image: string;
   productId: string;
+  fullImage?: boolean;
 }
 
 export const DEFAULT_SLIDES: BannerSlide[] = [
@@ -88,6 +89,22 @@ export const DEFAULT_SLIDES: BannerSlide[] = [
     image: 'https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=900&auto=format&fit=crop&q=80',
     productId: 'b-veg-normal',
   },
+  {
+    id: 'slide-lunch-special',
+    badge: 'LUNCH TIME SPECIAL • 11 AM - 2 PM',
+    titlePart1: 'Delicious',
+    titleHighlight: 'PIZZA COMBOS',
+    titlePart2: 'From ₹149',
+    subtitle: 'Good Food • Bright Mood • Tastier Day! Pizza + Cold Drink + Fries!',
+    priceOld: 199,
+    priceNew: 149,
+    feature1: 'Personal @ ₹149 / Medium @ ₹199',
+    feature2: 'Cold Drink + Fries Included',
+    bgGradient: 'from-amber-950 via-[#1c0f05] to-[#0d0702]',
+    image: '/images/lunch-time-special-combos.jpg',
+    productId: 'p-veg-supreme',
+    fullImage: true,
+  },
 ];
 
 export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpenDeals, slides = DEFAULT_SLIDES }) => {
@@ -110,7 +127,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpen
     <div className="w-full">
       {/* Main Hero Slider Container - Exactly 12:7 ratio on mobile */}
       <div
-        className="relative w-full bg-slate-950 overflow-hidden select-none aspect-[12/7] sm:aspect-auto min-h-[190px] sm:min-h-[380px] md:min-h-[420px] flex items-center py-2 sm:py-0"
+        className="relative w-full bg-slate-950 overflow-hidden select-none aspect-[12/7] sm:aspect-auto min-h-[190px] sm:min-h-[380px] md:min-h-[432px] sm:h-[380px] md:h-[432px] lg:h-[468px] flex items-center py-2 sm:py-0"
         onMouseEnter={() => setIsPaused(true)}
         onMouseLeave={() => setIsPaused(false)}
       >
@@ -119,11 +136,28 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpen
           className={`absolute inset-0 bg-gradient-to-r ${slide.bgGradient} transition-colors duration-700`}
         />
 
+        {/* Full-bleed offer image slide (no text box, no crop) */}
+        {slide.fullImage && (
+          <button
+            id={`btn-hero-order-${slide.id}`}
+            onClick={() => onSelectFeatured(slide.productId)}
+            className="relative block w-full h-full cursor-pointer"
+            aria-label={`${slide.titlePart1} ${slide.titleHighlight} ${slide.titlePart2}`}
+          >
+            <img
+              src={slide.image}
+              alt={`${slide.titlePart1} ${slide.titleHighlight} ${slide.titlePart2}`}
+              className="w-full h-full object-cover object-center sm:object-[center_20%]"
+              referrerPolicy="no-referrer"
+            />
+          </button>
+        )}
+
         {/* Ambient Glow */}
-        <div className="absolute top-1/2 right-1/4 -translate-y-1/2 w-96 h-96 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
+        <div className={`absolute top-1/2 right-1/4 -translate-y-1/2 w-96 h-96 bg-amber-500/15 rounded-full blur-3xl pointer-events-none ${slide.fullImage ? 'hidden' : ''}`} />
 
         {/* Content Grid: Side-by-side on both mobile and laptop */}
-        <div className="relative max-w-7xl mx-auto px-3 sm:px-6 py-2 sm:py-6 w-full flex flex-row items-center justify-between gap-2.5 sm:gap-6">
+        <div className={`relative max-w-7xl mx-auto px-3 sm:px-6 py-2 sm:py-6 w-full flex flex-row items-center justify-between gap-2.5 sm:gap-6 ${slide.fullImage ? 'hidden' : ''}`}>
           
           {/* Left Hero Texts */}
           <div className="flex-1 text-left z-10 min-w-0 pl-5 sm:pl-0">

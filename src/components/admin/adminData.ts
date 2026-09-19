@@ -30,6 +30,10 @@ export interface AdminOrder {
   timeAgo: string;
   cookingNotes?: string;
   outletId?: string; // which outlet owns the order (outlet-1 / outlet-2). Legacy orders without it are visible to all outlets.
+  // Rushda counter-billing extensions (optional so old orders keep working)
+  billDateIso?: string; // YYYY-MM-DD, defaults to today when missing
+  saleType?: 'CASH' | 'CREDIT';
+  partyPhone?: string;
 }
 
 export const SEED_ADMIN_ORDERS: AdminOrder[] = [];
