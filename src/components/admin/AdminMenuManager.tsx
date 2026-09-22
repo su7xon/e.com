@@ -22,13 +22,15 @@ interface AdminMenuManagerProps {
   onAddItem: (item: MenuItem) => void;
   onUpdateItem: (item: MenuItem) => void;
   onDeleteItem: (itemId: string) => void;
+  onRestoreMenu: () => void;
 }
 
 export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
   menuItems,
   onAddItem,
   onUpdateItem,
-  onDeleteItem
+  onDeleteItem,
+  onRestoreMenu
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -202,6 +204,20 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
           </p>
         </div>
 
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+        {menuItems.length === 0 && (
+          <button
+            id="btn-admin-restore-menu"
+            onClick={() => {
+              if (window.confirm('Pura default menu wapas laaye? (81 items)')) {
+                onRestoreMenu();
+              }
+            }}
+            className="flex items-center justify-center gap-1.5 bg-slate-900 text-white px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer active:scale-95"
+          >
+            <span>Restore Full Menu</span>
+          </button>
+        )}
         <button
           id="btn-admin-add-item"
           onClick={handleOpenAdd}
@@ -210,6 +226,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
           <Plus className="w-4 h-4" />
           <span>Add New Menu Item</span>
         </button>
+        </div>
       </div>
 
       {/* Filters & Search Row */}

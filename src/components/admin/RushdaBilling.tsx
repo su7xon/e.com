@@ -22,6 +22,7 @@ import {
   STORE_HEADER,
   buildCustomerBillHtml,
   buildKotBillHtml,
+  buildCombinedBillHtml,
   printThermal,
   type ThermalBillData,
 } from './ThermalBills';
@@ -159,6 +160,7 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
   const [saleType, setSaleType] = useState<'CASH' | 'CREDIT'>('CASH');
   const [tableNo, setTableNo] = useState('');
   const [phoneNo, setPhoneNo] = useState('');
+  const [custName, setCustName] = useState('');
   const [lines, setLines] = useState<BillLine[]>([]);
   const [extraDisPct, setExtraDisPct] = useState(0);
   const [extraFlat, setExtraFlat] = useState(0);
@@ -249,6 +251,7 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
     setExtraDisPct(0);
     setExtraFlat(0);
     setPhoneNo('');
+    setCustName('');
     setTableNo('');
     setQuickItemId('');
     setQuickRate('');
@@ -263,11 +266,13 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
     const orderType: AdminOrder['orderType'] =
       billMode === 'HOME' ? 'DELIVERY' : billMode === 'KOT' ? 'DINE_IN' : 'TAKEAWAY';
     const discount = Math.round(totals.lineDis + totals.extraPctAmt + extraFlat);
+    const billCustomerName =
+      custName.trim() || activeParty?.name || 'CASH SALE';
     const order: AdminOrder = {
       id: `ord-${Date.now()}`,
       orderNumber,
       outletId: outlet.id,
-      customerName: activeParty?.name ?? 'CASH SALE',
+      customerName: billCustomerName,
       customerPhone: phoneNo || activeParty?.phone || '',
       orderType,
       address: billMode === 'HOME' ? activeParty?.address : tableNo ? `Table ${tableNo}` : activeParty?.address,
@@ -319,7 +324,7 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
       dateStr: fmtBillDate(now),
       timeStr: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
       billTypeLabel: billMode === 'KOT' ? 'DINE IN' : billMode === 'HOME' ? 'HOME DELIVERY' : 'CARRY OUT',
-      customerName: (activeParty?.name ?? 'CASH SALE').toUpperCase(),
+      customerName: billCustomerName.toUpperCase(),
       address: tableNo ? `Table ${tableNo}` : (activeParty?.address ?? ''),
       phone: phoneNo || activeParty?.phone || '',
       soldBy: STORE_HEADER.soldBy,
@@ -340,8 +345,8 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
     };
     setLastBill(thermal);
     clearBill();
-    // Bill 1 (customer TAX INVOICE) on Save, Bill 2 (owner KOT) on Save+KOT
-    printThermal(printKot ? buildKotBillHtml(thermal) : buildCustomerBillHtml(thermal));
+    // Sales first (customer TAX INVOICE), then KOT (owner) — single print job
+    printThermal(printKot ? buildCombinedBillHtml(thermal) : buildCustomerBillHtml(thermal));
   };
 
   // ---- item master form ----
@@ -520,42 +525,48 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
     downloadCsv(`sale-report-${repFrom}-to-${repTo}.csv`, [header, ...body]);
   };
 
-  const nav: { id: ModuleKey; label: string; icon: React.ReactNode }[] = [
-    { id: 'SALE', label: 'SALE', icon: <Receipt className="w-4 h-4" /> },
-    { id: 'KOT', label: 'KOT', icon: <UtensilsCrossed className="w-4 h-4" /> },
-    { id: 'HOME', label: 'HOME DELIVERY', icon: <Bike className="w-4 h-4" /> },
-    { id: 'ITEM', label: 'ITEM MASTER', icon: <TableProperties className="w-4 h-4" /> },
-    { id: 'PARTY', label: 'PARTY MASTER', icon: <BookUser className="w-4 h-4" /> },
-    { id: 'OFFER', label: 'OFFER MASTER', icon: <Tags className="w-4 h-4" /> },
-    { id: 'REPORT', label: 'SALE REPORT', icon: <FileSpreadsheet className="w-4 h-4" /> },
+  const nav: { id: ModuleKey; label: string }[] = [
+    { id: 'SALE', label: 'Sale' },
+    { id: 'KOT', label: 'KOT' },
+    { id: 'HOME', label: 'Home Delivery' },
+    { id: 'ITEM', label: 'Items' },
+    { id: 'PARTY', label: 'Customers' },
+    { id: 'OFFER', label: 'Offers' },
+    { id: 'REPORT', label: 'Sale Report' },
   ];
 
   return (
     <div className="space-y-4">
-      {/* header strip like Rushda top bar */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      {/* header */}
+      <div className="bg-white rounded-lg border border-slate-200 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
-          <div className="text-lg font-black text-slate-900 tracking-tight">7 CHEESE PIZZA</div>
-          <div className="text-[11px] text-slate-500 font-semibold">{outlet.area} • Session : 2026-2027 • {new Date().toLocaleString('en-IN')}</div>
+          <div className="text-base font-bold text-slate-900">Counter Billing</div>
+          <div className="text-xs text-slate-500">{outlet.area}</div>
         </div>
         {lastBillNo && (
           <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
-            <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl">
+            <span className="text-slate-600 border border-slate-200 px-3 py-1.5 rounded-lg">
               Last bill: {lastBillNo}
             </span>
             {lastBill && (
               <>
                 <button
                   onClick={() => printThermal(buildCustomerBillHtml(lastBill))}
-                  className="flex items-center gap-1 bg-slate-900 text-white px-3 py-1.5 rounded-xl cursor-pointer"
+                  className="flex items-center gap-1 bg-slate-900 text-white px-3 py-1.5 rounded-lg cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5" /> Customer Bill
                 </button>
                 <button
                   onClick={() => printThermal(buildKotBillHtml(lastBill))}
-                  className="flex items-center gap-1 bg-white border border-slate-200 px-3 py-1.5 rounded-xl cursor-pointer"
+                  className="flex items-center gap-1 bg-white border border-slate-200 px-3 py-1.5 rounded-lg cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5" /> KOT (Owner)
+                </button>
+                <button
+                  onClick={() => printThermal(buildCombinedBillHtml(lastBill))}
+                  className="flex items-center gap-1 bg-emerald-600 text-white px-3 py-1.5 rounded-lg cursor-pointer"
+                >
+                  <Printer className="w-3.5 h-3.5" /> Both Together
                 </button>
               </>
             )}
@@ -565,16 +576,15 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
 
       <div className="flex flex-col lg:flex-row gap-4">
         {/* left nav */}
-        <div className="lg:w-52 shrink-0 bg-white rounded-2xl border border-slate-200 p-2 space-y-1">
+        <div className="lg:w-52 shrink-0 bg-white rounded-lg border border-slate-200 p-2 space-y-1">
           {nav.map((n) => (
             <button
               key={n.id}
               onClick={() => setModule(n.id)}
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-black transition-colors cursor-pointer ${
+              className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium cursor-pointer ${
                 module === n.id ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              {n.icon}
               <span>{n.label}</span>
             </button>
           ))}
@@ -584,7 +594,7 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
           {(module === 'SALE' || module === 'KOT' || module === 'HOME') && (
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
               {/* items */}
-              <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-200 p-4">
+              <div className="xl:col-span-2 bg-white rounded-lg border border-slate-200 p-4">
                 <div className="flex flex-col sm:flex-row gap-2 mb-3">
                   <div className="relative flex-1">
                     <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -592,10 +602,10 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                       value={itemSearch}
                       onChange={(e) => setItemSearch(e.target.value)}
                       placeholder="Search item / code…"
-                      className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30"
+                      className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
                     />
                   </div>
-                  <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold">
+                  <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 text-xs font-bold">
                     <option value="all">All categories</option>
                     {categories.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
@@ -605,17 +615,16 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                     <button
                       key={m.id}
                       onClick={() => addLine(m, 1)}
-                      className="text-left p-2.5 rounded-xl border border-slate-200 hover:border-red-300 hover:bg-red-50/50 transition-colors cursor-pointer"
+                      className="text-left p-2.5 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
                     >
-                      <div className="text-xs font-black text-slate-900 truncate">{m.name}</div>
-                      <div className="text-[10px] text-slate-500 font-mono">{m.id} • {m.category}</div>
-                      <div className="text-xs font-black text-red-600 mt-1">₹{m.price}</div>
+                      <div className="text-xs font-medium text-slate-900 truncate">{m.name}</div>
+                      <div className="text-xs font-bold text-slate-900 mt-0.5">₹{m.price}</div>
                     </button>
                   ))}
                 </div>
 
                 {/* quick add like right panel */}
-                <div className="mt-3 p-3 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                <div className="mt-3 p-2 rounded-lg border border-slate-200 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
                   <select value={quickItemId} onChange={(e) => {
                     const id = e.target.value;
                     setQuickItemId(id);
@@ -632,7 +641,7 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                       const m = menuItems.find((x) => x.id === quickItemId);
                       if (m) addLine(m, quickQty, quickRate === '' ? undefined : Number(quickRate));
                     }}
-                    className="flex items-center justify-center gap-1 bg-slate-900 text-white rounded-lg font-black py-1.5 cursor-pointer"
+                    className="flex items-center justify-center gap-1 bg-slate-900 text-white rounded-lg font-bold py-1.5 cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add
                   </button>
@@ -640,8 +649,8 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
               </div>
 
               {/* bill panel */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col">
-                <div className="text-xs font-black text-slate-900 mb-2">
+              <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col">
+                <div className="text-xs font-bold text-slate-900 mb-2">
                   {billMode === 'HOME' ? 'HOME DELIVERY BILL' : billMode === 'KOT' ? 'KOT / TABLE BILL' : 'COUNTER SALE BILL'}
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs mb-2">
@@ -652,6 +661,12 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                     <option value="CASH">CASH</option>
                     <option value="CREDIT">CREDIT</option>
                   </select>
+                  <input
+                    value={custName}
+                    onChange={(e) => setCustName(e.target.value)}
+                    placeholder="Customer name (e.g. Rahul)"
+                    className="px-2 py-1.5 rounded-lg border border-slate-200 col-span-2 font-bold"
+                  />
                   {billMode === 'KOT' && (
                     <input value={tableNo} onChange={(e) => setTableNo(e.target.value)} placeholder="Table no." className="px-2 py-1.5 rounded-lg border border-slate-200" />
                   )}
@@ -663,7 +678,7 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                   Discount Fix (lock line discounts)
                 </label>
 
-                <div className="border border-slate-200 rounded-xl overflow-hidden mb-2">
+                <div className="border border-slate-200 rounded-lg overflow-hidden mb-2">
                   <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 text-xs">
                     {lines.length === 0 && <div className="p-4 text-center text-slate-400">No items — tap items to add</div>}
                     {lines.map((l) => (
@@ -673,11 +688,11 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                           <div className="text-[10px] text-slate-500 font-mono">{l.size} • ₹{l.rate} • GST {l.taxPct}%</div>
                         </div>
                         <div className="flex items-center gap-1">
-                          <button onClick={() => setLines((p) => p.map((x) => x.key === l.key ? { ...x, qty: Math.max(1, x.qty - 1) } : x))} className="w-6 h-6 rounded-lg bg-slate-100 font-black cursor-pointer">−</button>
-                          <span className="w-6 text-center font-black">{l.qty}</span>
-                          <button onClick={() => setLines((p) => p.map((x) => x.key === l.key ? { ...x, qty: x.qty + 1 } : x))} className="w-6 h-6 rounded-lg bg-slate-100 font-black cursor-pointer">+</button>
+                          <button onClick={() => setLines((p) => p.map((x) => x.key === l.key ? { ...x, qty: Math.max(1, x.qty - 1) } : x))} className="w-6 h-6 rounded-lg bg-slate-100 font-bold cursor-pointer">−</button>
+                          <span className="w-6 text-center font-bold">{l.qty}</span>
+                          <button onClick={() => setLines((p) => p.map((x) => x.key === l.key ? { ...x, qty: x.qty + 1 } : x))} className="w-6 h-6 rounded-lg bg-slate-100 font-bold cursor-pointer">+</button>
                         </div>
-                        <span className="font-mono font-black w-14 text-right">₹{l.qty * l.rate}</span>
+                        <span className="font-mono font-bold w-14 text-right">₹{l.qty * l.rate}</span>
                         <button onClick={() => setLines((p) => p.filter((x) => x.key !== l.key))} className="text-red-500 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
                       </div>
                     ))}
@@ -703,25 +718,26 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                   {offers.map((o) => <option key={o.code} value={o.code}>{o.code} — {o.title}</option>)}
                 </select>
 
-                <div className="text-xs space-y-1 bg-slate-50 rounded-xl p-3 border border-slate-200 mb-3 font-mono">
+                <div className="text-xs space-y-1 bg-slate-50 rounded-lg p-3 border border-slate-200 mb-3 font-mono">
                   <div className="flex justify-between"><span>Gross Amt.</span><span>₹{totals.gross.toFixed(1)}</span></div>
                   <div className="flex justify-between"><span>GST</span><span>₹{totals.tax.toFixed(1)}</span></div>
-                  <div className="flex justify-between font-black text-base text-slate-900"><span>Net Amt.</span><span>₹{totals.net.toFixed(1)}</span></div>
+                  <div className="flex justify-between font-bold text-base text-slate-900"><span>Net Amt.</span><span>₹{totals.net.toFixed(1)}</span></div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => handleSaveBill(false)} disabled={!lines.length} className="bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white text-xs font-black py-2.5 rounded-xl cursor-pointer">Save Bill</button>
-                  <button onClick={() => handleSaveBill(true)} disabled={!lines.length} className="bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-xs font-black py-2.5 rounded-xl cursor-pointer">Save + KOT</button>
-                  <button onClick={() => lastBill && printThermal(buildCustomerBillHtml(lastBill))} disabled={!lastBill} className="flex items-center justify-center gap-1 bg-white border border-slate-200 text-xs font-bold py-2 rounded-xl cursor-pointer disabled:opacity-40"><Printer className="w-3.5 h-3.5" /> Reprint Bill</button>
-                  <button onClick={clearBill} className="bg-slate-100 text-xs font-bold py-2 rounded-xl cursor-pointer">Clear</button>
+                  <button onClick={() => handleSaveBill(false)} disabled={!lines.length} className="bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-xs font-bold py-2.5 rounded-lg cursor-pointer">Save Bill (Customer)</button>
+                  <button onClick={() => handleSaveBill(true)} disabled={!lines.length} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-bold py-2.5 rounded-lg cursor-pointer">Save + Both Print</button>
+                  <button onClick={() => lastBill && printThermal(buildCustomerBillHtml(lastBill))} disabled={!lastBill} className="flex items-center justify-center gap-1 bg-white border border-slate-200 text-xs font-bold py-2 rounded-lg cursor-pointer disabled:opacity-40"><Printer className="w-3.5 h-3.5" /> Reprint Bill</button>
+                  <button onClick={() => lastBill && printThermal(buildCombinedBillHtml(lastBill))} disabled={!lastBill} className="flex items-center justify-center gap-1 bg-white border border-slate-200 text-xs font-bold py-2 rounded-lg cursor-pointer disabled:opacity-40"><Printer className="w-3.5 h-3.5" /> Reprint Both</button>
+                  <button onClick={clearBill} className="bg-slate-100 text-xs font-bold py-2 rounded-lg cursor-pointer col-span-2">Clear</button>
                 </div>
               </div>
             </div>
           )}
 
           {module === 'ITEM' && (
-            <div className="bg-white rounded-2xl border border-slate-200 p-4">
-              <div className="text-sm font-black mb-3">CREATE NEW ITEM (Item Master)</div>
+            <div className="bg-white rounded-lg border border-slate-200 p-4">
+              <div className="text-sm font-bold mb-3">CREATE NEW ITEM (Item Master)</div>
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-xs mb-3">
                 <input value={fCode} onChange={(e) => setFCode(e.target.value)} placeholder="Item Code" className="px-2 py-1.5 rounded-lg border border-slate-200 font-mono" />
                 <select value={fCat} onChange={(e) => setFCat(e.target.value)} className="px-2 py-1.5 rounded-lg border border-slate-200">
@@ -737,15 +753,15 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                 <input type="number" value={fTax} onChange={(e) => setFTax(e.target.value === '' ? '' : Number(e.target.value))} placeholder="Tax %" className="px-2 py-1.5 rounded-lg border border-slate-200" />
               </div>
               <div className="flex gap-2 mb-4 text-xs font-bold">
-                <button onClick={handleSaveItem} className="bg-slate-900 text-white px-4 py-2 rounded-xl cursor-pointer">Save</button>
-                <button onClick={resetItemForm} className="bg-slate-100 px-4 py-2 rounded-xl cursor-pointer">Clear</button>
-                <button onClick={() => window.print()} className="bg-white border border-slate-200 px-4 py-2 rounded-xl cursor-pointer">Print</button>
+                <button onClick={handleSaveItem} className="bg-slate-900 text-white px-4 py-2 rounded-lg cursor-pointer">Save</button>
+                <button onClick={resetItemForm} className="bg-slate-100 px-4 py-2 rounded-lg cursor-pointer">Clear</button>
+                <button onClick={() => window.print()} className="bg-white border border-slate-200 px-4 py-2 rounded-lg cursor-pointer">Print</button>
                 <div className="relative ml-auto">
                   <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input value={masterSearch} onChange={(e) => setMasterSearch(e.target.value)} placeholder="Search…" className="pl-8 pr-3 py-2 rounded-xl border border-slate-200" />
+                  <input value={masterSearch} onChange={(e) => setMasterSearch(e.target.value)} placeholder="Search…" className="pl-8 pr-3 py-2 rounded-lg border border-slate-200" />
                 </div>
               </div>
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="border border-slate-200 rounded-lg overflow-hidden">
                 <div className="overflow-x-auto max-h-96 overflow-y-auto">
                   <table className="w-full text-xs">
                     <thead className="bg-slate-50 sticky top-0">
@@ -797,8 +813,8 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
           )}
 
           {module === 'PARTY' && (
-            <div className="bg-white rounded-2xl border border-slate-200 p-4">
-              <div className="text-sm font-black mb-3">PARTY MASTER</div>
+            <div className="bg-white rounded-lg border border-slate-200 p-4">
+              <div className="text-sm font-bold mb-3">PARTY MASTER</div>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 text-xs mb-3">
                 <input value={pName} onChange={(e) => setPName(e.target.value)} placeholder="Party name (e.g. MR AMIT)" className="px-2 py-1.5 rounded-lg border border-slate-200" />
                 <input value={pPhone} onChange={(e) => setPPhone(e.target.value)} placeholder="Phone" className="px-2 py-1.5 rounded-lg border border-slate-200" />
@@ -809,16 +825,16 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                     persistParties([...parties, { id: `p-${Date.now()}`, name: pName.trim().toUpperCase(), phone: pPhone.trim(), address: pAddr.trim(), kind: 'CUSTOMER' }]);
                     setPName(''); setPPhone(''); setPAddr('');
                   }}
-                  className="bg-slate-900 text-white rounded-xl font-black py-1.5 cursor-pointer"
+                  className="bg-slate-900 text-white rounded-lg font-bold py-1.5 cursor-pointer"
                 >
                   Add Party
                 </button>
               </div>
-              <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl text-xs">
+              <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg text-xs">
                 {parties.map((p) => (
                   <div key={p.id} className="px-3 py-2 flex items-center justify-between">
                     <div>
-                      <span className="font-black">{p.name}</span>
+                      <span className="font-bold">{p.name}</span>
                       <span className="text-slate-500 ml-2">{p.phone} • {p.address}</span>
                     </div>
                     <button onClick={() => persistParties(parties.filter((x) => x.id !== p.id))} className="text-red-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -829,8 +845,8 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
           )}
 
           {module === 'OFFER' && (
-            <div className="bg-white rounded-2xl border border-slate-200 p-4">
-              <div className="text-sm font-black mb-3">OFFER MASTER (Add-on discounts)</div>
+            <div className="bg-white rounded-lg border border-slate-200 p-4">
+              <div className="text-sm font-bold mb-3">OFFER MASTER (Add-on discounts)</div>
               <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 text-xs mb-3">
                 <input value={oCode} onChange={(e) => setOCode(e.target.value)} placeholder="Code" className="px-2 py-1.5 rounded-lg border border-slate-200 font-mono" />
                 <input value={oTitle} onChange={(e) => setOTitle(e.target.value)} placeholder="Title" className="px-2 py-1.5 rounded-lg border border-slate-200 col-span-2" />
@@ -845,15 +861,15 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                     persistOffers([...offers, { code: oCode.trim().toUpperCase(), title: oTitle.trim() || oCode, type: oType, value: Number(oValue), minOrder: Number(oMin) || 0 }]);
                     setOCode(''); setOTitle(''); setOValue(''); setOMin('');
                   }}
-                  className="bg-slate-900 text-white rounded-xl font-black cursor-pointer"
+                  className="bg-slate-900 text-white rounded-lg font-bold cursor-pointer"
                 >
                   Add
                 </button>
               </div>
-              <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl text-xs">
+              <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg text-xs">
                 {offers.map((o) => (
                   <div key={o.code} className="px-3 py-2 flex items-center justify-between">
-                    <div><span className="font-mono font-black">{o.code}</span><span className="ml-2">{o.title} — {o.type === 'percentage' ? `${o.value}%` : `₹${o.value}`} (min ₹{o.minOrder})</span></div>
+                    <div><span className="font-mono font-bold">{o.code}</span><span className="ml-2">{o.title} — {o.type === 'percentage' ? `${o.value}%` : `₹${o.value}`} (min ₹{o.minOrder})</span></div>
                     <button onClick={() => persistOffers(offers.filter((x) => x.code !== o.code))} className="text-red-500 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
                 ))}
@@ -862,8 +878,8 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
           )}
 
           {module === 'REPORT' && (
-            <div className="bg-white rounded-2xl border border-slate-200 p-4">
-              <div className="text-sm font-black mb-3">SALE REPORT — 7 CHEESE PIZZA</div>
+            <div className="bg-white rounded-lg border border-slate-200 p-4">
+              <div className="text-sm font-bold mb-3">SALE REPORT — 7 CHEESE PIZZA</div>
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-xs mb-3">
                 <label className="flex flex-col gap-1">Date From<input type="date" value={repFrom} onChange={(e) => setRepFrom(e.target.value)} className="px-2 py-1.5 rounded-lg border border-slate-200" /></label>
                 <label className="flex flex-col gap-1">Date To<input type="date" value={repTo} onChange={(e) => setRepTo(e.target.value)} className="px-2 py-1.5 rounded-lg border border-slate-200" /></label>
@@ -899,12 +915,12 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
               </div>
               <div className="flex flex-wrap gap-2 text-xs font-bold mb-3">
                 {(['detail', 'summary', 'category', 'tax'] as ReportView[]).map((v) => (
-                  <button key={v} onClick={() => setRepView(v)} className={`px-3 py-1.5 rounded-xl border cursor-pointer capitalize ${repView === v ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-200'}`}>{v}</button>
+                  <button key={v} onClick={() => setRepView(v)} className={`px-3 py-1.5 rounded-lg border cursor-pointer capitalize ${repView === v ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-200'}`}>{v}</button>
                 ))}
-                <button onClick={() => window.print()} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white border border-slate-200 cursor-pointer"><Printer className="w-3.5 h-3.5" /> Print</button>
-                <button onClick={handleExcel} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 text-white cursor-pointer"><Download className="w-3.5 h-3.5" /> Excel</button>
+                <button onClick={() => window.print()} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 cursor-pointer"><Printer className="w-3.5 h-3.5" /> Print</button>
+                <button onClick={handleExcel} className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 text-white cursor-pointer"><Download className="w-3.5 h-3.5" /> Excel</button>
               </div>
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="border border-slate-200 rounded-lg overflow-hidden">
                 <div className="overflow-x-auto max-h-96 overflow-y-auto">
                   <table className="w-full text-[11px] whitespace-nowrap">
                     <thead className="bg-slate-50 sticky top-0">
@@ -927,14 +943,14 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                           <td className="px-2 py-1 text-right">{r.qty}</td><td className="px-2 py-1 text-right">{r.rate}</td>
                           <td className="px-2 py-1 text-right">{r.amount.toFixed(1)}</td><td className="px-2 py-1 text-right">{r.disPct}</td>
                           <td className="px-2 py-1 text-right">{r.taxPct}</td><td className="px-2 py-1 text-right">{r.tax.toFixed(1)}</td>
-                          <td className="px-2 py-1 text-right font-black">{(repTaxMode === 'without' ? r.amount : r.net).toFixed(1)}</td>
+                          <td className="px-2 py-1 text-right font-bold">{(repTaxMode === 'without' ? r.amount : r.net).toFixed(1)}</td>
                         </tr>
                       ))}
                       {summaryRows.length === 0 && (
                         <tr><td colSpan={13} className="px-3 py-6 text-center text-slate-400 font-sans">No sales in range</td></tr>
                       )}
                     </tbody>
-                    <tfoot className="bg-slate-50 font-mono font-black">
+                    <tfoot className="bg-slate-50 font-mono font-bold">
                       <tr>
                         <td colSpan={8} className="px-2 py-1.5 text-right">TOTAL</td>
                         <td className="px-2 py-1.5 text-right">{repTotals.amount.toFixed(1)}</td>

@@ -1,17 +1,24 @@
 // Web Audio API based POS alert chimes without external asset dependencies
 
-let unlockedCtx: AudioContext | null = null;
+let sharedCtx: AudioContext | null = null;
 
-/** Call once on user gesture so alerts can play in background tabs later. */
-export const unlockAudio = () => {
+function getCtx(): AudioContext | null {
   try {
-    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
-    if (!unlockedCtx) unlockedCtx = new AudioContextClass();
-    if (unlockedCtx.state === 'suspended') void unlockedCtx.resume();
+    const AudioContextClass =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return null;
+    if (!sharedCtx) sharedCtx = new AudioContextClass();
+    if (sharedCtx.state === 'suspended') void sharedCtx.resume();
+    return sharedCtx;
   } catch {
-    // ignore
+    return null;
   }
+}
+
+/** Call on every user gesture so alerts can play later. Never closes ctx. */
+export const unlockAudio = () => {
+  getCtx();
 };
 
 function urgentBurst(ctx: AudioContext, at: number) {
@@ -36,32 +43,32 @@ function urgentBurst(ctx: AudioContext, at: number) {
 /** Loud repeating new-order alarm for ~durationMs (default 4s). */
 export const playNewOrderAlert = (durationMs = 4000) => {
   try {
-    unlockAudio();
-    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = unlockedCtx ?? new AudioContextClass();
+    const ctx = getCtx();
+    if (!ctx) return;
+    // Mobile vibration (Android) — iOS ignores silently.
+    try {
+      if (navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 800]);
+    } catch {
+      // ignore
+    }
     const bursts = Math.max(1, Math.round(durationMs / 1000));
     const now = ctx.currentTime + 0.05;
     for (let i = 0; i < bursts; i++) {
       urgentBurst(ctx, now + i * 1.0);
     }
-    setTimeout(() => {
-      try {
-        void ctx.close();
-      } catch {
-        // ignore
-      }
-      if (ctx === unlockedCtx) unlockedCtx = null;
-    }, durationMs + 800);
   } catch {
     // Audio context may be blocked before first user gesture
   }
 };
 export const playPosChime = (durationMs = 1500) => {
   try {
-    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
+    const ctx = getCtx();
+    if (!ctx) return;
+    try {
+      if (navigator.vibrate) navigator.vibrate(200);
+    } catch {
+      // ignore
+    }
     
     // Play pleasant 2-tone doorbell / register chime
     const now = ctx.currentTime;

@@ -18,14 +18,18 @@ import {
   Store,
   CheckCircle,
   Settings,
-  Image as ImageIcon
+  Image as ImageIcon,
+  QrCode,
+  Bike
 } from 'lucide-react';
 import { MenuItem, Coupon, CategoryItem } from '../../types';
 import { AdminOrder } from './adminData';
 import { Outlet } from './outlets';
+import { OutletQr } from './OutletQr';
 import { BannerSlide } from '../HeroBanner';
 import { AdminDashboard } from './AdminDashboard';
 import { AdminLiveOrders } from './AdminLiveOrders';
+import { AdminDelivery } from './AdminDelivery';
 import { RushdaBilling } from './RushdaBilling';
 import { AdminMenuManager } from './AdminMenuManager';
 import { AdminCouponManager } from './AdminCouponManager';
@@ -37,12 +41,16 @@ interface AdminLayoutProps {
   outlet: Outlet;
   orders: AdminOrder[];
   syncStatus: 'connecting' | 'live' | 'error';
+  syncError?: string;
+  onRetrySync: () => void;
   menuItems: MenuItem[];
   coupons: Coupon[];
   onUpdateOrderStatus: (orderId: string, newStatus: AdminOrder['status']) => void;
+  onDeleteOrder: (orderId: string) => void;
   onAddItem: (item: MenuItem) => void;
   onUpdateItem: (item: MenuItem) => void;
   onDeleteItem: (itemId: string) => void;
+  onRestoreMenu: () => void;
   onCreateOrder: (order: AdminOrder) => void;
   onAddCoupon: (coupon: Coupon) => void;
   onDeleteCoupon: (code: string) => void;
@@ -58,12 +66,16 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   outlet,
   orders,
   syncStatus,
+  syncError = '',
+  onRetrySync,
   menuItems,
   coupons,
   onUpdateOrderStatus,
+  onDeleteOrder,
   onAddItem,
   onUpdateItem,
   onDeleteItem,
+  onRestoreMenu,
   onCreateOrder,
   onAddCoupon,
   onDeleteCoupon,
@@ -74,35 +86,52 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   categories,
   onUpdateCategoryImage
 }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'live-orders' | 'rushda' | 'menu' | 'coupons' | 'images'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'live-orders' | 'delivery' | 'rushda' | 'menu' | 'coupons' | 'images' | 'qr'>('dashboard');
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isAlertSoundOn, setIsAlertSoundOn] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [orderScope, setOrderScope] = useState<'all' | 'mine'>('all');
   const [notifPerm, setNotifPerm] = useState<string>(
     () => (typeof Notification !== 'undefined' ? Notification.permission : 'unsupported')
   );
   const knownOrderIds = useRef<Set<string> | null>(null);
+  // Counter billing se isi device pe banaya order — uspe khud bep-bep mat bajao.
+  // Kitchen ke dusre device pe alarm normal bajega, sirf banane wali screen mute rahegi.
+  const selfCreatedIds = useRef<Set<string>>(new Set());
   const titleFlashTimer = useRef<number | null>(null);
   const baseTitle = useRef(document.title);
+  const soundOnRef = useRef(isAlertSoundOn);
+  soundOnRef.current = isAlertSoundOn;
 
-  const visibleOrders =
-    orderScope === 'all' ? orders : orders.filter((o) => !o.outletId || o.outletId === outlet.id);
-  const mineCount = orders.filter((o) => !o.outletId || o.outletId === outlet.id).length;
+  // Strict per-outlet: har outlet ko SIRF apne order dikhenge.
+  // Legacy orders (bina outletId) dono me dikhenge taaki purana data kho na jaye.
+  const visibleOrders = orders.filter((o) => !o.outletId || o.outletId === outlet.id);
 
   const activeOrdersCount = visibleOrders.filter(o => o.status === 'NEW' || o.status === 'KITCHEN').length;
+  const activeDeliveryCount = visibleOrders.filter(o => o.orderType === 'DELIVERY' && (o.status === 'NEW' || o.status === 'KITCHEN' || o.status === 'DISPATCHED')).length;
+
+  // Diagnose suffix (| net:http-404 ...) ko badge me saaf dikhao — aadha katke nahi.
+  const netInfo = (() => {
+    const i = syncError.indexOf('| net:');
+    return i >= 0 ? syncError.slice(i + 6, i + 70).trim() : '';
+  })();
+  const shortErr = syncError.includes('| net:')
+    ? syncError.slice(0, syncError.indexOf('| net:')).trim().slice(0, 40)
+    : syncError.slice(0, 40);
 
   const SyncBadge: React.FC<{ compact?: boolean }> = ({ compact }) => (
-    <span
+    <button
+      onClick={() => {
+        if (syncStatus === 'error') onRetrySync();
+      }}
       title={
         syncStatus === 'live'
           ? 'Connected to Firestore — orders arrive live from all devices'
           : syncStatus === 'error'
-            ? 'Cannot reach Firestore (rules/offline?) — showing this device only'
+            ? `Cannot reach Firestore — showing this device only. Reason: ${syncError || 'unknown'}. Tap to retry. Firestore Rules + internet check karo.`
             : 'Connecting to live order sync…'
       }
-      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-black border shrink-0 ${
+      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-black border shrink-0 cursor-pointer ${
         syncStatus === 'live'
           ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
           : syncStatus === 'error'
@@ -116,9 +145,17 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         }`}
       />
       {!compact && (
-        <span>{syncStatus === 'live' ? 'Live sync' : syncStatus === 'error' ? 'Sync error' : 'Connecting…'}</span>
+        <span>
+          {syncStatus === 'live'
+            ? 'Live sync'
+            : syncStatus === 'error'
+              ? netInfo
+                ? `Sync fail (${netInfo}) — tap to retry`
+                : `Sync error — tap to retry${shortErr ? `: ${shortErr}` : ''}`
+              : 'Connecting…'}
+        </span>
       )}
-    </span>
+    </button>
   );
 
   const stopTitleFlash = () => {
@@ -151,11 +188,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     }
   };
 
-  // Unlock audio on first interaction so background-tab alarms are allowed.
+  // Unlock audio on every interaction (autoplay policy needs gesture).
   useEffect(() => {
     const unlock = () => unlockAudio();
-    window.addEventListener('pointerdown', unlock, { once: true });
-    window.addEventListener('keydown', unlock, { once: true });
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    window.addEventListener('touchstart', unlock);
     const onFocus = () => stopTitleFlash();
     const onVis = () => {
       if (!document.hidden) stopTitleFlash();
@@ -165,6 +203,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     return () => {
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
+      window.removeEventListener('touchstart', unlock);
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVis);
       stopTitleFlash();
@@ -172,7 +211,20 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Counter billing se bana order: isi screen ka alarm suppress karo, order aage pass karo.
+  const handleCounterCreateOrder = (order: AdminOrder) => {
+    selfCreatedIds.current.add(order.id);
+    // memory leak guard
+    if (selfCreatedIds.current.size > 100) {
+      const first = selfCreatedIds.current.values().next().value;
+      if (first) selfCreatedIds.current.delete(first);
+    }
+    onCreateOrder(order);
+  };
+
   // Auto alarm on every genuinely NEW incoming order (sound ~4s + title + notification).
+  // NOTE: Counter billing (RushdaBilling) se bana order isi device pe silent rahega —
+  // online / dusre device se aaya order pe hi bep-bep bajega.
   useEffect(() => {
     if (knownOrderIds.current === null) {
       knownOrderIds.current = new Set(orders.map((o) => o.id));
@@ -183,9 +235,23 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     );
     knownOrderIds.current = new Set(orders.map((o) => o.id));
     if (!fresh.length) return;
-    const latest = fresh[0];
+    // Khud counter se banaye orders nikalo — unpe no sound, no flash, no popup.
+    const external = fresh.filter((o) => {
+      if (selfCreatedIds.current.has(o.id)) {
+        selfCreatedIds.current.delete(o.id);
+        return false;
+      }
+      return true;
+    });
+    if (!external.length) return;
+    const latest = external[0];
     const itemCount = latest.items.reduce((n, it) => n + (it.quantity || 1), 0);
-    if (isAlertSoundOn) playNewOrderAlert(4000);
+    // Repeat alarm 3x (12s) so kitchen hears even if tab background.
+    if (soundOnRef.current) {
+      playNewOrderAlert(4000);
+      window.setTimeout(() => { if (soundOnRef.current) playNewOrderAlert(4000); }, 4500);
+      window.setTimeout(() => { if (soundOnRef.current) playNewOrderAlert(4000); }, 9000);
+    }
     flashTitle(`🔔 NEW ORDER ${latest.orderNumber} — ₹${latest.total}`);
     try {
       if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
@@ -213,6 +279,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
   const handleRefresh = () => {
     setIsRefreshing(true);
+    onRetrySync();
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
@@ -288,10 +355,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             {[
               { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
               { id: 'live-orders', label: 'Live Orders & KOT', icon: ShoppingBag, badge: activeOrdersCount > 0 ? activeOrdersCount : undefined, badgeColor: 'bg-red-500 text-white' },
+              { id: 'delivery', label: 'Delivery (Rider)', icon: Bike, badge: activeDeliveryCount > 0 ? activeDeliveryCount : undefined, badgeColor: 'bg-blue-600 text-white' },
               { id: 'rushda', label: 'Counter Billing', icon: Receipt, badge: undefined, badgeColor: 'bg-slate-100 text-slate-600' },
               { id: 'menu', label: 'Menu Catalog', icon: UtensilsCrossed, badge: menuItems.length, badgeColor: 'bg-slate-100 text-slate-600' },
               { id: 'coupons', label: 'Offers & Coupons', icon: Tag, badge: coupons.length, badgeColor: 'bg-emerald-50 text-emerald-700' },
               { id: 'images', label: 'Store Images', icon: ImageIcon, badge: slides.length + categories.length, badgeColor: 'bg-violet-50 text-violet-700' },
+              { id: 'qr', label: 'Outlet QR Code', icon: QrCode, badge: undefined, badgeColor: 'bg-slate-100 text-slate-600' },
             ].map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
@@ -504,28 +573,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         </header>
 
         {/* Dynamic Page Views */}
-        <div className="p-4 sm:p-6 max-w-7xl w-full mx-auto">
-          {/* Outlet scope: never lose an order to the wrong login again */}
-          <div className="flex items-center gap-2 mb-4">
-            <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200 text-xs font-bold">
-              <button
-                id="btn-scope-all"
-                onClick={() => setOrderScope('all')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  orderScope === 'all' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                All outlets ({orders.length})
-              </button>
-              <button
-                id="btn-scope-mine"
-                onClick={() => setOrderScope('mine')}
-                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  orderScope === 'mine' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                {outlet.shortName} only ({mineCount})
-              </button>
+        <div className="p-3 max-w-7xl w-full mx-auto">
+          {/* Sirf {outlet.shortName} ke orders — dusre outlet ka order yahan kabhi nahi dikhega. */}
+          <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse mr-2" />
+              <span>{outlet.shortName} orders ({visibleOrders.length})</span>
             </div>
           </div>
 
@@ -544,6 +597,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             <AdminLiveOrders
               orders={visibleOrders}
               onUpdateOrderStatus={onUpdateOrderStatus}
+              onDeleteOrder={onDeleteOrder}
+            />
+          )}
+
+          {activeTab === 'delivery' && (
+            <AdminDelivery
+              orders={visibleOrders}
+              onUpdateOrderStatus={onUpdateOrderStatus}
             />
           )}
 
@@ -552,7 +613,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               outlet={outlet}
               orders={visibleOrders}
               menuItems={menuItems}
-              onCreateOrder={onCreateOrder}
+              onCreateOrder={handleCounterCreateOrder}
               onAddItem={onAddItem}
               onUpdateItem={onUpdateItem}
               onDeleteItem={onDeleteItem}
@@ -565,6 +626,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               onAddItem={onAddItem}
               onUpdateItem={onUpdateItem}
               onDeleteItem={onDeleteItem}
+              onRestoreMenu={onRestoreMenu}
             />
           )}
 
@@ -583,6 +645,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               categories={categories}
               onUpdateCategoryImage={onUpdateCategoryImage}
             />
+          )}
+
+          {activeTab === 'qr' && (
+            <OutletQr outlet={outlet} />
           )}
         </div>
       </main>

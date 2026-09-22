@@ -1,34 +1,46 @@
 import React, { useState } from 'react';
-import { 
-  Bike, 
-  UtensilsCrossed, 
-  Clock, 
-  ChefHat, 
-  CheckCircle, 
-  XCircle, 
-  Printer, 
-  Phone, 
-  MapPin, 
-  Receipt, 
-  Volume2, 
-  AlertCircle, 
-  Flame, 
+import {
+  Bike,
+  UtensilsCrossed,
+  Clock,
+  ChefHat,
+  CheckCircle,
+  XCircle,
+  Printer,
+  Phone,
+  MapPin,
+  Receipt,
+  Volume2,
+  AlertCircle,
+  Flame,
   Search,
   Check,
-  X
+  X,
+  Trash2
 } from 'lucide-react';
 import { AdminOrder } from './adminData';
 import { playPosChime } from './audioAlert';
+import { getOutletById } from './outlets';
+import {
+  STORE_HEADER,
+  buildCustomerBillHtml,
+  buildKotBillHtml,
+  buildCombinedBillHtml,
+  printThermal,
+  type ThermalBillData,
+} from './ThermalBills';
 
 interface AdminLiveOrdersProps {
   orders: AdminOrder[];
   onUpdateOrderStatus: (orderId: string, newStatus: AdminOrder['status']) => void;
+  onDeleteOrder?: (orderId: string) => void;
   onAddNewSampleOrder?: () => void;
 }
 
 export const AdminLiveOrders: React.FC<AdminLiveOrdersProps> = ({
   orders,
   onUpdateOrderStatus,
+  onDeleteOrder,
   onAddNewSampleOrder
 }) => {
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'NEW' | 'KITCHEN' | 'DISPATCHED' | 'COMPLETED'>('ALL');
@@ -52,6 +64,44 @@ export const AdminLiveOrders: React.FC<AdminLiveOrdersProps> = ({
   const countKitchen = orders.filter(o => o.status === 'KITCHEN').length;
   const countDispatched = orders.filter(o => o.status === 'DISPATCHED').length;
   const countCompleted = orders.filter(o => o.status === 'COMPLETED').length;
+
+  // Online/counter order -> thermal print data (sales TAX INVOICE + KOT, single job)
+  const orderToThermal = (o: AdminOrder): ThermalBillData => {
+    const serial = o.orderNumber.replace('#7C-', '').replace('#', '');
+    const now = new Date();
+    const dateStr = o.billDateIso
+      ? o.billDateIso.split('-').reverse().join('-')
+      : now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-');
+    const lines = o.items.map((it) => ({
+      name: (it.name || '').toUpperCase(),
+      size: it.size || '',
+      qty: it.quantity,
+      rate: it.price,
+      disPct: 0,
+      amt: it.quantity * it.price,
+    }));
+    const taxable = Math.max(0, o.subtotal - (o.discount || 0));
+    const base = Math.round(taxable);
+    return {
+      serialNo: serial,
+      dateStr,
+      timeStr: o.createdAt || now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      billTypeLabel: o.orderType === 'DELIVERY' ? 'HOME DELIVERY' : o.orderType === 'DINE_IN' ? 'DINE IN' : 'CARRY OUT',
+      customerName: (o.customerName || 'WALK-IN').toUpperCase(),
+      address: o.tableNumber || o.address || '',
+      phone: o.customerPhone || o.partyPhone || '',
+      soldBy: STORE_HEADER.soldBy,
+      lines,
+      totalQty: lines.reduce((s, l) => s + l.qty, 0),
+      totalAmt: o.subtotal + (o.tax || 0),
+      gstTotal: o.tax || 0,
+      grandTotal: o.total,
+      cgstBase: base,
+      cgstAmt: base * 0.025,
+      sgstBase: base,
+      sgstAmt: base * 0.025,
+    };
+  };
 
   return (
     <div className="space-y-5">
@@ -157,7 +207,20 @@ export const AdminLiveOrders: React.FC<AdminLiveOrdersProps> = ({
                 <div className="flex items-start justify-between pb-3 border-b border-slate-100">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono font-black text-sm text-slate-900">{ord.orderNumber}</span>
+                      <button
+                        onClick={() => setSelectedKotOrder(ord)}
+                        className="font-mono font-black text-sm text-slate-900 hover:underline cursor-pointer"
+                        title="Preview bill"
+                      >
+                        {ord.orderNumber}
+                      </button>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                        ord.outletId
+                          ? 'bg-violet-50 text-violet-700 border-violet-200'
+                          : 'bg-slate-100 text-slate-500 border-slate-200'
+                      }`}>
+                        {ord.outletId ? (getOutletById(ord.outletId)?.shortName || ord.outletId) : 'ALL'}
+                      </span>
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
                         ord.orderType === 'DELIVERY'
                           ? 'bg-blue-50 text-blue-700 border border-blue-200'
@@ -186,11 +249,15 @@ export const AdminLiveOrders: React.FC<AdminLiveOrdersProps> = ({
                 {/* Customer Details */}
                 <div className="py-2.5 text-xs text-slate-600 border-b border-slate-100 space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-900">{ord.customerName}</span>
-                    <a href={`tel:${ord.customerPhone}`} className="flex items-center gap-1 text-slate-600 hover:text-slate-900">
-                      <Phone className="w-3 h-3" />
-                      <span>{ord.customerPhone}</span>
-                    </a>
+                    <span className="font-bold text-slate-900">{ord.customerName || 'Walk-in Customer'}</span>
+                    {ord.customerPhone ? (
+                      <a href={`tel:${ord.customerPhone}`} className="flex items-center gap-1 text-slate-600 hover:text-slate-900">
+                        <Phone className="w-3 h-3" />
+                        <span>{ord.customerPhone}</span>
+                      </a>
+                    ) : (
+                      <span className="text-[10px] text-slate-400 font-bold">No phone</span>
+                    )}
                   </div>
                   {ord.address && (
                     <div className="flex items-start gap-1.5 text-[11px] text-slate-500">
@@ -256,12 +323,25 @@ export const AdminLiveOrders: React.FC<AdminLiveOrdersProps> = ({
               {/* Action Buttons Footer */}
               <div className="pt-3 border-t border-slate-100 flex items-center gap-2">
                 <button
-                  onClick={() => setSelectedKotOrder(ord)}
-                  className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer border border-slate-200/60"
-                  title="Print KOT Receipt"
+                  onClick={() => printThermal(buildCombinedBillHtml(orderToThermal(ord)))}
+                  className="p-2 rounded-xl bg-slate-900 hover:bg-slate-700 text-white transition-colors cursor-pointer border border-slate-900"
+                  title="Print Sales + KOT together"
                 >
                   <Printer className="w-4 h-4" />
                 </button>
+                {onDeleteOrder && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm(`Delete order ${ord.orderNumber}? Ye sab devices se हटेगा.`)) {
+                        onDeleteOrder(ord.id);
+                      }
+                    }}
+                    className="p-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 transition-colors cursor-pointer border border-red-200/60"
+                    title="Delete order permanently"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
 
                 {ord.status === 'NEW' && (
                   <>
@@ -339,8 +419,14 @@ export const AdminLiveOrders: React.FC<AdminLiveOrdersProps> = ({
                 <span>{selectedKotOrder.orderType}</span>
               </div>
               <div className="text-[10px] text-slate-600">
-                Time: {selectedKotOrder.createdAt} | Phone: {selectedKotOrder.customerPhone}
+                Time: {selectedKotOrder.createdAt} | Phone: {selectedKotOrder.customerPhone || '—'}
               </div>
+              {selectedKotOrder.address && (
+                <div className="text-[10px] font-sans bg-blue-50 p-1.5 border border-blue-200 rounded">
+                  <span className="font-bold">Deliver: </span>{selectedKotOrder.address}
+                  {selectedKotOrder.landmark && <span className="font-bold"> | Landmark: {selectedKotOrder.landmark}</span>}
+                </div>
+              )}
               {selectedKotOrder.tableNumber && (
                 <div className="text-xs font-black bg-amber-100 p-1 rounded text-center">
                   TABLE: {selectedKotOrder.tableNumber}
@@ -391,23 +477,45 @@ export const AdminLiveOrders: React.FC<AdminLiveOrdersProps> = ({
               </div>
             </div>
 
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex flex-col gap-2">
               <button
                 onClick={() => {
-                  window.print();
+                  if (selectedKotOrder) printThermal(buildCombinedBillHtml(orderToThermal(selectedKotOrder)));
                   setSelectedKotOrder(null);
                 }}
-                className="flex-1 flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white py-2 rounded-xl text-xs font-bold cursor-pointer"
+                className="w-full flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl text-xs font-black cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
-                <span>Print Receipt</span>
+                <span>Print Both — Sales + KOT</span>
               </button>
-              <button
-                onClick={() => setSelectedKotOrder(null)}
-                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
-              >
-                Close
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    if (selectedKotOrder) printThermal(buildCustomerBillHtml(orderToThermal(selectedKotOrder)));
+                    setSelectedKotOrder(null);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white py-2 rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Sales Only</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (selectedKotOrder) printThermal(buildKotBillHtml(orderToThermal(selectedKotOrder)));
+                    setSelectedKotOrder(null);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 py-2 rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>KOT Only</span>
+                </button>
+                <button
+                  onClick={() => setSelectedKotOrder(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

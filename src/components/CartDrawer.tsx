@@ -19,7 +19,7 @@ import {
   Navigation,
   Compass
 } from 'lucide-react';
-import { CartItem, Coupon, UserAddress, OrderType, MenuItem } from '../types';
+import { CartItem, Coupon, UserAddress, DeliveryDetails, OrderType, MenuItem } from '../types';
 import { COUPONS, MENU_ITEMS } from '../data/mockData';
 import { VegNonVegIcon } from './VegNonVegIcon';
 import { InteractiveMapPicker } from './InteractiveMapPicker';
@@ -39,8 +39,9 @@ interface CartDrawerProps {
   onOpenAddressModal: () => void;
   onSelectAddress?: (addr: UserAddress) => void;
   onProceedToCheckout?: () => void;
-  onPlaceOrder?: (notes: string, paymentMethod: string) => void;
+  onPlaceOrder?: (notes: string, paymentMethod: string, delivery?: DeliveryDetails) => void;
   onQuickAdd: (productId: string) => void;
+  onUpgradeItem?: (cartItemId: string) => void;
   availableCoupons?: Coupon[];
   availableMenuItems?: MenuItem[];
 }
@@ -62,6 +63,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onProceedToCheckout,
   onPlaceOrder,
   onQuickAdd,
+  onUpgradeItem,
   availableCoupons,
   availableMenuItems,
 }) => {
@@ -72,6 +74,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [cookingNotes, setCookingNotes] = useState('');
   const [isPlacing, setIsPlacing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'cash' | 'card'>('upi');
+  const [receiverName, setReceiverName] = useState('');
+  const [receiverPhone, setReceiverPhone] = useState('');
+  const [receiverLandmark, setReceiverLandmark] = useState(currentAddress.landmark || '');
+  const [formError, setFormError] = useState('');
+  const [mealFilter, setMealFilter] = useState('All');
+  const [upsellDismissed, setUpsellDismissed] = useState<Record<string, boolean>>({});
 
   if (!isOpen) return null;
 
@@ -116,21 +124,58 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   };
 
   const handleCompleteOrder = () => {
+    setFormError('');
+    if (orderType === 'DELIVERY') {
+      const digits = receiverPhone.replace(/\D/g, '').replace(/^91/, '');
+      if (!receiverName.trim()) {
+        setFormError('Please enter receiver name for delivery.');
+        return;
+      }
+      if (!/^[6-9]\d{9}$/.test(digits)) {
+        setFormError('Please enter a valid 10-digit mobile number.');
+        return;
+      }
+    }
     setIsPlacing(true);
     setTimeout(() => {
       setIsPlacing(false);
       if (onPlaceOrder) {
-        onPlaceOrder(cookingNotes, paymentMethod);
+        onPlaceOrder(cookingNotes, paymentMethod, {
+          name: receiverName.trim(),
+          phone: receiverPhone.replace(/\D/g, '').replace(/^91/, ''),
+          landmark: (receiverLandmark.trim() || currentAddress.landmark || '').trim(),
+        });
       } else if (onProceedToCheckout) {
         onProceedToCheckout();
       }
     }, 600);
   };
 
-  // Sweet / Dessert items for "Complete Your Meal" (Horizontal scroll)
-  const sweetProducts = menuList.filter(
-    (item) => item.category === 'desserts' || item.id.includes('dessert') || item.id.includes('choco')
-  );
+  // Domino's-style "Complete Your Meal" chips -> menu matchers
+  const MEAL_CHIPS = ['All', 'Desserts', 'Breads & More', 'Taco & Parcel', 'Beverages', 'Chicken Feast', 'Dips'];
+  const matchesMealChip = (item: MenuItem, chip: string): boolean => {
+    const id = item.id.toLowerCase();
+    const name = item.name.toLowerCase();
+    const cat = item.category;
+    switch (chip) {
+      case 'All': return true;
+      case 'Desserts': return cat === 'desserts' || id.includes('dessert') || id.includes('choco') || id.includes('lava');
+      case 'Breads & More': return name.includes('garlic') || name.includes('bread') || cat === 'pan-pizza';
+      case 'Taco & Parcel': return name.includes('taco') || name.includes('parcel') || name.includes('pocket') || name.includes('bites');
+      case 'Beverages': return cat === 'drinks';
+      case 'Chicken Feast': return cat === 'chicken-corner' || (!item.isVeg && (cat === 'non-veg-pizza' || name.includes('chicken')));
+      case 'Dips': return name.includes('dip');
+      default: return true;
+    }
+  };
+  const mealProducts = menuList.filter((item) => matchesMealChip(item, mealFilter));
+  const isPizzaLine = (name: string, category: string) =>
+    category === 'veg-pizza' || category === 'non-veg-pizza' || name.toLowerCase().includes('pizza');
+  const offBadge = (item: MenuItem): string | null => {
+    if (!item.originalPrice || item.originalPrice <= item.price) return null;
+    return `₹${item.originalPrice - item.price} OFF`;
+  };
+  const savedAmount = discount + (orderType === 'DELIVERY' && deliveryFee === 0 && subtotal > 0 ? 40 : 0);
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-xs flex justify-end animate-in fade-in duration-200">
@@ -163,17 +208,39 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           </button>
         </div>
 
+        {/* Domino's-style DELIVER header */}
+        <button
+          type="button"
+          onClick={onOpenAddressModal}
+          className="bg-white px-4 py-2.5 flex items-center gap-3 border-b border-slate-200 text-left w-full cursor-pointer hover:bg-slate-50 transition-colors"
+        >
+          <div className="shrink-0">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Deliver</div>
+            <div className="text-sm font-black text-slate-900">30 Mins</div>
+          </div>
+          <div className="w-px h-8 bg-slate-200" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-slate-800 truncate">
+              {currentAddress.address}, {currentAddress.city} - {currentAddress.pincode}
+            </p>
+            <p className="text-[11px] text-slate-500 truncate">
+              {currentAddress.landmark ? `Landmark: ${currentAddress.landmark}` : 'Tap to set exact address + landmark'}
+            </p>
+          </div>
+          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+        </button>
+
         {/* Free Delivery Bar */}
         {orderType === 'DELIVERY' && cartItems.length > 0 && (
-          <div className="bg-[#003d5c] px-4 py-2 text-white text-xs border-b border-white/10">
+          <div className="px-4 py-2 text-white text-xs bg-gradient-to-r from-[#ED1C24] via-[#7a1fa2] to-[#005580]">
             {isFreeDeliveryEligible ? (
-              <div className="flex items-center gap-1.5 text-emerald-300 font-bold">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>You have unlocked FREE Delivery!</span>
+              <div className="flex items-center gap-1.5 font-bold">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-amber-300" />
+                <span>Lowest Prices & FREE Delivery unlocked — Congratulations!</span>
               </div>
             ) : (
               <div>
-                <div className="flex items-center justify-between text-[11px] font-semibold text-blue-200 mb-1">
+                <div className="flex items-center justify-between text-[11px] font-semibold mb-1">
                   <span>Add ₹{freeDeliveryThreshold - subtotal} more for FREE Delivery</span>
                   <span>₹{subtotal}/₹{freeDeliveryThreshold}</span>
                 </div>
@@ -274,6 +341,44 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                           </p>
                         )}
 
+                        {/* Domino's-style crust upgrade strip */}
+                        {isPizzaLine(item.name, menuList.find((m) => m.id === item.productId)?.category ?? '') &&
+                          !upsellDismissed[item.cartItemId] && item.crust !== 'Cheese Burst' && (
+                          <div className="mt-1.5 bg-slate-100 rounded-lg p-1.5 flex items-center gap-2">
+                            <img
+                              src="/images/seven_cheese_pizza_1788869697088.jpg"
+                              alt="Cheese Burst"
+                              className="w-9 h-9 rounded-md object-cover shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[10px] font-bold text-slate-800 leading-tight">Upgrade your pizza crust now!</p>
+                              <p className="text-[10px] text-slate-600 leading-tight">Cheese Burst + ₹50</p>
+                            </div>
+                            {onUpgradeItem ? (
+                              <button
+                                onClick={() => onUpgradeItem(item.cartItemId)}
+                                className="text-[10px] font-black text-[#ED1C24] border border-[#ED1C24] rounded-lg px-2 py-1 bg-white cursor-pointer"
+                              >
+                                Select
+                              </button>
+                            ) : null}
+                            <button
+                              onClick={() => setUpsellDismissed((p) => ({ ...p, [item.cartItemId]: true }))}
+                              className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                              aria-label="Dismiss upgrade"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+
+                        <button
+                          onClick={onClose}
+                          className="text-[10px] font-bold text-slate-500 underline underline-offset-2 mt-1 cursor-pointer"
+                        >
+                          Edit &gt;
+                        </button>
+
                         <div className="flex items-center justify-between mt-1.5">
                           <span className="text-xs font-mono font-black text-slate-900">
                             ₹{item.price * item.quantity}
@@ -310,27 +415,44 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     </div>
                   ))}
                 </div>
+
+                <button
+                  onClick={onClose}
+                  className="mt-2 text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Add more items
+                </button>
               </div>
 
-              {/* 2. Complete Your Meal (Sweet Products Horizontal Scroll) */}
-              {sweetProducts.length > 0 && (
+              {/* 2. Complete Your Meal With (Domino's-style chips + upsell) */}
+              {mealProducts.length > 0 && (
                 <div className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm">🍰</span>
-                      <span className="text-xs font-black uppercase tracking-wider text-slate-800">
-                        Complete Your Meal
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                      Sweet Treats
-                    </span>
+                  <div className="flex items-center gap-2 mb-2.5">
+                    <span className="flex-1 h-px bg-slate-200" />
+                    <span className="text-xs font-bold text-slate-500">Complete Your Meal With</span>
+                    <span className="flex-1 h-px bg-slate-200" />
+                  </div>
+                  <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-none">
+                    {MEAL_CHIPS.map((chip) => (
+                      <button
+                        key={chip}
+                        onClick={() => setMealFilter(chip)}
+                        className={`shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-full border cursor-pointer transition-colors ${
+                          mealFilter === chip
+                            ? 'bg-slate-900 text-white border-slate-900'
+                            : 'bg-white text-slate-600 border-slate-200'
+                        }`}
+                      >
+                        {chip}
+                      </button>
+                    ))}
                   </div>
 
                   {/* Horizontal Scroll List */}
                   <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-none snap-x -mx-1 px-1">
-                    {sweetProducts.map((sweet) => {
+                    {mealProducts.slice(0, 12).map((sweet) => {
                       const inCart = cartItems.find((c) => c.productId === sweet.id);
+                      const off = offBadge(sweet);
                       return (
                         <div
                           key={sweet.id}
@@ -346,16 +468,25 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                                   (e.target as HTMLImageElement).src = '/images/choco_lava_cake_1788869782552.jpg';
                                 }}
                               />
+                              {!inCart ? (
+                                <button
+                                  onClick={() => onQuickAdd(sweet.id)}
+                                  className="absolute top-1 right-1 w-6 h-6 rounded-md bg-white shadow flex items-center justify-center text-[#ED1C24] hover:bg-[#ED1C24] hover:text-white transition-colors cursor-pointer"
+                                  aria-label={`Add ${sweet.name}`}
+                                >
+                                  <Plus className="w-4 h-4 stroke-[3]" />
+                                </button>
+                              ) : null}
                               <div className="absolute top-1 left-1 bg-white/90 backdrop-blur-xs p-0.5 rounded-sm">
                                 <VegNonVegIcon isVeg={sweet.isVeg} size="sm" />
                               </div>
-                              {sweet.badge && (
-                                <span className="absolute top-1 right-1 bg-amber-500 text-slate-950 text-[8px] font-black px-1 py-0.2 rounded-full uppercase leading-tight">
-                                  {sweet.badge}
+                              {off && (
+                                <span className="absolute bottom-1 left-1 bg-emerald-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded uppercase leading-tight">
+                                  {off}
                                 </span>
                               )}
                             </div>
-                            <h4 className="text-[11px] font-extrabold text-slate-900 line-clamp-1 leading-snug">
+                            <h4 className="text-[11px] font-extrabold text-slate-900 line-clamp-2 leading-snug min-h-7">
                               {sweet.name}
                             </h4>
                             <div className="flex items-center gap-1 mt-0.5">
@@ -695,6 +826,43 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     className="w-full bg-slate-100 text-xs px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580]"
                   />
                 </div>
+
+                {/* Receiver details — rider isi name/number/landmark par pahunchega */}
+                {orderType === 'DELIVERY' && (
+                  <div className="border-t border-slate-100 pt-2.5 space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-800 block">
+                      Receiver Details (for Rider)
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        value={receiverName}
+                        onChange={(e) => { setReceiverName(e.target.value); setFormError(''); }}
+                        placeholder="Receiver name *"
+                        className="bg-slate-100 text-xs px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580]"
+                      />
+                      <input
+                        value={receiverPhone}
+                        onChange={(e) => { setReceiverPhone(e.target.value); setFormError(''); }}
+                        placeholder="10-digit mobile *"
+                        inputMode="numeric"
+                        maxLength={13}
+                        className="bg-slate-100 text-xs px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580] font-mono"
+                      />
+                    </div>
+                    <input
+                      value={receiverLandmark}
+                      onChange={(e) => setReceiverLandmark(e.target.value)}
+                      placeholder="Landmark — e.g. Near Hanuman Mandir, 2nd floor"
+                      className="w-full bg-slate-100 text-xs px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580]"
+                    />
+                    {formError && (
+                      <p className="text-[11px] text-red-600 font-bold">{formError}</p>
+                    )}
+                    <p className="text-[10px] text-slate-500">
+                      Rider call + live location isi number par hogi. Order ke baad apni live location WhatsApp par share kar dena.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* 6. Bill Details */}
@@ -736,6 +904,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   <span className="font-mono text-base text-[#ED1C24]">₹{grandTotal}</span>
                 </div>
               </div>
+
+              {/* You saved strip */}
+              {savedAmount > 0 && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-3.5 py-2.5 text-xs font-bold text-emerald-800 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">%</span>
+                  <span>You saved ₹{savedAmount}{deliveryFee === 0 && orderType === 'DELIVERY' ? ' (FREE Delivery)' : ''} 🎉</span>
+                </div>
+              )}
             </>
           )}
         </div>

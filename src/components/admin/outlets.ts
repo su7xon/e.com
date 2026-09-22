@@ -14,8 +14,8 @@ export interface Outlet {
 export const OUTLETS: Outlet[] = [
   {
     id: 'outlet-1',
-    name: '7 Cheese Pizza — Outlet 1',
-    shortName: 'Outlet 1',
+    name: '7 Cheese Pizza',
+    shortName: '7 Cheese Pizza',
     area: 'Kaladhungi Road, Haldwani',
     password: 'cheese123',
     lat: 29.2139,
@@ -23,21 +23,71 @@ export const OUTLETS: Outlet[] = [
     radiusKm: 8,
     phone: '+91 98765 43210',
   },
-  {
-    id: 'outlet-2',
-    name: '7 Cheese Pizza — Outlet 2',
-    shortName: 'Outlet 2',
-    area: 'Mukhani, Haldwani',
-    password: 'cheese456',
-    lat: 29.205,
-    lng: 79.512,
-    radiusKm: 8,
-    phone: '+91 98765 43211',
-  },
 ];
 
 export function getOutletById(id: string): Outlet | undefined {
   return OUTLETS.find((o) => o.id === id);
+}
+
+function randomQrToken(): string {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  let s = '';
+  for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+const qrKey = (outletId: string) => `seven_cheese_outlet_qr_${outletId}`;
+
+/** Per-outlet QR token. Har outlet ka alag, localStorage me persist. */
+export function getOutletQrToken(outletId: string): string {
+  try {
+    const saved = localStorage.getItem(qrKey(outletId));
+    if (saved && saved.trim()) return saved;
+  } catch {
+    // ignore
+  }
+  const t = randomQrToken();
+  try {
+    localStorage.setItem(qrKey(outletId), t);
+  } catch {
+    // ignore
+  }
+  return t;
+}
+
+/** Purana QR invalid karke naya generate karo. */
+export function regenerateOutletQrToken(outletId: string): string {
+  const t = randomQrToken();
+  try {
+    localStorage.setItem(qrKey(outletId), t);
+  } catch {
+    // ignore
+  }
+  return t;
+}
+
+/** Customer scan URL — is link se aaya order hamesha isi outlet ka banega. */
+export function getOutletQrUrl(outletId: string, token?: string): string {
+  const t = token ?? getOutletQrToken(outletId);
+  const base =
+    typeof window !== 'undefined'
+      ? window.location.origin + window.location.pathname
+      : '/';
+  return `${base}?outlet=${encodeURIComponent(outletId)}&qrt=${encodeURIComponent(t)}`;
+}
+
+/** URL (?outlet=outlet-1) se outlet lock padho. Galat id pe null. */
+export function parseOutletQrParam(): string | null {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const oid = p.get('outlet');
+    if (oid && getOutletById(oid)) return oid;
+    const stored = localStorage.getItem('seven_cheese_qr_outlet');
+    if (stored && getOutletById(stored)) return stored;
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /** Haversine distance (km) between two geo points */
@@ -80,4 +130,21 @@ export function resolveOutletForOrder(lat?: number, lng?: number): NearestOutlet
     return findNearestOutlet(lat, lng);
   }
   return { outlet: OUTLETS[0], distanceKm: 0, inZone: true };
+}
+
+/** QR lock clear karo (customer dusre outlet ka menu dekhna chahe to). */
+export function clearOutletQrLock(): void {
+  try {
+    localStorage.removeItem('seven_cheese_qr_outlet');
+  } catch {
+    // ignore
+  }
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('outlet');
+    url.searchParams.delete('qrt');
+    window.history.replaceState({}, '', url.toString());
+  } catch {
+    // ignore
+  }
 }

@@ -61,11 +61,27 @@ function shell(title: string, body: string): string {
 }
 
 export function buildCustomerBillHtml(d: ThermalBillData): string {
+  return shell(`Invoice ${d.serialNo}`, buildCustomerBody(d));
+}
+
+export function buildKotBillHtml(d: ThermalBillData): string {
+  return shell(`KOT ${d.serialNo}`, buildKotBody(d));
+}
+
+export function buildCombinedBillHtml(d: ThermalBillData): string {
+  const body = `${buildCustomerBody(d)}
+    <div class="c" style="margin:12px 0;">- - - CUT HERE: CUSTOMER COPY ABOVE / KOT BELOW - - -</div>
+    <div style="page-break-before:always;"></div>
+    ${buildKotBody(d)}`;
+  return shell(`Invoice+KOT ${d.serialNo}`, body);
+}
+
+function buildCustomerBody(d: ThermalBillData): string {
   const lineHtml = d.lines.map((l) => `
     <div>${esc(l.name)}</div>
     <div class="row"><span>${esc(l.size)}</span><span>${l.qty}</span><span>${l.rate}</span><span>${l.disPct} %</span><span>${l.amt.toFixed(2)}</span></div>`
   ).join('');
-  const body = `
+  return `
     <div class="c">TAX INVOICE</div>
     <div class="c b lg">${STORE_HEADER.name}</div>
     <div class="c">${STORE_HEADER.addr1}</div>
@@ -93,14 +109,13 @@ export function buildCustomerBillHtml(d: ThermalBillData): string {
     <div class="c">User : ${esc(d.soldBy)}</div>
     <div class="c b">THANKS FOR YOUR KIND VISIT</div>
     <div class="c b">GOOD DAY</div>`;
-  return shell(`Invoice ${d.serialNo}`, body);
 }
 
-export function buildKotBillHtml(d: ThermalBillData): string {
+function buildKotBody(d: ThermalBillData): string {
   const rows = d.lines.map((l) => `
     <div class="row" style="border-top:1px solid #000;"><span>${esc(l.name)}<br>${esc(l.size)}</span><span>${l.qty}</span></div>`
   ).join('');
-  const body = `
+  return `
     <div class="c b lg">KOT</div>
     <div>Customer Name : &nbsp; ${esc(d.customerName)}</div>
     <div class="row"><span>&nbsp;</span><span>Date : ${esc(d.dateStr)}</span></div>
@@ -112,7 +127,6 @@ export function buildKotBillHtml(d: ThermalBillData): string {
     <div class="c">Bill Type : ${esc(d.billTypeLabel)}</div>
     <div class="c">KOT No. : ${esc(d.serialNo)}</div>
     <div class="c">Time : ${esc(d.timeStr)}</div>`;
-  return shell(`KOT ${d.serialNo}`, body);
 }
 
 export function printThermal(html: string) {

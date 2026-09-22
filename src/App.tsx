@@ -4,6 +4,7 @@ import {
   CartItem,
   Coupon,
   UserAddress,
+  DeliveryDetails,
   OrderType,
   ActiveOrder,
   CategoryItem
@@ -36,13 +37,17 @@ import { PwaInstallBanner, PwaOfflineBadge, PwaUpdatePrompt } from './components
 import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminLogin } from './components/admin/AdminLogin';
 import { AdminOrder, SEED_ADMIN_ORDERS } from './components/admin/adminData';
-import { Outlet, getOutletById, resolveOutletForOrder } from './components/admin/outlets';
+import { Outlet, getOutletById, resolveOutletForOrder, parseOutletQrParam } from './components/admin/outlets';
 import {
   saveMenuItemToFirestore,
   deleteMenuItemFromFirestore,
   fetchMenuItemsFromFirestore,
+  subscribeToFirestoreMenu,
+  FIREBASE_PROJECT_ID,
+  FIREBASE_API_KEY,
   saveOrderToFirestore,
   updateOrderStatusInFirestore,
+  deleteOrderFromFirestore,
   subscribeToFirestoreOrders,
 } from './lib/firebase';
 import { 
@@ -65,10 +70,25 @@ export default function App() {
     url ? url.replace('/src/assets/images/', '/images/') : url;
   const migrateItems = <T extends { image?: string }>(items: T[]): T[] =>
     items.map((it) => (it.image?.includes('/src/assets/') ? { ...it, image: fixImg(it.image) as string } : it));
-  // Navigation & Mode
+  // Navigation & Mode (reload pe bhi wahi view — admin me the to admin me hi raho)
   const [orderType, setOrderType] = useState<OrderType>('DELIVERY');
   const [activeTab, setActiveTab] = useState<'menu' | 'reorder' | 'bigbig' | 'combos' | 'rewards'>('menu');
-  const [currentView, setCurrentView] = useState<'home' | 'billing' | 'admin'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'billing' | 'admin'>(() => {
+    try {
+      const saved = sessionStorage.getItem('seven_cheese_current_view');
+      if (saved === 'admin' || saved === 'billing') return saved;
+    } catch {
+      // ignore
+    }
+    return 'home';
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('seven_cheese_current_view', currentView);
+    } catch {
+      // ignore
+    }
+  }, [currentView]);
 
   // Logged-in outlet (admin POS). Kept in sessionStorage so login survives refresh.
   const [adminOutlet, setAdminOutlet] = useState<Outlet | null>(() => {
@@ -83,7 +103,28 @@ export default function App() {
   const handleAdminLogout = () => {
     sessionStorage.removeItem('seven_cheese_admin_outlet');
     setAdminOutlet(null);
+    setCurrentView('home'); // logout ke baad reload pe login gate pe nahi, store pe aao
   };
+
+  // QR-locked outlet: customer ne outlet QR scan kiya to order hamesha usi outlet ka.
+  // URL ?outlet=xxx aate hi lock + persist, taaki refresh pe bhi lock rahe.
+  const [qrOutletId, setQrOutletId] = useState<string | null>(() => {
+    const parsed = parseOutletQrParam();
+    try {
+      if (parsed) localStorage.setItem('seven_cheese_qr_outlet', parsed);
+    } catch {
+      // ignore
+    }
+    return parsed;
+  });
+  const qrOutlet = qrOutletId ? getOutletById(qrOutletId) || null : null;
+
+  // QR link same-tab me khule / back-forward ho to lock bhi update ho.
+  useEffect(() => {
+    const reparse = () => setQrOutletId(parseOutletQrParam());
+    window.addEventListener('popstate', reparse);
+    return () => window.removeEventListener('popstate', reparse);
+  }, []);
   
   // Store Images State (hero slides + categories, editable from Admin → Store Images)
   const [heroSlides, setHeroSlides] = useState<BannerSlide[]>(() => {
@@ -152,6 +193,8 @@ export default function App() {
   }, [menuItems]);
 
   // Boot: load Firestore menu (same on all devices). Fall back to local menu on failure.
+  // Live subscription: kisi bhi outlet ka add/edit/delete sab devices pe turant dikhe
+  // (visibility filter alag se lagta hai — data global, display outlet-wise).
   useEffect(() => {
     let cancelled = false;
     // One-time brochure upgrade: version stamp set karo + stale Firestore docs delete karo
@@ -166,38 +209,99 @@ export default function App() {
         deleteMenuItemFromFirestore(id).catch(() => {});
       });
     }
+    const mergeRemote = (remote: MenuItem[]) => {
+      setMenuItems((prev) => {
+        const byId = new Map<string, MenuItem>(prev.map((m) => [m.id, m]));
+        remote.forEach((m) => {
+          if (REMOVED_MENU_IDS.includes(m.id)) {
+            byId.delete(m.id);
+            return;
+          }
+          byId.set(m.id, { ...m, image: fixImg(m.image) });
+        });
+        // Safety: local me bachi hui stale ids bhi nikalo
+        REMOVED_MENU_IDS.forEach((id) => byId.delete(id));
+        // Remote se gayab docs = dusre outlet ne hard-delete kiye (apne outlet ke).
+        // Local stale copy mat rakho — warna delete wapas aa jayega.
+        const remoteIds = new Set(remote.map((m) => m.id));
+        for (const id of Array.from(byId.keys())) {
+          const local = byId.get(id)!;
+          if (id.startsWith('custom-') && !remoteIds.has(id) && !local.outletId) {
+            byId.delete(id);
+          }
+        }
+        return Array.from(byId.values());
+      });
+    };
     fetchMenuItemsFromFirestore()
       .then((remote) => {
         if (cancelled || !remote) return;
-        setMenuItems((prev) => {
-          const byId = new Map(prev.map((m) => [m.id, m]));
-          remote.forEach((m) => {
-            if (REMOVED_MENU_IDS.includes(m.id)) {
-              byId.delete(m.id);
-              return;
-            }
-            byId.set(m.id, { ...m, image: fixImg(m.image) });
-          });
-          // Safety: local me bachi hui stale ids bhi nikalo
-          REMOVED_MENU_IDS.forEach((id) => byId.delete(id));
-          return Array.from(byId.values());
-        });
+        mergeRemote(remote);
       })
       .catch(() => {});
+    const unsub = subscribeToFirestoreMenu(
+      (remote) => {
+        if (cancelled) return;
+        mergeRemote(remote);
+      },
+      () => {}
+    );
     return () => {
       cancelled = true;
+      unsub();
     };
   }, []);
 
   // Live: admin screen subscribes to Firestore orders (all devices, all outlets).
   // Merged by id — Firestore wins on conflicts, local-only orders are kept.
+  // NOTE: subscription runs always (not only in admin view) so customer-side
+  // pending retries can clear as soon as Firestore confirms the write.
   const [orderSyncStatus, setOrderSyncStatus] = useState<'connecting' | 'live' | 'error'>('connecting');
+  const [orderSyncError, setOrderSyncError] = useState<string>('');
+  const [pendingOrderIds, setPendingOrderIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('seven_cheese_pending_orders') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  // Manual reconnect counter — Refresh dabane pe subscription dobara lagti hai.
+  const [syncRetry, setSyncRetry] = useState(0);
   useEffect(() => {
-    if (currentView !== 'admin' || !adminOutlet) return;
     setOrderSyncStatus('connecting');
+    let gotFirstSnapshot = false;
+    const timer = window.setTimeout(() => {
+      if (!gotFirstSnapshot) {
+        setOrderSyncStatus((s) => (s === 'connecting' ? 'error' : s));
+        setOrderSyncError((e) => e || 'timeout-no-snapshot — Firestore se jawab nahi (internet / adblock / VPN / Rules check karo)');
+        console.error('[orders] Firestore snapshot timeout — check internet, adblock, or Firestore Rules.');
+        // Auto-diagnose: tap ka wait mat karo, turant asli wajah nikalo
+        diagnoseFirestoreNet().then((info) => {
+          if (syncStatusRef.current === 'live') return;
+          setOrderSyncError((e) => {
+            if (!e) return `net:${info}`;
+            if (e.includes('| net:')) return e.replace(/\| net:.*$/, `| net:${info}`);
+            return `${e} | net:${info}`;
+          });
+        });
+      }
+    }, 10000);
     const unsub = subscribeToFirestoreOrders(
       (remote) => {
+        gotFirstSnapshot = true;
+        window.clearTimeout(timer);
         setOrderSyncStatus('live');
+        setOrderSyncError('');
+        // Pending queue clear: jo order Firestore me dikha, wo synced.
+        if (remote.length) {
+          const remoteIds = new Set(remote.map((o) => o.id));
+          setPendingOrderIds((prev) => {
+            if (!prev.length) return prev;
+            const next = prev.filter((id) => !remoteIds.has(id));
+            if (next.length !== prev.length) safeSet('seven_cheese_pending_orders', JSON.stringify(next));
+            return next;
+          });
+        }
         if (!remote.length) return;
         setAdminOrders((prev) => {
           const remoteById = new Map(remote.map((o) => [o.id, o]));
@@ -210,10 +314,19 @@ export default function App() {
           return [...fresh, ...mergedPrev];
         });
       },
-      () => setOrderSyncStatus('error')
+      (msg) => {
+        gotFirstSnapshot = true;
+        window.clearTimeout(timer);
+        setOrderSyncStatus('error');
+        setOrderSyncError(msg || 'permission-denied — Firestore Rules me read allow karo');
+        console.error('[orders] Firestore subscribe error:', msg);
+      }
     );
-    return unsub;
-  }, [currentView, adminOutlet]);
+    return () => {
+      window.clearTimeout(timer);
+      unsub();
+    };
+  }, [syncRetry]);
 
   // Live Coupons State (Syncs with Admin)
   const [coupons, setCoupons] = useState<Coupon[]>(() => {
@@ -240,6 +353,93 @@ export default function App() {
   useEffect(() => {
     safeSet('seven_cheese_admin_orders', JSON.stringify(adminOrders));
   }, [adminOrders]);
+
+  // Manual reconnect (admin Refresh button): subscription dobara + pending orders turant push.
+  const adminOrdersRef = React.useRef(adminOrders);
+  adminOrdersRef.current = adminOrders;
+  const syncStatusRef = React.useRef(orderSyncStatus);
+  syncStatusRef.current = orderSyncStatus;
+
+  // Browser se direct REST ping — SDK timeout ka asli karan badge me likh deta hai:
+  // http-200 = net+rules OK | http-403 = Rules locked | http-404 = Firestore DB bani hi nahi | net-blocked = adblock/firewall/ISP
+  const diagnoseFirestoreNet = async (): Promise<string> => {
+    try {
+      const ctrl = new AbortController();
+      const t = window.setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const res = await fetch(
+          `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/orders?pageSize=1&key=${FIREBASE_API_KEY}`,
+          { signal: ctrl.signal }
+        );
+        let hint = '';
+        try {
+          const body = await res.text();
+          const m = body.match(/"message"\s*:\s*"([^"]{0,60})/);
+          if (m) hint = ':' + m[1];
+        } catch { /* ignore */ }
+        return `http-${res.status}${hint}`;
+      } finally {
+        window.clearTimeout(t);
+      }
+    } catch (e: unknown) {
+      return e instanceof Error && e.name === 'AbortError' ? 'net-timeout-8s' : 'net-blocked(fetch-fail)';
+    }
+  };
+
+  const handleRetrySync = () => {
+    setOrderSyncStatus('connecting');
+    setOrderSyncError('');
+    setSyncRetry((n) => n + 1);
+    diagnoseFirestoreNet().then((info) => {
+      if (syncStatusRef.current === 'live') return; // tab tak connect ho gaya to chhedo mat
+      setOrderSyncError((e) => {
+        if (e.includes('| net:')) return e.replace(/\| net:.*$/, `| net:${info}`);
+        return e ? `${e} | net:${info}` : `net:${info}`;
+      });
+    });
+    pendingOrderIds.forEach((id) => {
+      const order = adminOrdersRef.current.find((o) => o.id === id);
+      if (!order) return;
+      saveOrderToFirestore(order)
+        .then(() => {
+          setPendingOrderIds((prev) => {
+            const next = prev.filter((x) => x !== id);
+            safeSet('seven_cheese_pending_orders', JSON.stringify(next));
+            return next;
+          });
+          setOrderSyncStatus('live');
+          setOrderSyncError('');
+        })
+        .catch(() => {});
+    });
+  };
+
+  // Retry pending Firestore writes every 10s (offline / rules fail case).
+  useEffect(() => {
+    if (!pendingOrderIds.length) return;
+    const t = window.setInterval(() => {
+      pendingOrderIds.forEach((id) => {
+        const order = adminOrders.find((o) => o.id === id);
+        if (!order) return;
+        saveOrderToFirestore(order)
+          .then(() => {
+            setPendingOrderIds((prev) => {
+              const next = prev.filter((x) => x !== id);
+              safeSet('seven_cheese_pending_orders', JSON.stringify(next));
+              return next;
+            });
+            setOrderSyncStatus('live');
+            setOrderSyncError('');
+          })
+          .catch((err) => {
+            console.error('[orders] retry failed:', err);
+            setOrderSyncStatus('error');
+            setOrderSyncError(err?.code || err?.message || 'write-failed');
+          });
+      });
+    }, 10000);
+    return () => window.clearInterval(t);
+  }, [pendingOrderIds.length]);
   
   // Addresses (legacy 'Train' addresses are dropped — train delivery removed)
   const dropTrainAddresses = (list: UserAddress[]): UserAddress[] =>
@@ -445,6 +645,16 @@ export default function App() {
     setCartItems((prev) => prev.filter((it) => it.cartItemId !== cartItemId));
   };
 
+  // Domino's-style crust upsell: Cheese Burst +₹50 on that cart line
+  const handleUpgradeCartItem = (cartItemId: string) => {
+    setCartItems((prev) =>
+      prev.map((it) => {
+        if (it.cartItemId !== cartItemId || it.crust === 'Cheese Burst') return it;
+        return { ...it, crust: 'Cheese Burst' as const, price: it.price + 50 };
+      })
+    );
+  };
+
   const handleClearCart = () => {
     setCartItems([]);
     setAppliedCoupon(null);
@@ -467,7 +677,7 @@ export default function App() {
     });
   };
 
-  const handlePlaceOrder = (notes: string, paymentMethod?: string) => {
+  const handlePlaceOrder = (notes: string, paymentMethod?: string, delivery?: DeliveryDetails) => {
     const subtotal = cartTotal;
     const isFreeDel = subtotal >= 99 || appliedCoupon?.code === 'FREEDEL';
     const deliveryFee = orderType === 'DELIVERY' ? (isFreeDel ? 0 : 40) : 0;
@@ -505,18 +715,31 @@ export default function App() {
       riderPhone: '+91 98912 34567',
     };
 
-    // Assign nearest outlet (from customer GPS, else default Outlet 1)
-    const { outlet: orderOutlet } = resolveOutletForOrder(currentAddress.lat, currentAddress.lng);
+    // Assign outlet: QR scan lock wins, else nearest from GPS, else Outlet 1.
+    const orderOutlet = qrOutlet ?? resolveOutletForOrder(currentAddress.lat, currentAddress.lng).outlet;
+
+    // Real receiver details from checkout (Domino's-style form) — no more dummy data.
+    const receiverName = delivery?.name?.trim() || 'Walk-in Customer';
+    const receiverPhone = delivery?.phone?.trim() || '';
+    const orderLandmark = delivery?.landmark?.trim() || currentAddress.landmark?.trim() || '';
+    const fullDeliveryAddress =
+      `${currentAddress.address}, ${currentAddress.city} - ${currentAddress.pincode}` +
+      (orderLandmark ? `, Landmark: ${orderLandmark}` : '');
+    const hasGps = typeof currentAddress.lat === 'number' && typeof currentAddress.lng === 'number';
+    const orderMapsUrl = hasGps
+      ? `https://www.google.com/maps/search/?api=1&query=${currentAddress.lat},${currentAddress.lng}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullDeliveryAddress)}`;
 
     // Push into Admin live orders
     const newAdminOrder: AdminOrder = {
       id: `ord-${Date.now()}`,
       orderNumber: `#7C-${Math.floor(1000 + Math.random() * 9000)}`,
       outletId: orderOutlet.id,
-      customerName: 'Customer (App Store)',
-      customerPhone: '+91 98765 43210',
+      customerName: receiverName,
+      customerPhone: receiverPhone,
       orderType: orderType === 'DINE_IN' ? 'DINE_IN' : 'DELIVERY',
-      address: `${currentAddress.address}, ${currentAddress.city}`,
+      address: fullDeliveryAddress,
+      landmark: orderLandmark || undefined,
       tableNumber: orderType === 'DINE_IN' ? 'Table T-01' : undefined,
       items: cartItems.map((c) => ({
         name: c.name,
@@ -539,11 +762,29 @@ export default function App() {
       createdAt: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
       timeAgo: 'Just now',
       cookingNotes: notes || undefined,
+      deliveryLat: hasGps ? currentAddress.lat : undefined,
+      deliveryLng: hasGps ? currentAddress.lng : undefined,
+      mapsUrl: orderMapsUrl,
     };
 
     setAdminOrders((prev) => [newAdminOrder, ...prev]);
     // Mirror to Firestore so the admin screen rings live on any device.
-    saveOrderToFirestore(newAdminOrder).catch(() => {});
+    // Fail = other phone ka order admin tak kabhi nahi pahunchega, isliye
+    // pending queue me dalo + retry karo, silent swallow nahi.
+    saveOrderToFirestore(newAdminOrder)
+      .then(() => {
+        setPendingOrderIds((prev) => prev.filter((id) => id !== newAdminOrder.id));
+      })
+      .catch((err) => {
+        console.error('[orders] Firestore write failed:', err);
+        setOrderSyncStatus('error');
+        setOrderSyncError(err?.code || err?.message || 'write-failed');
+        setPendingOrderIds((prev) => {
+          const next = prev.includes(newAdminOrder.id) ? prev : [...prev, newAdminOrder.id];
+          safeSet('seven_cheese_pending_orders', JSON.stringify(next));
+          return next;
+        });
+      });
     setActiveOrder(newOrder);
     setPastOrders((prev) => [newOrder, ...prev]);
     setCartItems([]);
@@ -572,7 +813,7 @@ export default function App() {
     setIsCartOpen(true);
   };
 
-  // Filtered Products
+  // Filtered Products (menu dono outlets me same — shared catalog)
   const filteredProducts = useMemo(() => {
     return menuItems.filter((item) => {
       // Search
@@ -644,8 +885,8 @@ export default function App() {
             setCurrentAddress(addr);
             setAddresses((prev) => [addr, ...prev.filter((a) => a.id !== addr.id)]);
           }}
-          onPlaceOrder={(notes, method) => {
-            handlePlaceOrder(notes, method);
+          onPlaceOrder={(notes, method, delivery) => {
+            handlePlaceOrder(notes, method, delivery);
             setCurrentView('home');
           }}
           onGoBack={() => setCurrentView('home')}
@@ -712,13 +953,26 @@ export default function App() {
         outlet={adminOutlet}
         orders={adminOrders}
         syncStatus={orderSyncStatus}
+        syncError={orderSyncError}
+        onRetrySync={handleRetrySync}
         menuItems={menuItems}
         coupons={coupons}
         onUpdateOrderStatus={(id, status) => {
           setAdminOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
           updateOrderStatusInFirestore(id, status).catch(() => {});
         }}
+        onDeleteOrder={(id) => {
+          setAdminOrders((prev) => prev.filter((o) => o.id !== id));
+          setPendingOrderIds((prev) => {
+            if (!prev.includes(id)) return prev;
+            const next = prev.filter((x) => x !== id);
+            safeSet('seven_cheese_pending_orders', JSON.stringify(next));
+            return next;
+          });
+          deleteOrderFromFirestore(id).catch(() => {});
+        }}
         onAddItem={(item) => {
+          // Shared catalog: yahan add hoga to dono outlets + customer store me dikhega.
           setMenuItems((prev) => [item, ...prev]);
           saveMenuItemToFirestore(item).catch(() => {});
         }}
@@ -729,6 +983,12 @@ export default function App() {
         onDeleteItem={(id) => {
           setMenuItems((prev) => prev.filter((it) => it.id !== id));
           deleteMenuItemFromFirestore(id).catch(() => {});
+        }}
+        onRestoreMenu={() => {
+          // Pura default brochure menu wapas — local + Firestore dono me.
+          setMenuItems(MENU_ITEMS);
+          safeSet('seven_cheese_menu_items', JSON.stringify(MENU_ITEMS));
+          MENU_ITEMS.forEach((m) => saveMenuItemToFirestore(m).catch(() => {}));
         }}
         onCreateOrder={(order) => {
           setAdminOrders((prev) => [order, ...prev]);
@@ -778,6 +1038,8 @@ export default function App() {
         onOpenRewards={() => setIsRewardsModalOpen(true)}
         onOpenAdmin={() => setCurrentView('admin')}
       />
+
+      {/* QR outlet lock active in background — banner hidden, order direct locked outlet jayega. */}
 
       {/* Main Content Areas based on active tab */}
       {activeTab === 'menu' && (
@@ -1280,7 +1542,7 @@ export default function App() {
           setCurrentAddress(addr);
           setAddresses((prev) => [addr, ...prev.filter((a) => a.id !== addr.id)]);
         }}
-        onPlaceOrder={(notes, method) => handlePlaceOrder(notes, method)}
+        onPlaceOrder={(notes, method, delivery) => handlePlaceOrder(notes, method, delivery)}
         onProceedToCheckout={() => {
           setIsCartOpen(false);
           setCurrentView('billing');
@@ -1290,6 +1552,7 @@ export default function App() {
           const it = menuItems.find((m) => m.id === pid) || MENU_ITEMS.find((m) => m.id === pid);
           if (it) handleSimpleAddToCart(it);
         }}
+        onUpgradeItem={handleUpgradeCartItem}
         availableCoupons={coupons}
         availableMenuItems={menuItems}
       />

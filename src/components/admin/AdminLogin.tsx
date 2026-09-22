@@ -33,33 +33,16 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onBackToStore }
             7
           </div>
           <h1 className="text-white font-black text-lg mt-3">7 Cheese Admin POS</h1>
-          <p className="text-slate-400 text-xs mt-1">Select your outlet + enter password</p>
+          <p className="text-slate-400 text-xs mt-1">Enter password to open POS</p>
         </div>
 
         <form onSubmit={handleLogin} className="p-5 space-y-4">
-          {/* Outlet select */}
-          <div>
-            <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Outlet</label>
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              {OUTLETS.map((o) => (
-                <button
-                  key={o.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedId(o.id);
-                    setError('');
-                  }}
-                  className={`flex flex-col items-center gap-1 px-3 py-3 rounded-2xl border-2 text-xs font-bold transition-all cursor-pointer ${
-                    selectedId === o.id
-                      ? 'border-[#ED1C24] bg-red-50 text-slate-900'
-                      : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
-                  }`}
-                >
-                  <Store className={`w-5 h-5 ${selectedId === o.id ? 'text-[#ED1C24]' : 'text-slate-400'}`} />
-                  <span>{o.shortName}</span>
-                  <span className="text-[10px] font-medium text-slate-400">{o.area}</span>
-                </button>
-              ))}
+          {/* Single outlet info (selector hataya — ab sirf 1 outlet) */}
+          <div className="flex items-center gap-3 px-4 py-3 rounded-2xl border-2 border-[#ED1C24] bg-red-50">
+            <Store className="w-5 h-5 text-[#ED1C24]" />
+            <div>
+              <div className="text-xs font-bold text-slate-900">{OUTLETS[0].shortName}</div>
+              <div className="text-[10px] font-medium text-slate-400">{OUTLETS[0].area}</div>
             </div>
           </div>
 

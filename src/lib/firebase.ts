@@ -16,14 +16,15 @@ import type { AdminOrder } from '../components/admin/adminData';
 
 // Config: VITE_ env vars first, fallback to project defaults so upload works out of the box.
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyAcPsgKOrYQypAdLPYJs-AFuMhsRYhmxZg',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'pizzaaaaaaaa-6b26b.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'pizzaaaaaaaa-6b26b',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'pizzaaaaaaaa-6b26b.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '588235968119',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:588235968119:web:634b33ccd17612c7ee0072',
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-R7PYRGSL2F',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyCBPh_XLIGGeLpjkd8eQIk-U6-6t9ZWSGs',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'pizzaaaaaaaa-4f3b2.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'pizzaaaaaaaa-4f3b2',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'pizzaaaaaaaa-4f3b2.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '1025047896197',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:1025047896197:web:a9e872efbf5fc1164609ec',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-5BD3XTBB2J',
 };
+
 
 let app: FirebaseApp;
 if (getApps().length === 0) {
@@ -31,6 +32,9 @@ if (getApps().length === 0) {
 } else {
   app = getApp();
 }
+
+export const FIREBASE_PROJECT_ID: string = firebaseConfig.projectId;
+export const FIREBASE_API_KEY: string = firebaseConfig.apiKey;
 
 export const storage: FirebaseStorage = getStorage(app);
 export const db: Firestore = getFirestore(app);
@@ -232,6 +236,34 @@ export async function fetchMenuItemsFromFirestore(): Promise<MenuItem[] | null> 
   return items;
 }
 
+/**
+ * Live subscription for menuItems (har device, har outlet).
+ * Admin Outlet-1 me add/delete kare to Outlet-2 / customer phone pe bhi live update.
+ * Returns unsubscribe. Never throws.
+ */
+export function subscribeToFirestoreMenu(
+  onItems: (items: MenuItem[]) => void,
+  onError?: (message: string) => void
+): () => void {
+  try {
+    return onSnapshot(
+      collection(db, MENU_COLLECTION),
+      (snap) => {
+        const list: MenuItem[] = [];
+        snap.forEach((d) => {
+          list.push({ ...(d.data() as MenuItem), id: d.id });
+        });
+        onItems(list);
+      },
+      (err) => {
+        onError?.(err.code || err.message);
+      }
+    );
+  } catch {
+    return () => {};
+  }
+}
+
 // ---------- Firestore: orders collection (customer device -> admin device, live) ----------
 
 const ORDERS_COLLECTION = 'orders';
@@ -247,6 +279,11 @@ export async function updateOrderStatusInFirestore(
   status: AdminOrder['status']
 ): Promise<void> {
   await setDoc(doc(db, ORDERS_COLLECTION, orderId), { status }, { merge: true });
+}
+
+/** Admin deletes order: remove from Firestore so it vanishes on all devices. */
+export async function deleteOrderFromFirestore(orderId: string): Promise<void> {
+  await deleteDoc(doc(db, ORDERS_COLLECTION, orderId));
 }
 
 /** Live subscription for the admin screen. Returns unsubscribe. Never throws. */

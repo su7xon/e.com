@@ -48,6 +48,10 @@ export interface MenuItem {
   defaultSize?: PizzaSize;
   defaultCrust?: PizzaCrust;
   sizePrices?: { Regular?: number; Medium?: number; Large?: number };
+  /** Outlet scope: jis outlet ne item banaya. Empty = shared (sab outlets me dikhega). */
+  outletId?: string;
+  /** Shared item ko kisi outlet ne apne yahan hide kiya (delete = sirf apne outlet se hide). */
+  hiddenInOutlets?: string[];
 }
 
 export interface CartItem {
@@ -98,6 +102,12 @@ export interface UserAddress {
   isDefault?: boolean;
   lat?: number;
   lng?: number;
+}
+
+export interface DeliveryDetails {
+  name: string;
+  phone: string;
+  landmark: string;
 }
 
 export interface ActiveOrder {

@@ -20,7 +20,7 @@ import {
   ChevronUp,
   Navigation,
 } from 'lucide-react';
-import { CartItem, Coupon, UserAddress, OrderType, MenuItem } from '../types';
+import { CartItem, Coupon, UserAddress, DeliveryDetails, OrderType, MenuItem } from '../types';
 import { COUPONS, MENU_ITEMS } from '../data/mockData';
 import { VegNonVegIcon } from './VegNonVegIcon';
 import { InteractiveMapPicker } from './InteractiveMapPicker';
@@ -36,7 +36,7 @@ interface BillingPageProps {
   currentAddress: UserAddress;
   onOpenAddressModal: () => void;
   onSelectAddress?: (addr: UserAddress) => void;
-  onPlaceOrder: (notes: string, paymentMethod?: string) => void;
+  onPlaceOrder: (notes: string, paymentMethod?: string, delivery?: DeliveryDetails) => void;
   onGoBack: () => void;
   onAddToCart: (item: MenuItem) => void;
   availableCoupons?: Coupon[];
@@ -67,6 +67,11 @@ export const BillingPage: React.FC<BillingPageProps> = ({
   const [cookingNotes, setCookingNotes] = useState('');
   const [isPlacing, setIsPlacing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'cod'>('upi');
+  const [receiverName, setReceiverName] = useState('');
+  const [receiverPhone, setReceiverPhone] = useState('');
+  const [receiverLandmark, setReceiverLandmark] = useState(currentAddress.landmark || '');
+  const [formError, setFormError] = useState('');
+  const [mealFilter, setMealFilter] = useState('All');
 
   const couponList = availableCoupons || COUPONS;
   const menuList = availableMenuItems || MENU_ITEMS;
@@ -108,12 +113,47 @@ export const BillingPage: React.FC<BillingPageProps> = ({
   };
 
   const handlePlaceOrderClick = () => {
+    setFormError('');
+    if (orderType === 'DELIVERY') {
+      const digits = receiverPhone.replace(/\D/g, '').replace(/^91/, '');
+      if (!receiverName.trim()) {
+        setFormError('Please enter receiver name for delivery.');
+        return;
+      }
+      if (!/^[6-9]\d{9}$/.test(digits)) {
+        setFormError('Please enter a valid 10-digit mobile number.');
+        return;
+      }
+    }
     setIsPlacing(true);
     setTimeout(() => {
       setIsPlacing(false);
-      onPlaceOrder(cookingNotes, paymentMethod);
+      onPlaceOrder(cookingNotes, paymentMethod, {
+        name: receiverName.trim(),
+        phone: receiverPhone.replace(/\D/g, '').replace(/^91/, ''),
+        landmark: (receiverLandmark.trim() || currentAddress.landmark || '').trim(),
+      });
     }, 800);
   };
+
+  const MEAL_CHIPS = ['All', 'Desserts', 'Breads & More', 'Taco & Parcel', 'Beverages', 'Chicken Feast', 'Dips'];
+  const matchesMealChip = (item: MenuItem, chip: string): boolean => {
+    const id = item.id.toLowerCase();
+    const name = item.name.toLowerCase();
+    const cat = item.category;
+    switch (chip) {
+      case 'All': return true;
+      case 'Desserts': return cat === 'desserts' || id.includes('dessert') || id.includes('choco') || id.includes('lava');
+      case 'Breads & More': return name.includes('garlic') || name.includes('bread') || cat === 'pan-pizza';
+      case 'Taco & Parcel': return name.includes('taco') || name.includes('parcel') || name.includes('pocket') || name.includes('bites');
+      case 'Beverages': return cat === 'drinks';
+      case 'Chicken Feast': return cat === 'chicken-corner' || (!item.isVeg && (cat === 'non-veg-pizza' || name.includes('chicken')));
+      case 'Dips': return name.includes('dip');
+      default: return true;
+    }
+  };
+  const mealProducts = menuList.filter((m) => matchesMealChip(m, mealFilter));
+  const savedAmount = discount + (orderType === 'DELIVERY' && deliveryFee === 0 && subtotal > 0 ? 40 : 0);
 
   // You May Also Like — pick random items not already in cart
   const suggestedItems = useMemo(() => {
@@ -147,6 +187,38 @@ export const BillingPage: React.FC<BillingPageProps> = ({
 
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-5">
         
+        {/* Domino's-style DELIVER strip */}
+        <button
+          type="button"
+          onClick={onOpenAddressModal}
+          className="w-full bg-white rounded-2xl border border-slate-200 px-4 py-3 flex items-center gap-3 text-left cursor-pointer hover:border-slate-300 transition-colors shadow-sm"
+        >
+          <div className="shrink-0">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Deliver</div>
+            <div className="text-sm font-black text-slate-900">30 Mins</div>
+          </div>
+          <div className="w-px h-8 bg-slate-200" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-slate-800 truncate">
+              {currentAddress.address}, {currentAddress.city} - {currentAddress.pincode}
+            </p>
+            <p className="text-[11px] text-slate-500 truncate">
+              {currentAddress.landmark ? `Landmark: ${currentAddress.landmark}` : 'Tap to set exact address + landmark'}
+            </p>
+          </div>
+          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+        </button>
+
+        {orderType === 'DELIVERY' && cartItems.length > 0 && (
+          <div className="rounded-2xl px-4 py-2.5 text-white text-xs font-bold bg-gradient-to-r from-[#ED1C24] via-[#7a1fa2] to-[#005580] shadow-sm">
+            {deliveryFee === 0 ? (
+              <span>Lowest Prices & FREE Delivery unlocked — Congratulations!</span>
+            ) : (
+              <span>Add items worth ₹{freeDeliveryThreshold - subtotal} more for FREE Delivery</span>
+            )}
+          </div>
+        )}
+
         {/* Checkout Header */}
         <div className="text-center mb-2">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
@@ -256,29 +328,35 @@ export const BillingPage: React.FC<BillingPageProps> = ({
               </div>
             </div>
 
-            {/* Complete Your Meal (Sweet Products Horizontal Scroll) */}
-            {menuList.filter((item) => item.category === 'desserts' || item.id.includes('dessert') || item.id.includes('choco')).length > 0 && (
+            {/* Complete Your Meal With (Domino's-style chips) */}
+            {mealProducts.length > 0 && (
               <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">🍰</span>
-                    <div>
-                      <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800">
-                        Complete Your Meal
-                      </h3>
-                      <p className="text-[11px] text-slate-500 font-medium">
-                        Irresistible sweet treats to complete your feast
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-[10px] text-amber-800 font-bold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                    Sweet Treats
-                  </span>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="flex-1 h-px bg-slate-200" />
+                  <h3 className="text-xs sm:text-sm font-bold text-slate-500">
+                    Complete Your Meal With
+                  </h3>
+                  <span className="flex-1 h-px bg-slate-200" />
+                </div>
+                <div className="flex gap-1.5 overflow-x-auto pb-2.5 scrollbar-none">
+                  {MEAL_CHIPS.map((chip) => (
+                    <button
+                      key={chip}
+                      onClick={() => setMealFilter(chip)}
+                      className={`shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-full border cursor-pointer transition-colors ${
+                        mealFilter === chip
+                          ? 'bg-slate-900 text-white border-slate-900'
+                          : 'bg-white text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      {chip}
+                    </button>
+                  ))}
                 </div>
 
                 <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none snap-x -mx-1 px-1">
-                  {menuList
-                    .filter((item) => item.category === 'desserts' || item.id.includes('dessert') || item.id.includes('choco'))
+                  {mealProducts
+                    .slice(0, 12)
                     .map((sweet) => {
                       const inCart = cartItems.find((c) => c.productId === sweet.id);
                       return (
@@ -522,6 +600,43 @@ export const BillingPage: React.FC<BillingPageProps> = ({
               </div>
             </div>
 
+            {/* Receiver details — rider isi name/number/landmark par pahunchega */}
+            {orderType === 'DELIVERY' && (
+              <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm">
+                <span className="text-sm font-black uppercase tracking-wider text-slate-800 block mb-3">
+                  Receiver Details (for Rider)
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    value={receiverName}
+                    onChange={(e) => { setReceiverName(e.target.value); setFormError(''); }}
+                    placeholder="Receiver name *"
+                    className="bg-slate-50 border border-slate-200 text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580]"
+                  />
+                  <input
+                    value={receiverPhone}
+                    onChange={(e) => { setReceiverPhone(e.target.value); setFormError(''); }}
+                    placeholder="10-digit mobile *"
+                    inputMode="numeric"
+                    maxLength={13}
+                    className="bg-slate-50 border border-slate-200 text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580] font-mono"
+                  />
+                </div>
+                <input
+                  value={receiverLandmark}
+                  onChange={(e) => setReceiverLandmark(e.target.value)}
+                  placeholder="Landmark — e.g. Near Hanuman Mandir, 2nd floor"
+                  className="mt-2 w-full bg-slate-50 border border-slate-200 text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580]"
+                />
+                {formError && (
+                  <p className="text-xs text-red-600 font-bold mt-2">{formError}</p>
+                )}
+                <p className="text-[11px] text-slate-500 mt-2">
+                  Rider call + live location isi number par hogi. Order ke baad apni live location WhatsApp par share kar dena.
+                </p>
+              </div>
+            )}
+
             {/* Cooking Notes */}
             <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm">
               <span className="text-sm font-black uppercase tracking-wider text-slate-800 block mb-2">
@@ -635,6 +750,14 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                   <span className="font-mono text-lg text-[#005580]">₹{grandTotal}</span>
                 </div>
               </div>
+
+              {/* You saved strip */}
+              {savedAmount > 0 && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-2.5 text-xs font-bold text-emerald-800 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-black shrink-0">%</span>
+                  <span>You saved ₹{savedAmount}{deliveryFee === 0 && orderType === 'DELIVERY' ? ' (FREE Delivery)' : ''} 🎉</span>
+                </div>
+              )}
 
               {/* Delivery Time Estimate */}
               <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-2.5">

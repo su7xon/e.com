@@ -34,6 +34,11 @@ export interface AdminOrder {
   billDateIso?: string; // YYYY-MM-DD, defaults to today when missing
   saleType?: 'CASH' | 'CREDIT';
   partyPhone?: string;
+  // Rider delivery extensions (online store orders)
+  landmark?: string;
+  deliveryLat?: number;
+  deliveryLng?: number;
+  mapsUrl?: string;
 }
 
 export const SEED_ADMIN_ORDERS: AdminOrder[] = [];
