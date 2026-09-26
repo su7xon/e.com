@@ -20,7 +20,7 @@ import {
   CRUST_PRICE_MODIFIERS
 } from './data/mockData';
 import { Navbar } from './components/Navbar';
-import { DEFAULT_SLIDES, BannerSlide } from './components/HeroBanner';
+import { HeroBanner, DEFAULT_SLIDES, BannerSlide } from './components/HeroBanner';
 import { CravingCategories } from './components/CravingCategories';
 import { CategoryMarquee } from './components/CategoryMarquee';
 import { ProductCard } from './components/ProductCard';
@@ -1104,6 +1104,13 @@ export default function App() {
       {/* Main Content Areas based on active tab */}
       {activeTab === 'menu' && (
         <main className="w-full">
+          {/* Hero Banner with 7 Cheese Pizza carousel promotions */}
+          <HeroBanner
+            slides={heroSlides}
+            onSelectFeatured={handleSelectFeatured}
+            onOpenDeals={() => setIsDealsModalOpen(true)}
+          />
+
           {/* Browse Our Category - Moving Marquee */}
           <CategoryMarquee
             categories={storeCategories}
