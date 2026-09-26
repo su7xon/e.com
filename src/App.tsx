@@ -20,7 +20,7 @@ import {
   CRUST_PRICE_MODIFIERS
 } from './data/mockData';
 import { Navbar } from './components/Navbar';
-import { HeroBanner, DEFAULT_SLIDES, BannerSlide } from './components/HeroBanner';
+import { DEFAULT_SLIDES, BannerSlide } from './components/HeroBanner';
 import { CravingCategories } from './components/CravingCategories';
 import { CategoryMarquee } from './components/CategoryMarquee';
 import { ProductCard } from './components/ProductCard';
@@ -118,7 +118,7 @@ export default function App() {
     items.map((it) => (it.image?.includes('/src/assets/') ? { ...it, image: fixImg(it.image) as string } : it));
   // Navigation & Mode (reload pe bhi wahi view — admin me the to admin me hi raho)
   const [orderType, setOrderType] = useState<OrderType>('DELIVERY');
-  const [activeTab, setActiveTab] = useState<'menu' | 'reorder' | 'bigbig' | 'combos' | 'rewards'>('menu');
+  const [activeTab, setActiveTab] = useState<'menu' | 'reorder' | 'combos' | 'rewards'>('menu');
   const [currentView, setCurrentView] = useState<'home' | 'billing' | 'admin'>(() => {
     try {
       const saved = sessionStorage.getItem('seven_cheese_current_view');
@@ -1104,13 +1104,6 @@ export default function App() {
       {/* Main Content Areas based on active tab */}
       {activeTab === 'menu' && (
         <main className="w-full">
-          {/* Hero Banner with 7 Cheese Pizza carousel promotions */}
-          <HeroBanner
-            slides={heroSlides}
-            onSelectFeatured={handleSelectFeatured}
-            onOpenDeals={() => setIsDealsModalOpen(true)}
-          />
-
           {/* Browse Our Category - Moving Marquee */}
           <CategoryMarquee
             categories={storeCategories}
@@ -1230,7 +1223,7 @@ export default function App() {
                     : selectedCategory === 'burgers'
                     ? 'Gourmet Burgers'
                     : selectedCategory === 'wraps'
-                    ? 'Flame-Grilled Signature Wraps'
+                    ? 'Signature Wraps'
                     : selectedCategory === 'starters-sides'
                     ? 'Garlic Breads, Starters & Dips'
                     : selectedCategory === 'pasta'
@@ -1440,64 +1433,6 @@ export default function App() {
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* 7 Cheese Special Showcase Tab */}
-      {activeTab === 'bigbig' && (
-        <div className="max-w-5xl mx-auto px-4 py-8">
-          <div className="bg-[#18181b] text-white rounded-3xl p-6 sm:p-10 relative overflow-hidden shadow-2xl border border-white/10">
-            <div className="relative z-10 max-w-xl">
-              <span className="bg-amber-400 text-slate-950 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">
-                Signature Innovation
-              </span>
-              <h1 className="text-3xl sm:text-5xl font-black text-white mt-3 leading-tight">
-                The 7 Cheese Experience
-              </h1>
-              <p className="text-amber-400 font-bold text-lg mt-1">
-                7 Artisanal Cheeses in Harmony
-              </p>
-              <p className="text-slate-300 text-sm mt-3 leading-relaxed">
-                Handcrafted dough infused with garlic butter, topped with Mozzarella for stretch, Cheddar for sharpness, Gouda for smokiness, Parmesan for umami, Provolone for silkiness, Fontina for earthiness, and Ricotta dollops for pure indulgence.
-              </p>
-
-              {/* 7 Cheese Badges */}
-              <div className="mt-4 flex flex-wrap gap-1.5">
-                {['Mozzarella', 'Cheddar', 'Gouda', 'Parmesan', 'Provolone', 'Fontina', 'Ricotta'].map((cheese, i) => (
-                  <span key={cheese} className="bg-white/10 text-amber-300 border border-amber-400/30 text-[11px] font-bold px-2.5 py-1 rounded-lg">
-                    #{i + 1} {cheese}
-                  </span>
-                ))}
-              </div>
-
-              <div className="mt-6 flex items-baseline gap-3">
-                <span className="text-slate-400 line-through text-lg font-mono">₹429</span>
-                <span className="text-4xl font-black text-amber-400 font-mono">₹329</span>
-                <span className="text-xs bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold px-2 py-0.5 rounded-full">
-                  SAVE ₹100
-                </span>
-              </div>
-              <button
-                id="btn-order-7cheese-tab"
-                onClick={() => {
-                  const item = MENU_ITEMS.find((m) => m.id === 'p-veg-supreme');
-                  if (item) handleOpenCustomize(item);
-                }}
-                className="mt-6 bg-[#ED1C24] hover:bg-[#c91430] text-white font-black px-8 py-3.5 rounded-full text-base shadow-lg transition-all cursor-pointer"
-              >
-                Customise & Add 7 Cheese Pizza
-              </button>
-            </div>
-
-            <div className="mt-6 md:mt-0 md:absolute right-6 bottom-6 md:w-88 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl">
-              <img
-                src="https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop&q=80"
-                alt="7 Cheese Pizza Signature"
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-            </div>
           </div>
         </div>
       )}

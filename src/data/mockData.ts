@@ -41,7 +41,6 @@ export const CRAVING_CATEGORIES: CategoryItem[] = [
   {
     id: 'cat-wraps',
     name: 'Wraps',
-    tag: 'GRILLED',
     startingPrice: 119,
     image: 'https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=300&auto=format&fit=crop&q=80',
     filterKey: 'wraps',
