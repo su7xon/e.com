@@ -50,32 +50,6 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-white text-slate-900 shadow-md border-b border-slate-200">
-      {/* Top Utility Ribbon — hidden on mobile (saves space), same on sm+ */}
-      <div className="hidden sm:block bg-slate-50 px-3 py-1.5 text-xs border-b border-slate-200">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1 text-amber-600 font-medium">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              7 Cheese Pizza Express: 30 Mins Guarantee
-            </span>
-            <span className="hidden md:inline text-slate-300">|</span>
-            <span className="hidden md:inline text-slate-500">Free delivery on orders above ₹99 • Authentic 7-Cheese Blend</span>
-          </div>
-
-          {onOpenAdmin && (
-            <button
-              id="btn-top-admin-pos"
-              onClick={onOpenAdmin}
-              className="flex items-center gap-1 text-[11px] font-bold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 px-2.5 py-0.5 rounded-md border border-amber-300 transition-all cursor-pointer shadow-xs"
-              title="Open Live POS & Kitchen Admin Panel"
-            >
-              <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
-              <span>Admin POS</span>
-            </button>
-          )}
-        </div>
-      </div>
-
       {/* Main Bar */}
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2">
         <div className="flex items-center justify-between gap-2 sm:gap-4">

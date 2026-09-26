@@ -1634,6 +1634,8 @@ export default function App() {
         currentAddress={currentAddress}
         onSelectAddress={(addr) => setCurrentAddress(addr)}
         onAddNewAddress={(newAddr) => setAddresses((prev) => [newAddr, ...prev])}
+        onUpdateAddress={handleUpdateAddress}
+        onDeleteAddress={handleDeleteAddress}
       />
 
       <RewardsModal
