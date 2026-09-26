@@ -69,7 +69,8 @@ export const BillingPage: React.FC<BillingPageProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'cod'>('upi');
   const [receiverName, setReceiverName] = useState('');
   const [receiverPhone, setReceiverPhone] = useState('');
-  const [receiverLandmark, setReceiverLandmark] = useState(currentAddress.landmark || '');
+  // Landmark hamesha blank — user khud likhega (saved address se auto-fill nahi)
+  const [receiverLandmark, setReceiverLandmark] = useState('');
   const [formError, setFormError] = useState('');
   const [mealFilter, setMealFilter] = useState('All');
 
@@ -131,7 +132,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
       onPlaceOrder(cookingNotes, paymentMethod, {
         name: receiverName.trim(),
         phone: receiverPhone.replace(/\D/g, '').replace(/^91/, ''),
-        landmark: (receiverLandmark.trim() || currentAddress.landmark || '').trim(),
+        landmark: receiverLandmark.trim(),
       });
     }, 800);
   };

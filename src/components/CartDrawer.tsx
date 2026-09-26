@@ -76,7 +76,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'cash' | 'card'>('upi');
   const [receiverName, setReceiverName] = useState('');
   const [receiverPhone, setReceiverPhone] = useState('');
-  const [receiverLandmark, setReceiverLandmark] = useState(currentAddress.landmark || '');
+  // Landmark hamesha blank — user khud likhega (saved address se auto-fill nahi)
+  const [receiverLandmark, setReceiverLandmark] = useState('');
   const [formError, setFormError] = useState('');
   const [mealFilter, setMealFilter] = useState('All');
   const [upsellDismissed, setUpsellDismissed] = useState<Record<string, boolean>>({});
@@ -143,7 +144,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         onPlaceOrder(cookingNotes, paymentMethod, {
           name: receiverName.trim(),
           phone: receiverPhone.replace(/\D/g, '').replace(/^91/, ''),
-          landmark: (receiverLandmark.trim() || currentAddress.landmark || '').trim(),
+          landmark: receiverLandmark.trim(),
         });
       } else if (onProceedToCheckout) {
         onProceedToCheckout();

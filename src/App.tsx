@@ -779,7 +779,7 @@ export default function App() {
     // Real receiver details from checkout (Domino's-style form) — no more dummy data.
     const receiverName = delivery?.name?.trim() || 'Walk-in Customer';
     const receiverPhone = delivery?.phone?.trim() || '';
-    const orderLandmark = delivery?.landmark?.trim() || currentAddress.landmark?.trim() || '';
+    const orderLandmark = delivery?.landmark?.trim() || '';
     const fullDeliveryAddress =
       `${currentAddress.address}, ${currentAddress.city} - ${currentAddress.pincode}` +
       (orderLandmark ? `, Landmark: ${orderLandmark}` : '');
