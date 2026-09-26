@@ -12,7 +12,7 @@ import {
   Search,
   CheckCircle,
 } from 'lucide-react';
-import { AdminOrder } from './adminData';
+import { AdminOrder, formatTimeAgo } from './adminData';
 
 interface AdminDeliveryProps {
   orders: AdminOrder[];
@@ -134,7 +134,7 @@ export const AdminDelivery: React.FC<AdminDeliveryProps> = ({
                     <span className="font-mono font-black text-sm text-slate-900">{o.orderNumber}</span>
                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
                       <Clock className="w-3 h-3" />
-                      <span>{o.createdAt} ({o.timeAgo})</span>
+                      <span>{o.createdAt} ({formatTimeAgo(o.id, o.timeAgo)})</span>
                     </div>
                   </div>
                   <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
@@ -184,7 +184,7 @@ export const AdminDelivery: React.FC<AdminDeliveryProps> = ({
                 </div>
 
                 <div className="py-2.5 text-xs text-slate-600">
-                  {o.items.reduce((a, b) => a + b.quantity, 0)} items • ₹{o.total} • {o.paymentMethod} ({o.paymentStatus})
+                  {(o.items || []).reduce((a, b) => a + b.quantity, 0)} items • ₹{o.total} • {o.paymentMethod} ({o.paymentStatus})
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pb-1">

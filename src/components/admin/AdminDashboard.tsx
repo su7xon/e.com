@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AdminOrder } from './adminData';
+import { AdminOrder, formatTimeAgo } from './adminData';
 
 interface AdminDashboardProps {
   orders: AdminOrder[];
@@ -200,11 +200,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                       <span className="text-slate-400"> • {ord.customerPhone}</span>
                     </td>
                     <td className="py-1.5 px-2 text-slate-600 max-w-[220px] truncate hidden md:table-cell">
-                      {ord.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}
+                      {(ord.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ')}
                     </td>
                     <td className="py-1.5 px-2 font-bold">₹{ord.total}</td>
                     <td className="py-1.5 px-2 text-slate-600">{ord.status}</td>
-                    <td className="py-1.5 px-2 text-right text-slate-500">{ord.timeAgo}</td>
+                    <td className="py-1.5 px-2 text-right text-slate-500">{formatTimeAgo(ord.id, ord.timeAgo)}</td>
                   </tr>
                 ))
               )}

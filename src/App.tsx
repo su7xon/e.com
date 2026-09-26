@@ -63,6 +63,51 @@ import {
   ShieldCheck 
 } from 'lucide-react';
 
+// Error Boundary to catch React render crashes (white screen fix)
+class AdminErrorBoundary extends React.Component<
+  { children: React.ReactNode; onReset?: () => void },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode; onReset?: () => void }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[AdminErrorBoundary] Crash:', error, info.componentStack);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', padding: 24 }}>
+          <div style={{ maxWidth: 500, background: '#fff', borderRadius: 16, padding: 32, boxShadow: '0 4px 24px rgba(0,0,0,0.1)', textAlign: 'center' }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
+            <h2 style={{ fontWeight: 900, fontSize: 18, color: '#0f172a', marginBottom: 8 }}>Admin Panel Crash</h2>
+            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+              {this.state.error?.message || 'Unknown error'}
+            </p>
+            <pre style={{ textAlign: 'left', fontSize: 11, background: '#f1f5f9', padding: 12, borderRadius: 8, overflow: 'auto', maxHeight: 200, color: '#ef4444', marginBottom: 16 }}>
+              {this.state.error?.stack || 'No stack trace'}
+            </pre>
+            <button
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                this.props.onReset?.();
+              }}
+              style={{ background: '#ED1C24', color: '#fff', border: 'none', padding: '10px 24px', borderRadius: 12, fontWeight: 800, fontSize: 13, cursor: 'pointer' }}
+            >
+              Retry / Go Back
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   // Migration: old cached image URLs pointed at /src/assets (never served in dist).
   // Rewrite them to /images (public folder) so blank images never show.
@@ -331,7 +376,13 @@ export default function App() {
   // Live Coupons State (Syncs with Admin)
   const [coupons, setCoupons] = useState<Coupon[]>(() => {
     const saved = localStorage.getItem('seven_cheese_coupons');
-    return saved ? JSON.parse(saved) : COUPONS;
+    if (!saved) return COUPONS;
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed) ? parsed : COUPONS;
+    } catch {
+      return COUPONS;
+    }
   });
 
   useEffect(() => {
@@ -471,7 +522,13 @@ export default function App() {
   // Rewards Points (Default 100/600)
   const [points, setPoints] = useState<number>(() => {
     const saved = localStorage.getItem('seven_cheese_points') || localStorage.getItem('dominos_points');
-    return saved ? JSON.parse(saved) : 100;
+    if (!saved) return 100;
+    try {
+      const parsed = JSON.parse(saved);
+      return typeof parsed === 'number' ? parsed : 100;
+    } catch {
+      return 100;
+    }
   });
 
   // Past Orders & Active Order
@@ -949,6 +1006,7 @@ export default function App() {
   if (currentView === 'admin' && adminOutlet) {
     return (
       <>
+      <AdminErrorBoundary onReset={() => setCurrentView('home')}>
       <AdminLayout
         outlet={adminOutlet}
         orders={adminOrders}
@@ -1011,6 +1069,7 @@ export default function App() {
           setStoreCategories((prev) => prev.map((c) => (c.id === id ? { ...c, image } : c)));
         }}
       />
+      </AdminErrorBoundary>
         <PwaOfflineBadge />
         <PwaUpdatePrompt />
       </>

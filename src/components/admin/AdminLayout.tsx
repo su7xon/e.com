@@ -245,7 +245,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     });
     if (!external.length) return;
     const latest = external[0];
-    const itemCount = latest.items.reduce((n, it) => n + (it.quantity || 1), 0);
+    const itemCount = (latest.items || []).reduce((n, it) => n + (it.quantity || 1), 0);
     // Repeat alarm 3x (12s) so kitchen hears even if tab background.
     if (soundOnRef.current) {
       playNewOrderAlert(4000);

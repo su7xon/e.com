@@ -18,7 +18,7 @@ import {
   X,
   Trash2
 } from 'lucide-react';
-import { AdminOrder } from './adminData';
+import { AdminOrder, formatTimeAgo } from './adminData';
 import { playPosChime } from './audioAlert';
 import { getOutletById } from './outlets';
 import {
@@ -72,7 +72,7 @@ export const AdminLiveOrders: React.FC<AdminLiveOrdersProps> = ({
     const dateStr = o.billDateIso
       ? o.billDateIso.split('-').reverse().join('-')
       : now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-');
-    const lines = o.items.map((it) => ({
+    const lines = (o.items || []).map((it) => ({
       name: (it.name || '').toUpperCase(),
       size: it.size || '',
       qty: it.quantity,
@@ -232,7 +232,7 @@ export const AdminLiveOrders: React.FC<AdminLiveOrdersProps> = ({
                     </div>
                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
                       <Clock className="w-3 h-3" />
-                      <span>{ord.createdAt} ({ord.timeAgo})</span>
+                      <span>{ord.createdAt} ({formatTimeAgo(ord.id, ord.timeAgo)})</span>
                     </div>
                   </div>
 
@@ -270,9 +270,9 @@ export const AdminLiveOrders: React.FC<AdminLiveOrdersProps> = ({
                 {/* Items List */}
                 <div className="py-3 space-y-2 border-b border-slate-100">
                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                    Ordered Items ({ord.items.reduce((a, b) => a + b.quantity, 0)})
+                    Ordered Items ({(ord.items || []).reduce((a, b) => a + b.quantity, 0)})
                   </div>
-                  {ord.items.map((item, idx) => (
+                  {(ord.items || []).map((item, idx) => (
                     <div key={idx} className="flex items-start justify-between text-xs">
                       <div className="flex items-start gap-2">
                         <span className="w-4 h-4 rounded-xs border flex items-center justify-center shrink-0 mt-0.5 bg-slate-50 border-slate-300">
@@ -434,7 +434,7 @@ export const AdminLiveOrders: React.FC<AdminLiveOrdersProps> = ({
               )}
 
               <div className="py-2 border-t border-b border-dashed border-slate-400 space-y-1.5">
-                {selectedKotOrder.items.map((item, i) => (
+                {(selectedKotOrder.items || []).map((item, i) => (
                   <div key={i} className="flex justify-between">
                     <div>
                       <span className="font-bold">{item.quantity}x {item.name}</span>

@@ -43,6 +43,25 @@ export interface AdminOrder {
 
 export const SEED_ADMIN_ORDERS: AdminOrder[] = [];
 
+export function formatTimeAgo(id: string, fallback: string): string {
+  if (!id.startsWith('ord-')) return fallback;
+  const timestamp = parseInt(id.replace('ord-', ''), 10);
+  if (isNaN(timestamp)) return fallback;
+  
+  const diffMs = Date.now() - timestamp;
+  const diffMins = Math.floor(diffMs / 60000);
+  
+  if (diffMins < 1) return 'Just now';
+  if (diffMins === 1) return '1 min ago';
+  if (diffMins < 60) return `${diffMins} mins ago`;
+  
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours === 1) return '1 hr ago';
+  if (diffHours < 24) return `${diffHours} hrs ago`;
+  
+  return fallback;
+}
+
 export const PRESET_PIZZA_IMAGES = [
   { label: '7 Cheese Special', url: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop&q=80' },
   { label: 'Pepperoni & Meat', url: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=800&auto=format&fit=crop&q=80' },
