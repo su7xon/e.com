@@ -10,34 +10,7 @@ interface BeforeInstallPromptEvent extends Event {
 const INSTALL_DISMISSED_KEY = 'seven_cheese_pwa_install_dismissed';
 const APK_URL = '/7cheese-pizza.apk';
 
-export const ApkDownloadButton: React.FC = () => {
-  const [available, setAvailable] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch(APK_URL, { method: 'HEAD' })
-      .then((r) => {
-        if (!cancelled && r.ok) setAvailable(true);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (!available) return null;
-  return (
-    <a
-      id="btn-apk-download"
-      href={APK_URL}
-      download
-      className="flex items-center justify-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-xs font-black px-3.5 py-2 rounded-xl transition-colors cursor-pointer shrink-0"
-    >
-      <Download className="w-3.5 h-3.5" />
-      <span>APK ↓</span>
-    </a>
-  );
-};
 
 export function usePwaInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -88,8 +61,23 @@ export function usePwaInstall() {
 }
 
 export const PwaInstallBanner: React.FC = () => {
-  const { canInstall, promptInstall, dismiss } = usePwaInstall();
-  if (!canInstall) return null;
+  const { canInstall, dismiss } = usePwaInstall();
+  const [apkAvailable, setApkAvailable] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(APK_URL, { method: 'HEAD' })
+      .then((r) => {
+        if (!cancelled && r.ok) setApkAvailable(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Single Install button — seedha APK download (no alag APK button)
+  if (!canInstall && !apkAvailable) return null;
   return (
     <div className="fixed bottom-20 sm:bottom-24 left-3 right-3 sm:left-auto sm:right-6 sm:max-w-sm z-50 animate-in slide-in-from-bottom-2 duration-200">
       <div className="bg-slate-950 text-white rounded-2xl shadow-2xl border border-white/10 p-4 flex items-center gap-3">
@@ -103,15 +91,15 @@ export const PwaInstallBanner: React.FC = () => {
           </p>
         </div>
         <div className="flex flex-col gap-1.5 shrink-0">
-          <button
+          <a
             id="btn-pwa-install"
-            onClick={() => void promptInstall()}
+            href={APK_URL}
+            download
             className="flex items-center justify-center gap-1.5 bg-[#ED1C24] hover:bg-[#c91430] text-white text-xs font-black px-3.5 py-2 rounded-xl shadow-md transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Install</span>
-          </button>
-          <ApkDownloadButton />
+          </a>
         </div>
         <button
           id="btn-pwa-install-dismiss"
