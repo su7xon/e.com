@@ -11,6 +11,7 @@ import {
 } from './types';
 import {
   MENU_ITEMS,
+  MAKE_YOUR_OWN_BASE,
   MENU_VERSION,
   REMOVED_MENU_IDS,
   CRAVING_CATEGORIES,
@@ -118,7 +119,7 @@ export default function App() {
     items.map((it) => (it.image?.includes('/src/assets/') ? { ...it, image: fixImg(it.image) as string } : it));
   // Navigation & Mode (reload pe bhi wahi view — admin me the to admin me hi raho)
   const [orderType, setOrderType] = useState<OrderType>('DELIVERY');
-  const [activeTab, setActiveTab] = useState<'menu' | 'reorder' | 'combos' | 'rewards'>('menu');
+  const [activeTab, setActiveTab] = useState<'menu' | 'reorder' | 'makeyourown' | 'combos' | 'rewards'>('menu');
   const [currentView, setCurrentView] = useState<'home' | 'billing' | 'admin'>(() => {
     try {
       const saved = sessionStorage.getItem('seven_cheese_current_view');
@@ -1440,6 +1441,46 @@ export default function App() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Make Your Own Pizza Tab */}
+      {activeTab === 'makeyourown' && (
+        <div className="max-w-3xl mx-auto px-4 py-8">
+          <div className="bg-gradient-to-br from-[#18181b] via-[#2a1215] to-[#18181b] text-white rounded-3xl p-6 sm:p-10 relative overflow-hidden shadow-2xl border border-white/10">
+            <div className="relative z-10">
+              <span className="bg-amber-400 text-slate-950 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">
+                Build It Your Way
+              </span>
+              <h1 className="text-3xl sm:text-4xl font-black text-white mt-3 leading-tight">
+                Make Your Own Pizza
+              </h1>
+              <p className="text-slate-300 text-sm mt-2 max-w-md leading-relaxed">
+                Fresh base se start karo — size, crust, extra 7-cheese layer aur unlimited toppings apni pasand se chuno.
+              </p>
+
+              <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {['1. Size', '2. Crust', '3. Cheese', '4. Toppings'].map((step) => (
+                  <div key={step} className="bg-white/10 border border-white/15 rounded-xl px-3 py-2.5 text-center">
+                    <span className="text-xs font-black text-amber-300">{step}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 flex items-center gap-3">
+                <span className="text-slate-400 line-through text-lg font-mono">₹199</span>
+                <span className="text-3xl font-black text-amber-400 font-mono">₹149</span>
+                <span className="text-xs text-slate-400 font-medium">onwards</span>
+              </div>
+              <button
+                id="btn-start-make-your-own"
+                onClick={() => handleOpenCustomize(MAKE_YOUR_OWN_BASE)}
+                className="mt-5 bg-[#ED1C24] hover:bg-[#c91430] text-white font-black px-8 py-3.5 rounded-full text-base shadow-lg transition-all cursor-pointer"
+              >
+                Start Building →
+              </button>
+            </div>
           </div>
         </div>
       )}

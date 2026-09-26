@@ -2,13 +2,14 @@ import React from 'react';
 import {
   Pizza,
   RotateCcw,
+  ChefHat,
   Package,
   Gift,
   ShoppingBag,
   ArrowRight,
 } from 'lucide-react';
 
-export type StoreTab = 'menu' | 'reorder' | 'combos' | 'rewards';
+export type StoreTab = 'menu' | 'reorder' | 'makeyourown' | 'combos' | 'rewards';
 
 interface BottomNavProps {
   activeTab: StoreTab;
@@ -89,6 +90,16 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           >
             <RotateCcw className={`w-5 h-5 ${activeTab === 'reorder' ? 'stroke-[2.5]' : ''}`} />
             <span className="text-[10px] sm:text-[11px] font-bold">Reorder</span>
+          </button>
+
+          {/* Make Your Own */}
+          <button
+            id="btn-tab-makeyourown"
+            onClick={() => setActiveTab('makeyourown')}
+            className={tabBtn(activeTab === 'makeyourown', 'text-[#ED1C24]')}
+          >
+            <ChefHat className={`w-5 h-5 ${activeTab === 'makeyourown' ? 'stroke-[2.5]' : ''}`} />
+            <span className="text-[10px] sm:text-[11px] font-bold">Make Own</span>
           </button>
 
           {/* Combos */}

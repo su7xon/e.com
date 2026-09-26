@@ -112,6 +112,27 @@ export const AVAILABLE_TOPPINGS: ExtraTopping[] = [
   { id: 'top-seekh-kabab', name: 'Chicken Seekh Kabab', price: 40, isVeg: false },
 ];
 
+// Make Your Own Pizza — blank base, customer step-by-step banata hai (CustomizeModal me khulta hai)
+export const MAKE_YOUR_OWN_BASE: MenuItem = {
+  id: 'p-make-your-own',
+  name: 'Make Your Own Pizza',
+  category: 'veg-pizza',
+  subCategoryTitle: 'Build Your Own',
+  isVeg: true,
+  price: 149,
+  originalPrice: 199,
+  description: 'Start with a fresh hand-tossed base, pick your size, crust, extra 7-cheese layer and unlimited toppings.',
+  toppings: [],
+  image: 'https://images.unsplash.com/photo-1571407970349-bc81e7e96d47?w=800&auto=format&fit=crop&q=80',
+  badge: 'CHEF SPECIAL',
+  rating: 4.9,
+  reviewsCount: 2100,
+  isCustomizable: true,
+  defaultSize: 'Regular',
+  defaultCrust: 'New Hand Tossed',
+  sizePrices: { Regular: 149, Medium: 299, Large: 449 },
+};
+
 export const MENU_ITEMS: MenuItem[] = [
   // ==========================================
   // 1. VEG PIZZA'S (From Brochure Page 2)
