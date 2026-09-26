@@ -11,27 +11,7 @@ interface CustomizeModalProps {
   onConfirmAddToCart: (cartItem: CartItem) => void;
 }
 
-// Small topping thumbnail with letter-tile fallback (broken URL kabhi blank nahi chhodega)
-const ToppingThumb: React.FC<{ topping: ExtraTopping }> = ({ topping }) => {
-  const [failed, setFailed] = useState(false);
-  if (!topping.image || failed) {
-    return (
-      <span className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center text-sm font-black shrink-0">
-        {topping.name.charAt(0)}
-      </span>
-    );
-  }
-  return (
-    <img
-      src={topping.image}
-      alt={topping.name}
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
-      className="w-8 h-8 rounded-lg object-cover shrink-0 bg-amber-50"
-    />
-  );
-};
+
 
 export const CustomizeModal: React.FC<CustomizeModalProps> = ({
   item,
@@ -317,16 +297,15 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
                         : 'border-slate-200 hover:border-slate-300 bg-white'
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-2">
                       <div
-                        className={`w-4 h-4 rounded-xs border flex items-center justify-center shrink-0 ${
+                        className={`w-4 h-4 rounded-xs border flex items-center justify-center ${
                           isChecked ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'
                         }`}
                       >
                         {isChecked && <Check className="w-3 h-3 text-white stroke-[3]" />}
                       </div>
-                      <ToppingThumb topping={topping} />
-                      <span className="text-xs font-semibold text-slate-800 truncate">
+                      <span className="text-xs font-semibold text-slate-800">
                         {topping.name}
                       </span>
                     </div>
