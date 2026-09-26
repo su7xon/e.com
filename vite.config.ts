@@ -52,7 +52,12 @@ export default defineConfig(() => {
         },
         workbox: {
           navigateFallback: 'index.html',
+          // APK / static files ko SPA fallback se bahar rakho —
+          // warna installed SW /7cheese-pizza.apk pe bhi index.html paros dega.
+          navigateFallbackDenylist: [/\.apk$/, /\.well-known\//, /7cheese-pizza\.apk/],
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          // 11MB APK ko precache me mat ghusao — download link se aayega.
+          maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
