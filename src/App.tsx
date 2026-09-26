@@ -32,6 +32,7 @@ import { RewardsModal } from './components/RewardsModal';
 import { DealsModal } from './components/DealsModal';
 import { BottomNav } from './components/BottomNav';
 import { BillingPage } from './components/BillingPage';
+import { PromiseSection } from './components/PromiseSection';
 import { ChatAssistant } from './components/ChatAssistant';
 import { PwaInstallBanner, PwaOfflineBadge, PwaUpdatePrompt } from './components/PwaManager';
 import { AdminLayout } from './components/admin/AdminLayout';
@@ -1343,6 +1344,17 @@ export default function App() {
             )}
 
           </div>
+
+          {/* 7 Cheese Promise — quality + lowest price cards */}
+          <PromiseSection
+            onOpenDeals={() => setIsDealsModalOpen(true)}
+            onOpenRewards={() => setIsRewardsModalOpen(true)}
+            onBrowseMenu={() => {
+              setSelectedCategory('all');
+              const el = document.getElementById('menu-items-section');
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+            }}
+          />
         </main>
       )}
 
@@ -1679,6 +1691,7 @@ export default function App() {
         cartCount={cartItemCount}
         cartTotal={cartTotal}
         onOpenCart={() => setIsCartOpen(true)}
+        points={points}
       />
 
       {/* PWA: install prompt, update prompt, offline badge */}

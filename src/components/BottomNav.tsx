@@ -2,18 +2,22 @@ import React from 'react';
 import {
   Pizza,
   RotateCcw,
-  Sparkles,
+  Layers,
+  Package,
+  Gift,
   ShoppingBag,
   ArrowRight,
-  Layers
 } from 'lucide-react';
 
+export type StoreTab = 'menu' | 'reorder' | 'bigbig' | 'combos' | 'rewards';
+
 interface BottomNavProps {
-  activeTab: 'menu' | 'reorder' | 'bigbig' | 'combos' | 'rewards';
-  setActiveTab: (tab: 'menu' | 'reorder' | 'bigbig' | 'combos' | 'rewards') => void;
+  activeTab: StoreTab;
+  setActiveTab: (tab: StoreTab) => void;
   cartCount: number;
   cartTotal: number;
   onOpenCart: () => void;
+  points: number;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
@@ -22,10 +26,16 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   cartCount,
   cartTotal,
   onOpenCart,
+  points,
 }) => {
+  const tabBtn = (isActive: boolean, activeColor: string) =>
+    `flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-xl relative transition-all cursor-pointer min-w-0 flex-1 ${
+      isActive ? activeColor : 'text-slate-400 hover:text-slate-900'
+    }`;
+
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40">
-      
+
       {/* Floating Cart Banner if cart has items */}
       {cartCount > 0 && (
         <div className="max-w-md sm:max-w-lg mx-auto px-3 pb-2 animate-in slide-in-from-bottom-2 duration-200">
@@ -60,15 +70,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
       {/* Bottom Nav Bar */}
       <nav className="bg-white text-slate-900 border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] px-2 sm:px-6 py-2">
-        <div className="max-w-md sm:max-w-2xl mx-auto flex items-center justify-between">
-          
+        <div className="max-w-md sm:max-w-2xl mx-auto flex items-stretch justify-between gap-1">
+
           {/* Menu */}
           <button
             id="btn-tab-menu"
             onClick={() => setActiveTab('menu')}
-            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'menu' ? 'text-[#ED1C24]' : 'text-slate-400 hover:text-slate-900'
-            }`}
+            className={tabBtn(activeTab === 'menu', 'text-[#ED1C24]')}
           >
             <Pizza className={`w-5 h-5 ${activeTab === 'menu' ? 'stroke-[2.5]' : ''}`} />
             <span className="text-[10px] sm:text-[11px] font-bold">Menu</span>
@@ -78,9 +86,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           <button
             id="btn-tab-reorder"
             onClick={() => setActiveTab('reorder')}
-            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl transition-all cursor-pointer ${
-              activeTab === 'reorder' ? 'text-[#ED1C24]' : 'text-slate-400 hover:text-slate-900'
-            }`}
+            className={tabBtn(activeTab === 'reorder', 'text-[#ED1C24]')}
           >
             <RotateCcw className={`w-5 h-5 ${activeTab === 'reorder' ? 'stroke-[2.5]' : ''}`} />
             <span className="text-[10px] sm:text-[11px] font-bold">Reorder</span>
@@ -90,9 +96,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           <button
             id="btn-tab-bigbig"
             onClick={() => setActiveTab('bigbig')}
-            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-xl relative transition-all cursor-pointer ${
-              activeTab === 'bigbig' ? 'text-amber-500' : 'text-slate-400 hover:text-slate-900'
-            }`}
+            className={tabBtn(activeTab === 'bigbig', 'text-amber-500')}
           >
             <span className="absolute -top-1 bg-amber-400 text-slate-950 text-[8px] font-black px-1 rounded-full uppercase leading-tight">
               HOT
@@ -100,8 +104,33 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             <Layers className={`w-5 h-5 ${activeTab === 'bigbig' ? 'stroke-[2.5]' : ''}`} />
             <span className="text-[10px] sm:text-[11px] font-bold">7 Cheese</span>
           </button>
+
+          {/* Combos */}
+          <button
+            id="btn-tab-combos"
+            onClick={() => setActiveTab('combos')}
+            className={tabBtn(activeTab === 'combos', 'text-[#ED1C24]')}
+          >
+            <Package className={`w-5 h-5 ${activeTab === 'combos' ? 'stroke-[2.5]' : ''}`} />
+            <span className="text-[10px] sm:text-[11px] font-bold">Combos</span>
+          </button>
+
+          {/* Rewards with points */}
+          <button
+            id="btn-tab-rewards"
+            onClick={() => setActiveTab('rewards')}
+            className={tabBtn(activeTab === 'rewards', 'text-amber-500')}
+          >
+            <Gift className={`w-5 h-5 ${activeTab === 'rewards' ? 'stroke-[2.5]' : ''}`} />
+            <span className="text-[10px] sm:text-[11px] font-bold font-mono">{points}/600</span>
+          </button>
         </div>
       </nav>
+
+      {/* Hidden cart trigger for tests */}
+      <button id="btn-bottom-cart-hidden" onClick={onOpenCart} className="hidden" aria-hidden="true">
+        <ShoppingBag className="w-4 h-4" />
+      </button>
     </div>
   );
 };

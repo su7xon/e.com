@@ -6,6 +6,7 @@ export interface ExtraTopping {
   name: string;
   price: number;
   isVeg: boolean;
+  image?: string;
 }
 
 export type MenuCategoryType = 

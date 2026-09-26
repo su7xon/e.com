@@ -94,23 +94,25 @@ export const CRAVING_CATEGORIES: CategoryItem[] = [
   },
 ];
 
+const TOP_IMG = (id: string) => `https://images.unsplash.com/${id}?w=200&auto=format&fit=crop&q=60`;
+
 export const AVAILABLE_TOPPINGS: ExtraTopping[] = [
-  { id: 'top-extra-cheese', name: '7-Cheese Blend Layer', price: 49, isVeg: true },
-  { id: 'top-paneer', name: 'Fresh Spiced Paneer', price: 25, isVeg: true },
-  { id: 'top-olives', name: 'Black Spanish Olives', price: 25, isVeg: true },
-  { id: 'top-corn', name: 'Golden Sweet Corn', price: 25, isVeg: true },
-  { id: 'top-baby-corn', name: 'Tender Baby Corn', price: 25, isVeg: true },
-  { id: 'top-jalapeno', name: 'Zesty Jalapenos', price: 25, isVeg: true },
-  { id: 'top-mushroom', name: 'Fresh Button Mushrooms', price: 25, isVeg: true },
-  { id: 'top-paprika', name: 'Spicy Red Paprika', price: 25, isVeg: true },
-  { id: 'top-capsicum', name: 'Crisp Green Capsicum', price: 25, isVeg: true },
-  { id: 'top-tomato', name: 'Ripe Juicy Tomatoes', price: 25, isVeg: true },
-  { id: 'top-onion', name: 'Fresh Crunchy Onions', price: 25, isVeg: true },
-  { id: 'top-bbq-chicken', name: 'Barbeque Chicken', price: 40, isVeg: false },
-  { id: 'top-peri-chicken', name: 'Peri-Peri Chicken', price: 40, isVeg: false },
-  { id: 'top-chicken-tikka', name: 'Tandoori Chicken Tikka', price: 40, isVeg: false },
-  { id: 'top-chicken-salami', name: 'Smoked Chicken Salami', price: 40, isVeg: false },
-  { id: 'top-seekh-kabab', name: 'Chicken Seekh Kabab', price: 40, isVeg: false },
+  { id: 'top-extra-cheese', name: '7-Cheese Blend Layer', price: 49, isVeg: true, image: TOP_IMG('photo-1486297678162-eb2a19b0a32d') },
+  { id: 'top-paneer', name: 'Fresh Spiced Paneer', price: 25, isVeg: true, image: TOP_IMG('photo-1631452180519-c014fe946bc7') },
+  { id: 'top-olives', name: 'Black Spanish Olives', price: 25, isVeg: true, image: TOP_IMG('photo-1474979266404-7eaacbcd87c5') },
+  { id: 'top-corn', name: 'Golden Sweet Corn', price: 25, isVeg: true, image: TOP_IMG('photo-1551754655-cd27e38d2076') },
+  { id: 'top-baby-corn', name: 'Tender Baby Corn', price: 25, isVeg: true, image: TOP_IMG('photo-1551754655-cd27e38d2076') },
+  { id: 'top-jalapeno', name: 'Zesty Jalapenos', price: 25, isVeg: true, image: TOP_IMG('photo-1583119912267-cc97c911e416') },
+  { id: 'top-mushroom', name: 'Fresh Button Mushrooms', price: 25, isVeg: true, image: TOP_IMG('photo-1504545102780-26774c1bb073') },
+  { id: 'top-paprika', name: 'Spicy Red Paprika', price: 25, isVeg: true, image: TOP_IMG('photo-1563565375-f3fdfdbefa83') },
+  { id: 'top-capsicum', name: 'Crisp Green Capsicum', price: 25, isVeg: true, image: TOP_IMG('photo-1566385101042-1a0aa0c1268c') },
+  { id: 'top-tomato', name: 'Ripe Juicy Tomatoes', price: 25, isVeg: true, image: TOP_IMG('photo-1592924357228-91a4daadcfea') },
+  { id: 'top-onion', name: 'Fresh Crunchy Onions', price: 25, isVeg: true, image: TOP_IMG('photo-1518977956812-cd3dbadaaf31') },
+  { id: 'top-bbq-chicken', name: 'Barbeque Chicken', price: 40, isVeg: false, image: TOP_IMG('photo-1555939594-58d7cb561ad1') },
+  { id: 'top-peri-chicken', name: 'Peri-Peri Chicken', price: 40, isVeg: false, image: TOP_IMG('photo-1594221708779-94832f4320d1') },
+  { id: 'top-chicken-tikka', name: 'Tandoori Chicken Tikka', price: 40, isVeg: false, image: TOP_IMG('photo-1599487488170-d11ec9c172f0') },
+  { id: 'top-chicken-salami', name: 'Smoked Chicken Salami', price: 40, isVeg: false, image: TOP_IMG('photo-1628840042765-356cda07504e') },
+  { id: 'top-seekh-kabab', name: 'Chicken Seekh Kabab', price: 40, isVeg: false, image: TOP_IMG('photo-1603360946369-dc9bb6258143') },
 ];
 
 export const MENU_ITEMS: MenuItem[] = [
