@@ -63,6 +63,14 @@ export function usePwaInstall() {
 export const PwaInstallBanner: React.FC = () => {
   const { canInstall, dismiss } = usePwaInstall();
   const [apkAvailable, setApkAvailable] = useState(false);
+  const [dismissed, setDismissed] = useState(
+    () => sessionStorage.getItem(INSTALL_DISMISSED_KEY) === '1',
+  );
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    dismiss();
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -77,7 +85,7 @@ export const PwaInstallBanner: React.FC = () => {
   }, []);
 
   // Single Install button — seedha APK download (no alag APK button)
-  if (!canInstall && !apkAvailable) return null;
+  if (dismissed || (!canInstall && !apkAvailable)) return null;
   return (
     <div className="fixed bottom-20 sm:bottom-24 left-3 right-3 sm:left-auto sm:right-6 sm:max-w-sm z-50 animate-in slide-in-from-bottom-2 duration-200">
       <div className="bg-slate-950 text-white rounded-2xl shadow-2xl border border-white/10 p-4 flex items-center gap-3">
@@ -103,7 +111,7 @@ export const PwaInstallBanner: React.FC = () => {
         </div>
         <button
           id="btn-pwa-install-dismiss"
-          onClick={dismiss}
+          onClick={handleDismiss}
           className="text-zinc-500 hover:text-white transition-colors cursor-pointer shrink-0"
           aria-label="Dismiss install prompt"
         >
