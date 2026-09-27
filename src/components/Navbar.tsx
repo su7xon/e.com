@@ -9,7 +9,7 @@ import {
   X,
   ShieldCheck
 } from 'lucide-react';
-import { OrderType, UserAddress } from '../types';
+import { OrderType, UserAddress, MenuItem } from '../types';
 import { SevenCheeseLogo } from './SevenCheeseLogo';
 
 interface NavbarProps {
@@ -31,6 +31,11 @@ interface NavbarProps {
   outletDistanceKm?: number;
   gpsState?: 'idle' | 'locating' | 'locked' | 'denied';
   onDetectLocation?: () => void;
+  /** Amazon-style live suggestions for current searchQuery */
+  suggestions?: MenuItem[];
+  onSelectSuggestion?: (item: MenuItem) => void;
+  /** Table QR se aaya customer — address pill dikhane ka matlab nahi */
+  isTableLocked?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -51,11 +56,20 @@ export const Navbar: React.FC<NavbarProps> = ({
   outletDistanceKm,
   gpsState,
   onDetectLocation,
+  suggestions = [],
+  onSelectSuggestion,
+  isTableLocked = false,
 }) => {
+  const [searchFocus, setSearchFocus] = React.useState(false);
   const liveKm =
     typeof outletDistanceKm === 'number' && Number.isFinite(outletDistanceKm)
       ? outletDistanceKm.toFixed(1)
       : (currentAddress.distanceKm?.toFixed(1) ?? '—');
+  const showSuggestions = searchFocus && searchQuery.trim().length > 0 && suggestions.length > 0;
+  const scrollToMenu = () => {
+    const el = document.getElementById('menu-items-section');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+  };
   return (
     <header className="sticky top-0 z-40 bg-white text-slate-900 shadow-md border-b border-slate-200">
       {/* Main Bar */}
@@ -76,7 +90,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             </div>
 
-            {/* Address / Store Selector */}
+            {/* Address / Store Selector — table QR lock pe hide (dine-in me address ka matlab nahi) */}
+            {!isTableLocked && (
             <button
               id="btn-address-selector"
               onClick={onOpenAddressModal}
@@ -108,6 +123,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </p>
               </div>
             </button>
+            )}
           </div>
 
           {/* Mode Switcher Tabs */}
@@ -234,6 +250,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setSearchFocus(true)}
+              onBlur={() => setSearchFocus(false)}
               placeholder="Search pizza..."
               className="w-full bg-slate-100 border border-slate-200 text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm pl-8 sm:pl-9 pr-7 sm:pr-8 py-1.5 sm:py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner font-medium sm:hidden"
             />
@@ -241,17 +259,71 @@ export const Navbar: React.FC<NavbarProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setSearchFocus(true)}
+              onBlur={() => setSearchFocus(false)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  (e.target as HTMLInputElement).blur();
+                  scrollToMenu();
+                }
+              }}
               placeholder="Search 7 Cheese Special, Farmhouse, Tandoori Chicken, Wraps, Burgers..."
               className="w-full bg-slate-100 border border-slate-200 text-slate-900 placeholder:text-slate-400 text-xs sm:text-sm pl-8 sm:pl-9 pr-7 sm:pr-8 py-1.5 sm:py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner font-medium hidden sm:block"
             />
             {searchQuery && (
               <button
                 id="btn-clear-search"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => setSearchQuery('')}
                 className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
+            )}
+            {/* Amazon-style live suggestions */}
+            {showSuggestions && (
+              <div className="absolute top-full left-0 right-0 mt-1.5 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50">
+                {suggestions.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      onSelectSuggestion?.(s);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 hover:bg-amber-50 active:bg-amber-100 transition-colors text-left cursor-pointer border-b border-slate-100 last:border-0"
+                  >
+                    <img
+                      src={s.image}
+                      alt=""
+                      className="w-9 h-9 rounded-lg object-cover shrink-0 bg-slate-100"
+                      loading="lazy"
+                    />
+                    <span className="flex-1 min-w-0">
+                      <span className="flex items-center gap-1.5 text-xs font-bold text-slate-900 truncate">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${s.isVeg ? 'bg-emerald-500' : 'bg-red-600'}`} />
+                        <span className="truncate">{s.name}</span>
+                      </span>
+                      <span className="block text-[10px] text-slate-400 truncate">
+                        {s.isVeg ? 'Veg' : 'Non-veg'} • tap to order
+                      </span>
+                    </span>
+                    <span className="text-xs font-black text-slate-900 shrink-0">₹{s.price}</span>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    (document.activeElement as HTMLElement | null)?.blur?.();
+                    setSearchFocus(false);
+                    scrollToMenu();
+                  }}
+                  className="w-full px-3 py-2 bg-slate-50 hover:bg-slate-100 text-[11px] font-black text-[#ED1C24] text-center cursor-pointer"
+                >
+                  See all results below ↓
+                </button>
+              </div>
             )}
           </div>
         </div>

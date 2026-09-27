@@ -972,6 +972,24 @@ export default function App() {
     });
   }, [menuItems, searchQuery, vegOnly, nonVegOnly, selectedCategory, sortBy]);
 
+  // Amazon-style live suggestions: naam + description + toppings me match, top 6
+  const searchSuggestions = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return menuItems
+      .filter((m) => {
+        if (m.name.toLowerCase().includes(q)) return true;
+        if (m.description.toLowerCase().includes(q)) return true;
+        return m.toppings?.some((t) => t.toLowerCase().includes(q)) ?? false;
+      })
+      .slice(0, 6);
+  }, [menuItems, searchQuery]);
+
+  const handleSelectSuggestion = (item: MenuItem) => {
+    // Product card tap jaisa behavior: customizable = modal, warna direct add
+    if (item.isCustomizable) handleOpenCustomize(item);
+    else handleSimpleAddToCart(item);
+  };
   // Featured Hero banner selection
   const handleSelectFeatured = (productId: string) => {
     const item = menuItems.find((m) => m.id === productId) || MENU_ITEMS.find((m) => m.id === productId);
@@ -1157,6 +1175,9 @@ export default function App() {
         outletDistanceKm={outletInfo.distanceKm}
         gpsState={gpsState}
         onDetectLocation={requestGps}
+        suggestions={searchSuggestions}
+        onSelectSuggestion={handleSelectSuggestion}
+        isTableLocked={!!qrTable}
       />
 
       {/* Table QR lock banner — customer ko pata rahe order kis table pe jayega */}
@@ -1165,7 +1186,7 @@ export default function App() {
           <div className="flex items-center justify-between gap-3 bg-slate-900 text-white rounded-2xl px-4 py-2.5 shadow-md">
             <span className="flex items-center gap-2 text-xs font-bold">
               <Armchair className="w-4 h-4 text-amber-400" />
-              <span>{qrTable.name} • Dine-in locked (QR scan)</span>
+              <span>Dine-in • Table QR se order</span>
             </span>
             <button
               onClick={() => {
