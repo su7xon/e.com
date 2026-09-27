@@ -14,15 +14,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   const [period, setPeriod] = useState<'today' | 'yesterday' | 'week' | 'month' | 'all'>('today');
 
-  const grossRevenue = orders.reduce((acc, o) => acc + (o.status !== 'CANCELLED' ? o.total : 0), 0);
+  // Firestore se aadha-adhura purana doc bhi aa sakta hai (bina total) — NaN se bachao.
+  const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
+  const grossRevenue = orders.reduce((acc, o) => acc + (o.status !== 'CANCELLED' ? num(o.total) : 0), 0);
   const deliveryOrders = orders.filter(o => o.orderType === 'DELIVERY');
   const dineInOrders = orders.filter(o => o.orderType === 'DINE_IN');
   const activeDelivery = deliveryOrders.filter(o => o.status === 'NEW' || o.status === 'KITCHEN' || o.status === 'DISPATCHED').length;
   const activeDineIn = dineInOrders.filter(o => o.status === 'NEW' || o.status === 'KITCHEN').length;
   const avgOrderValue = orders.length > 0 ? Math.round(grossRevenue / orders.length) : 0;
 
-  const deliverySales = deliveryOrders.reduce((acc, o) => acc + o.total, 0);
-  const dineInSales = dineInOrders.reduce((acc, o) => acc + o.total, 0);
+  const deliverySales = deliveryOrders.reduce((acc, o) => acc + num(o.total), 0);
+  const dineInSales = dineInOrders.reduce((acc, o) => acc + num(o.total), 0);
   const gstCollected = Math.round(grossRevenue * 0.05);
 
   return (
@@ -202,7 +204,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <td className="py-1.5 px-2 text-slate-600 max-w-[220px] truncate hidden md:table-cell">
                       {(ord.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ')}
                     </td>
-                    <td className="py-1.5 px-2 font-bold">₹{ord.total}</td>
+                    <td className="py-1.5 px-2 font-bold">₹{num(ord.total)}</td>
                     <td className="py-1.5 px-2 text-slate-600">{ord.status}</td>
                     <td className="py-1.5 px-2 text-right text-slate-500">{formatTimeAgo(ord.id, ord.timeAgo)}</td>
                   </tr>

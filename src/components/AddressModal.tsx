@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, MapPin, Plus, Check, Home, Briefcase, Navigation, Compass, Pencil, Trash2 } from 'lucide-react';
 import { UserAddress } from '../types';
 import { InteractiveMapPicker } from './InteractiveMapPicker';
+import { findNearestOutlet } from './admin/outlets';
 
 interface AddressModalProps {
   isOpen: boolean;
@@ -67,8 +68,9 @@ export const AddressModal: React.FC<AddressModalProps> = ({
 
     if (editingId) {
       const existing = addresses.find((a) => a.id === editingId);
+      const base: UserAddress = existing ?? { id: editingId, address: '', city: '', pincode: '' } as UserAddress;
       const updated: UserAddress = {
-        ...(existing ?? { id: editingId, distanceKm: 2.8 }),
+        ...base,
         id: editingId,
         label,
         address: addressLine,
@@ -76,6 +78,10 @@ export const AddressModal: React.FC<AddressModalProps> = ({
         pincode,
         landmark,
       };
+      // GPS pin ho to outlet distance live compute karo, warna purani value rakho
+      if (typeof base.lat === 'number' && typeof base.lng === 'number') {
+        updated.distanceKm = findNearestOutlet(base.lat, base.lng).distanceKm;
+      }
       onUpdateAddress(updated);
       if (currentAddress.id === editingId) onSelectAddress(updated);
     } else {
@@ -86,7 +92,6 @@ export const AddressModal: React.FC<AddressModalProps> = ({
         city,
         pincode,
         landmark,
-        distanceKm: 2.8,
       };
       onAddNewAddress(newAddr);
       onSelectAddress(newAddr);
@@ -168,6 +173,11 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                   {addresses.map((addr) => {
                     const isSelected = currentAddress.id === addr.id;
                     const Icon = getAddressIcon(addr.label);
+                    // Live outlet distance: GPS pin ho to compute karo, warna saved value
+                    const liveKm =
+                      typeof addr.lat === 'number' && typeof addr.lng === 'number'
+                        ? findNearestOutlet(addr.lat, addr.lng).distanceKm
+                        : addr.distanceKm;
 
                     return (
                       <div
@@ -198,9 +208,9 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                               <span className="font-black text-xs sm:text-sm text-slate-900">
                                 {addr.label}
                               </span>
-                              {addr.distanceKm && (
+                              {liveKm !== undefined && (
                                 <span className="bg-amber-100 text-amber-900 text-[10px] font-bold px-1.5 py-0.2 rounded">
-                                  {addr.distanceKm} km away
+                                  {liveKm.toFixed(1)} km away
                                 </span>
                               )}
                             </div>

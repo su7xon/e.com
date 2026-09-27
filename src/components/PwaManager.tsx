@@ -61,7 +61,7 @@ export function usePwaInstall() {
 }
 
 export const PwaInstallBanner: React.FC = () => {
-  const { canInstall, dismiss } = usePwaInstall();
+  const { canInstall, promptInstall, dismiss } = usePwaInstall();
   const [apkAvailable, setApkAvailable] = useState(false);
   const [dismissed, setDismissed] = useState(
     () => sessionStorage.getItem(INSTALL_DISMISSED_KEY) === '1',
@@ -99,15 +99,26 @@ export const PwaInstallBanner: React.FC = () => {
           </p>
         </div>
         <div className="flex flex-col gap-1.5 shrink-0">
-          <a
-            id="btn-pwa-install"
-            href={APK_URL}
-            download
-            className="flex items-center justify-center gap-1.5 bg-[#ED1C24] hover:bg-[#c91430] text-white text-xs font-black px-3.5 py-2 rounded-xl shadow-md transition-colors cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Install</span>
-          </a>
+          {canInstall ? (
+            <button
+              id="btn-pwa-install"
+              onClick={() => void promptInstall()}
+              className="flex items-center justify-center gap-1.5 bg-[#ED1C24] hover:bg-[#c91430] text-white text-xs font-black px-3.5 py-2 rounded-xl shadow-md transition-colors cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Install</span>
+            </button>
+          ) : (
+            <a
+              id="btn-pwa-install"
+              href={APK_URL}
+              download
+              className="flex items-center justify-center gap-1.5 bg-[#ED1C24] hover:bg-[#c91430] text-white text-xs font-black px-3.5 py-2 rounded-xl shadow-md transition-colors cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Install</span>
+            </a>
+          )}
         </div>
         <button
           id="btn-pwa-install-dismiss"

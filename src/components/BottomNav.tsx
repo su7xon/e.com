@@ -4,12 +4,12 @@ import {
   RotateCcw,
   ChefHat,
   Package,
-  Gift,
+  User,
   ShoppingBag,
   ArrowRight,
 } from 'lucide-react';
 
-export type StoreTab = 'menu' | 'reorder' | 'makeyourown' | 'combos' | 'rewards';
+export type StoreTab = 'menu' | 'reorder' | 'makeyourown' | 'combos' | 'profile';
 
 interface BottomNavProps {
   activeTab: StoreTab;
@@ -17,7 +17,6 @@ interface BottomNavProps {
   cartCount: number;
   cartTotal: number;
   onOpenCart: () => void;
-  points: number;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
@@ -26,7 +25,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   cartCount,
   cartTotal,
   onOpenCart,
-  points,
 }) => {
   const tabBtn = (isActive: boolean, activeColor: string) =>
     `flex flex-col items-center gap-0.5 py-1 px-1.5 rounded-xl relative transition-all cursor-pointer min-w-0 flex-1 ${
@@ -112,14 +110,14 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             <span className="text-[10px] sm:text-[11px] font-bold">Combos</span>
           </button>
 
-          {/* Rewards with points */}
+          {/* Profile */}
           <button
-            id="btn-tab-rewards"
-            onClick={() => setActiveTab('rewards')}
-            className={tabBtn(activeTab === 'rewards', 'text-amber-500')}
+            id="btn-tab-profile"
+            onClick={() => setActiveTab('profile')}
+            className={tabBtn(activeTab === 'profile', 'text-[#ED1C24]')}
           >
-            <Gift className={`w-5 h-5 ${activeTab === 'rewards' ? 'stroke-[2.5]' : ''}`} />
-            <span className="text-[10px] sm:text-[11px] font-bold font-mono">{points}/600</span>
+            <User className={`w-5 h-5 ${activeTab === 'profile' ? 'stroke-[2.5]' : ''}`} />
+            <span className="text-[10px] sm:text-[11px] font-bold">Profile</span>
           </button>
         </div>
       </nav>

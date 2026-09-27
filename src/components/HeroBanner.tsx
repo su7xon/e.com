@@ -89,22 +89,6 @@ export const DEFAULT_SLIDES: BannerSlide[] = [
     image: 'https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=900&auto=format&fit=crop&q=80',
     productId: 'b-veg-normal',
   },
-  {
-    id: 'slide-lunch-special',
-    badge: 'LUNCH TIME SPECIAL • 11 AM - 2 PM',
-    titlePart1: 'Delicious',
-    titleHighlight: 'PIZZA COMBOS',
-    titlePart2: 'From ₹149',
-    subtitle: 'Good Food • Bright Mood • Tastier Day! Pizza + Cold Drink + Fries!',
-    priceOld: 199,
-    priceNew: 149,
-    feature1: 'Personal @ ₹149 / Medium @ ₹199',
-    feature2: 'Cold Drink + Fries Included',
-    bgGradient: 'from-amber-950 via-[#1c0f05] to-[#0d0702]',
-    image: '/images/lunch-time-special-combos.jpg',
-    productId: 'p-veg-supreme',
-    fullImage: true,
-  },
 ];
 
 export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpenDeals, slides = DEFAULT_SLIDES }) => {

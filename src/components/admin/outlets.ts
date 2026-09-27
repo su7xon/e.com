@@ -18,8 +18,9 @@ export const OUTLETS: Outlet[] = [
     shortName: '7 Cheese Pizza',
     area: 'Kaladhungi Road, Haldwani',
     password: 'cheese123',
-    lat: 29.2139,
-    lng: 79.5279,
+    // Real store pin: 29°13'49.0"N 79°29'18.4"E (Unchapul, Kaladhungi Road)
+    lat: 29.23028,
+    lng: 79.488444,
     radiusKm: 8,
     phone: '+91 98765 43210',
   },
@@ -136,6 +137,7 @@ export function resolveOutletForOrder(lat?: number, lng?: number): NearestOutlet
 export function clearOutletQrLock(): void {
   try {
     localStorage.removeItem('seven_cheese_qr_outlet');
+    localStorage.removeItem('seven_cheese_qr_table');
   } catch {
     // ignore
   }
@@ -143,8 +145,99 @@ export function clearOutletQrLock(): void {
     const url = new URL(window.location.href);
     url.searchParams.delete('outlet');
     url.searchParams.delete('qrt');
+    url.searchParams.delete('table');
     window.history.replaceState({}, '', url.toString());
   } catch {
     // ignore
+  }
+}
+
+// ---------- Tables: har table ka apna QR, scan = ussi table ke naam pe order ----------
+
+export interface OutletTable {
+  id: string;
+  outletId: string;
+  name: string;
+}
+
+const tablesKey = (outletId: string) => `seven_cheese_tables_${outletId}`;
+
+function seedTables(outletId: string): OutletTable[] {
+  return [
+    { id: `${outletId}-t01`, outletId, name: 'Table T-01' },
+    { id: `${outletId}-t02`, outletId, name: 'Table T-02' },
+  ];
+}
+
+/** Outlet ki tables. Pehli baar 2 default tables (T-01, T-02) ke saath. */
+export function getOutletTables(outletId: string): OutletTable[] {
+  try {
+    const saved = localStorage.getItem(tablesKey(outletId));
+    if (saved) {
+      const parsed = JSON.parse(saved) as OutletTable[];
+      if (Array.isArray(parsed)) return parsed.filter((t) => t && t.id && t.name);
+    }
+  } catch {
+    // ignore — seed below
+  }
+  const seeded = seedTables(outletId);
+  try {
+    localStorage.setItem(tablesKey(outletId), JSON.stringify(seeded));
+  } catch {
+    // ignore
+  }
+  return seeded;
+}
+
+export function saveOutletTables(outletId: string, tables: OutletTable[]): void {
+  try {
+    localStorage.setItem(tablesKey(outletId), JSON.stringify(tables));
+  } catch {
+    // ignore
+  }
+}
+
+export function addOutletTable(outletId: string, name: string): OutletTable {
+  const table: OutletTable = {
+    id: `${outletId}-t${Date.now().toString(36)}`,
+    outletId,
+    name: name.trim(),
+  };
+  saveOutletTables(outletId, [...getOutletTables(outletId), table]);
+  return table;
+}
+
+export function deleteOutletTable(outletId: string, tableId: string): void {
+  saveOutletTables(
+    outletId,
+    getOutletTables(outletId).filter((t) => t.id !== tableId)
+  );
+}
+
+export function getTableById(outletId: string, tableId: string): OutletTable | undefined {
+  return getOutletTables(outletId).find((t) => t.id === tableId);
+}
+
+/** Table QR link — scan karne wala order hamesha isi outlet + isi table ke naam pe banega. */
+export function getTableQrUrl(outletId: string, tableId: string, token?: string): string {
+  const t = token ?? getOutletQrToken(outletId);
+  const base =
+    typeof window !== 'undefined'
+      ? window.location.origin + window.location.pathname
+      : '/';
+  return `${base}?outlet=${encodeURIComponent(outletId)}&qrt=${encodeURIComponent(t)}&table=${encodeURIComponent(tableId)}`;
+}
+
+/** URL (?table=...) se table lock padho. Galat id pe null. */
+export function parseTableQrParam(outletId?: string): string | null {
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const tid = p.get('table');
+    if (tid && outletId && getTableById(outletId, tid)) return tid;
+    const stored = localStorage.getItem('seven_cheese_qr_table');
+    if (stored && outletId && getTableById(outletId, stored)) return stored;
+    return null;
+  } catch {
+    return null;
   }
 }

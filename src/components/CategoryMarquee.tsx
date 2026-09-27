@@ -38,9 +38,9 @@ export const CategoryMarquee: React.FC<CategoryMarqueeProps> = ({ onSelectCatego
               }}
               className="shrink-0 group/card relative w-44 sm:w-52 md:w-60 aspect-[4/3] rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.03] cursor-pointer border border-slate-200 hover:border-amber-400"
             >
-              {/* Category Image */}
+              {/* Category Image — marquee card photo (bannerImage), craving cutout nahi */}
               <img
-                src={cat.image}
+                src={cat.bannerImage || cat.image}
                 alt={cat.name}
                 className="w-full h-full object-cover transition-transform duration-500 group-hover/card:scale-110"
                 referrerPolicy="no-referrer"

@@ -27,16 +27,18 @@ export const AdminReports: React.FC<AdminReportsProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const grossSales = orders.reduce((sum, o) => sum + (o.status !== 'CANCELLED' ? o.total : 0), 0);
+  // Bina-total wale purane docs NaN na banaye — guard.
+  const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
+  const grossSales = orders.reduce((sum, o) => sum + (o.status !== 'CANCELLED' ? num(o.total) : 0), 0);
   const deliveryOrders = orders.filter(o => o.orderType === 'DELIVERY' && o.status !== 'CANCELLED');
   const dineInOrders = orders.filter(o => o.orderType === 'DINE_IN' && o.status !== 'CANCELLED');
 
-  const deliveryTotal = deliveryOrders.reduce((sum, o) => sum + o.total, 0);
-  const dineInTotal = dineInOrders.reduce((sum, o) => sum + o.total, 0);
+  const deliveryTotal = deliveryOrders.reduce((sum, o) => sum + num(o.total), 0);
+  const dineInTotal = dineInOrders.reduce((sum, o) => sum + num(o.total), 0);
 
   const gstCollected = Math.round(grossSales * 0.05);
-  const upiTotal = orders.filter(o => o.paymentMethod === 'UPI' && o.status !== 'CANCELLED').reduce((s, o) => s + o.total, 0);
-  const cashTotal = orders.filter(o => o.paymentMethod === 'CASH' && o.status !== 'CANCELLED').reduce((s, o) => s + o.total, 0);
+  const upiTotal = orders.filter(o => o.paymentMethod === 'UPI' && o.status !== 'CANCELLED').reduce((s, o) => s + num(o.total), 0);
+  const cashTotal = orders.filter(o => o.paymentMethod === 'CASH' && o.status !== 'CANCELLED').reduce((s, o) => s + num(o.total), 0);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">

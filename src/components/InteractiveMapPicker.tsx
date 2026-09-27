@@ -15,6 +15,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { UserAddress } from '../types';
+import { findNearestOutlet } from './admin/outlets';
 
 interface InteractiveMapPickerProps {
   isOpen: boolean;
@@ -273,7 +274,8 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
       city: city.trim() || 'Haldwani',
       pincode: pincode.trim() || '263139',
       landmark: landmark.trim() || undefined,
-      distanceKm: 2.3,
+      // Real outlet distance — hardcoded 2.3 nahi, GPS pin se compute
+      distanceKm: findNearestOutlet(coords.lat, coords.lng).distanceKm,
       lat: coords.lat,
       lng: coords.lng,
     };
@@ -286,6 +288,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
   // No-JS-lib map preview: Google embed (no API key) pinned on exact coords
   const mapEmbedSrc = `https://maps.google.com/maps?q=${coords.lat},${coords.lng}&z=18&output=embed`;
   const gmapsLink = `https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`;
+  const outletKm = findNearestOutlet(coords.lat, coords.lng).distanceKm.toFixed(1);
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
@@ -475,7 +478,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
               </span>
               <p className="text-xs font-extrabold text-slate-900 truncate">{roadArea || 'Locating...'}</p>
               <p className="text-[11px] text-slate-600 font-medium">
-                {city} - {pincode}
+                {city} - {pincode} • <span className="font-black text-amber-700">Outlet se {outletKm} km</span>
               </p>
             </div>
           </div>

@@ -32,6 +32,7 @@ import { AdminLiveOrders } from './AdminLiveOrders';
 import { AdminDelivery } from './AdminDelivery';
 import { RushdaBilling } from './RushdaBilling';
 import { AdminMenuManager } from './AdminMenuManager';
+import { AdminOffersManager } from './AdminOffersManager';
 import { AdminCouponManager } from './AdminCouponManager';
 import { AdminReports } from './AdminReports';
 import { AdminStoreImages } from './AdminStoreImages';
@@ -59,7 +60,7 @@ interface AdminLayoutProps {
   slides: BannerSlide[];
   onUpdateSlideImage: (id: string, image: string) => void;
   categories: CategoryItem[];
-  onUpdateCategoryImage: (id: string, image: string) => void;
+  onUpdateCategoryImage: (id: string, image: string, field?: 'image' | 'bannerImage') => void;
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
@@ -86,7 +87,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   categories,
   onUpdateCategoryImage
 }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'live-orders' | 'delivery' | 'rushda' | 'menu' | 'coupons' | 'images' | 'qr'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'live-orders' | 'delivery' | 'rushda' | 'menu' | 'offers' | 'coupons' | 'images' | 'qr'>('dashboard');
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isAlertSoundOn, setIsAlertSoundOn] = useState(true);
@@ -358,7 +359,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               { id: 'delivery', label: 'Delivery (Rider)', icon: Bike, badge: activeDeliveryCount > 0 ? activeDeliveryCount : undefined, badgeColor: 'bg-blue-600 text-white' },
               { id: 'rushda', label: 'Counter Billing', icon: Receipt, badge: undefined, badgeColor: 'bg-slate-100 text-slate-600' },
               { id: 'menu', label: 'Menu Catalog', icon: UtensilsCrossed, badge: menuItems.length, badgeColor: 'bg-slate-100 text-slate-600' },
-              { id: 'coupons', label: 'Offers & Coupons', icon: Tag, badge: coupons.length, badgeColor: 'bg-emerald-50 text-emerald-700' },
+              { id: 'offers', label: 'Combos & Offers', icon: Sparkles, badge: menuItems.filter((m) => m.category === 'combos').length, badgeColor: 'bg-amber-50 text-amber-700' },
+              { id: 'coupons', label: 'Promo Codes', icon: Tag, badge: coupons.length, badgeColor: 'bg-emerald-50 text-emerald-700' },
               { id: 'images', label: 'Store Images', icon: ImageIcon, badge: slides.length + categories.length, badgeColor: 'bg-violet-50 text-violet-700' },
               { id: 'qr', label: 'Outlet QR Code', icon: QrCode, badge: undefined, badgeColor: 'bg-slate-100 text-slate-600' },
             ].map((item) => {
@@ -627,6 +629,15 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               onUpdateItem={onUpdateItem}
               onDeleteItem={onDeleteItem}
               onRestoreMenu={onRestoreMenu}
+            />
+          )}
+
+          {activeTab === 'offers' && (
+            <AdminOffersManager
+              menuItems={menuItems}
+              onAddItem={onAddItem}
+              onUpdateItem={onUpdateItem}
+              onDeleteItem={onDeleteItem}
             />
           )}
 

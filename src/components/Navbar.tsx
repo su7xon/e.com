@@ -2,7 +2,6 @@ import React from 'react';
 import { 
   MapPin, 
   ChevronDown, 
-  User, 
   Search, 
   ShoppingBag, 
   Clock,
@@ -27,8 +26,11 @@ interface NavbarProps {
   setVegOnly: (val: boolean) => void;
   nonVegOnly: boolean;
   setNonVegOnly: (val: boolean) => void;
-  onOpenRewards: () => void;
   onOpenAdmin?: () => void;
+  /** Live outlet distance (GPS / selected address se computed). Na ho to address ka purana distanceKm. */
+  outletDistanceKm?: number;
+  gpsState?: 'idle' | 'locating' | 'locked' | 'denied';
+  onDetectLocation?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -45,9 +47,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   setVegOnly,
   nonVegOnly,
   setNonVegOnly,
-  onOpenRewards,
   onOpenAdmin,
+  outletDistanceKm,
+  gpsState,
+  onDetectLocation,
 }) => {
+  const liveKm =
+    typeof outletDistanceKm === 'number' && Number.isFinite(outletDistanceKm)
+      ? outletDistanceKm.toFixed(1)
+      : (currentAddress.distanceKm?.toFixed(1) ?? '—');
   return (
     <header className="sticky top-0 z-40 bg-white text-slate-900 shadow-md border-b border-slate-200">
       {/* Main Bar */}
@@ -74,8 +82,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={onOpenAddressModal}
               className="flex items-center gap-2 text-left bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-xl transition-colors border border-slate-200 max-w-[180px] sm:max-w-[320px] truncate"
             >
-              <div className="hidden sm:flex flex-col items-center justify-center bg-slate-900 px-1.5 py-1 rounded text-[11px] font-bold text-amber-400 shrink-0">
-                <span>{currentAddress.distanceKm ?? '1.8'} km</span>
+              <div
+                className="hidden sm:flex flex-col items-center justify-center bg-slate-900 px-1.5 py-1 rounded text-[11px] font-bold text-amber-400 shrink-0 cursor-pointer"
+                title={gpsState === 'locked' ? 'GPS se live outlet distance' : 'Tap karke exact GPS distance nikalo'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (gpsState === 'locating') return;
+                  if (onDetectLocation) onDetectLocation();
+                  else onOpenAddressModal();
+                }}
+              >
+                <span>{gpsState === 'locating' ? '...' : `${liveKm} km`}</span>
                 <span className="text-[9px] text-slate-400 uppercase">OUTLET</span>
               </div>
               <div className="min-w-0">
@@ -150,16 +167,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                   ₹{cartTotal}
                 </span>
               )}
-            </button>
-
-            {/* Profile Avatar */}
-            <button
-              id="btn-nav-profile"
-              onClick={onOpenRewards}
-              className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-200 flex items-center justify-center transition-colors text-slate-600"
-              title="User Account"
-            >
-              <User className="w-4 h-4" />
             </button>
 
             {/* Admin POS Shortcut Button */}

@@ -29,17 +29,15 @@ import { CustomizeModal } from './components/CustomizeModal';
 import { CartDrawer } from './components/CartDrawer';
 import { OrderTrackerModal } from './components/OrderTrackerModal';
 import { AddressModal } from './components/AddressModal';
-import { RewardsModal } from './components/RewardsModal';
 import { DealsModal } from './components/DealsModal';
 import { BottomNav } from './components/BottomNav';
 import { BillingPage } from './components/BillingPage';
-import { PromiseSection } from './components/PromiseSection';
 import { ChatAssistant } from './components/ChatAssistant';
 import { PwaInstallBanner, PwaOfflineBadge, PwaUpdatePrompt } from './components/PwaManager';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminLogin } from './components/admin/AdminLogin';
 import { AdminOrder, SEED_ADMIN_ORDERS } from './components/admin/adminData';
-import { Outlet, getOutletById, resolveOutletForOrder, parseOutletQrParam } from './components/admin/outlets';
+import { Outlet, getOutletById, findNearestOutlet, resolveOutletForOrder, parseOutletQrParam, parseTableQrParam, getTableById, clearOutletQrLock } from './components/admin/outlets';
 import {
   saveMenuItemToFirestore,
   deleteMenuItemFromFirestore,
@@ -62,7 +60,10 @@ import {
   Pizza, 
   Clock, 
   Layers, 
-  ShieldCheck 
+  ShieldCheck,
+  Ruler,
+  ArrowRight,
+  Armchair
 } from 'lucide-react';
 
 // Error Boundary to catch React render crashes (white screen fix)
@@ -119,7 +120,7 @@ export default function App() {
     items.map((it) => (it.image?.includes('/src/assets/') ? { ...it, image: fixImg(it.image) as string } : it));
   // Navigation & Mode (reload pe bhi wahi view — admin me the to admin me hi raho)
   const [orderType, setOrderType] = useState<OrderType>('DELIVERY');
-  const [activeTab, setActiveTab] = useState<'menu' | 'reorder' | 'makeyourown' | 'combos' | 'rewards'>('menu');
+  const [activeTab, setActiveTab] = useState<'menu' | 'reorder' | 'makeyourown' | 'combos' | 'profile'>('menu');
   const [currentView, setCurrentView] = useState<'home' | 'billing' | 'admin'>(() => {
     try {
       const saved = sessionStorage.getItem('seven_cheese_current_view');
@@ -166,12 +167,40 @@ export default function App() {
   });
   const qrOutlet = qrOutletId ? getOutletById(qrOutletId) || null : null;
 
+  // Table-locked QR: customer ne table QR scan kiya to order ussi table ke naam pe.
+  const [qrTableId, setQrTableId] = useState<string | null>(() => {
+    const oid = parseOutletQrParam();
+    const tid = oid ? parseTableQrParam(oid) : null;
+    try {
+      if (tid) localStorage.setItem('seven_cheese_qr_table', tid);
+    } catch {
+      // ignore
+    }
+    return tid;
+  });
+  const qrTable = qrOutletId && qrTableId ? getTableById(qrOutletId, qrTableId) || null : null;
+
   // QR link same-tab me khule / back-forward ho to lock bhi update ho.
   useEffect(() => {
-    const reparse = () => setQrOutletId(parseOutletQrParam());
+    const reparse = () => {
+      const oid = parseOutletQrParam();
+      setQrOutletId(oid);
+      const tid = oid ? parseTableQrParam(oid) : null;
+      try {
+        if (tid) localStorage.setItem('seven_cheese_qr_table', tid);
+      } catch {
+        // ignore
+      }
+      setQrTableId(tid);
+    };
     window.addEventListener('popstate', reparse);
     return () => window.removeEventListener('popstate', reparse);
   }, []);
+
+  // Table QR se aaya customer = Dine-in, ussi table pe locked.
+  useEffect(() => {
+    if (qrTable) setOrderType('DINE_IN');
+  }, [qrTable]);
   
   // Store Images State (hero slides + categories, editable from Admin → Store Images)
   const [heroSlides, setHeroSlides] = useState<BannerSlide[]>(() => {
@@ -199,7 +228,17 @@ export default function App() {
     if (!saved) return CRAVING_CATEGORIES;
     try {
       const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) && parsed.length > 0 ? parsed : CRAVING_CATEGORIES;
+      if (!Array.isArray(parsed) || parsed.length === 0) return CRAVING_CATEGORIES;
+      // Merge: purane cached items me naya bannerImage backfill karo,
+      // admin-customised image/bannerImage preserve rahe.
+      const defaultsById = new Map(CRAVING_CATEGORIES.map((c) => [c.id, c]));
+      return parsed
+        .map((c: CategoryItem) => {
+          const d = defaultsById.get(c.id);
+          if (!d) return c;
+          return { ...d, ...c, image: c.image || d.image, bannerImage: (c as CategoryItem).bannerImage || d.bannerImage || d.image };
+        })
+        .concat(CRAVING_CATEGORIES.filter((d) => !parsed.some((c: CategoryItem) => c.id === d.id)));
     } catch {
       return CRAVING_CATEGORIES;
     }
@@ -509,6 +548,60 @@ export default function App() {
   });
   const [currentAddress, setCurrentAddress] = useState<UserAddress>(() => addresses[0] || DEFAULT_ADDRESSES[0]);
 
+  // ---- Live outlet distance: boot pe EK BAR GPS permission mango, outlet se kitni door ho pata chale ----
+  // Browser permission ek bar mangta hai, uske baad yaad rakhta hai. Fix localStorage me persist taaki reload pe prompt na doharaye.
+  const [userGps, setUserGps] = useState<{ lat: number; lng: number } | null>(() => {
+    try {
+      const saved = localStorage.getItem('seven_cheese_user_gps');
+      if (!saved) return null;
+      const p = JSON.parse(saved);
+      if (typeof p?.lat === 'number' && typeof p?.lng === 'number') return p;
+    } catch {
+      // ignore
+    }
+    return null;
+  });
+  const [gpsState, setGpsState] = useState<'idle' | 'locating' | 'locked' | 'denied'>(() =>
+    userGps ? 'locked' : 'idle'
+  );
+
+  const requestGps = React.useCallback(() => {
+    if (!('geolocation' in navigator)) {
+      setGpsState('denied');
+      return;
+    }
+    setGpsState('locating');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const fix = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setUserGps(fix);
+        setGpsState('locked');
+        try {
+          localStorage.setItem('seven_cheese_user_gps', JSON.stringify(fix));
+        } catch {
+          // ignore
+        }
+      },
+      () => setGpsState('denied'),
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 600000 }
+    );
+  }, []);
+
+  // First mount pe ek bar auto-ask (sirf jab purana fix saved nahi hai)
+  useEffect(() => {
+    if (!userGps) requestGps();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Badge distance priority: real GPS fix > selected address ka GPS pin > purana hardcoded distanceKm
+  const outletInfo = useMemo(() => {
+    if (userGps) return findNearestOutlet(userGps.lat, userGps.lng);
+    if (typeof currentAddress.lat === 'number' && typeof currentAddress.lng === 'number') {
+      return findNearestOutlet(currentAddress.lat, currentAddress.lng);
+    }
+    return resolveOutletForOrder(currentAddress.lat, currentAddress.lng);
+  }, [userGps, currentAddress.lat, currentAddress.lng]);
+
   // Cart & Customization State
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
     const saved = localStorage.getItem('seven_cheese_cart') || localStorage.getItem('dominos_cart');
@@ -520,18 +613,6 @@ export default function App() {
     }
   });
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
-
-  // Rewards Points (Default 100/600)
-  const [points, setPoints] = useState<number>(() => {
-    const saved = localStorage.getItem('seven_cheese_points') || localStorage.getItem('dominos_points');
-    if (!saved) return 100;
-    try {
-      const parsed = JSON.parse(saved);
-      return typeof parsed === 'number' ? parsed : 100;
-    } catch {
-      return 100;
-    }
-  });
 
   // Past Orders & Active Order
   const [pastOrders, setPastOrders] = useState<ActiveOrder[]>(() => {
@@ -608,17 +689,12 @@ export default function App() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isOrderTrackerOpen, setIsOrderTrackerOpen] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
-  const [isRewardsModalOpen, setIsRewardsModalOpen] = useState(false);
   const [isDealsModalOpen, setIsDealsModalOpen] = useState(false);
 
   // Persist State
   useEffect(() => {
     safeSet('seven_cheese_cart', JSON.stringify(cartItems));
   }, [cartItems]);
-
-  useEffect(() => {
-    safeSet('seven_cheese_points', JSON.stringify(points));
-  }, [points]);
 
   useEffect(() => {
     safeSet('seven_cheese_addresses', JSON.stringify(addresses));
@@ -799,7 +875,7 @@ export default function App() {
       orderType: orderType === 'DINE_IN' ? 'DINE_IN' : 'DELIVERY',
       address: fullDeliveryAddress,
       landmark: orderLandmark || undefined,
-      tableNumber: orderType === 'DINE_IN' ? 'Table T-01' : undefined,
+      tableNumber: orderType === 'DINE_IN' ? (qrTable?.name ?? 'Table T-01') : undefined,
       items: cartItems.map((c) => ({
         name: c.name,
         quantity: c.quantity,
@@ -851,25 +927,6 @@ export default function App() {
     setIsCartOpen(false);
     setCurrentView('home');
     setIsOrderTrackerOpen(true);
-
-    // Award loyalty points: 10 points per ₹100 spent
-    const earnedPts = Math.floor(finalTotal / 10);
-    setPoints((prev) => Math.min(600, prev + earnedPts));
-  };
-
-  const handleRedeemReward = (rewardTitle: string, discountVal: number) => {
-    const rewardCoupon: Coupon = {
-      code: 'REWARD-REDEEM',
-      discountType: 'flat',
-      value: discountVal,
-      minOrder: 0,
-      title: rewardTitle,
-      description: `Cheesy Rewards Redemption - ₹${discountVal} OFF`,
-      tag: 'LOYALTY REWARD',
-    };
-    setAppliedCoupon(rewardCoupon);
-    setPoints((prev) => Math.max(0, prev - 150));
-    setIsCartOpen(true);
   };
 
   // Filtered Products (menu dono outlets me same — shared catalog)
@@ -1067,8 +1124,8 @@ export default function App() {
           setHeroSlides((prev) => prev.map((s) => (s.id === id ? { ...s, image } : s)));
         }}
         categories={storeCategories}
-        onUpdateCategoryImage={(id, image) => {
-          setStoreCategories((prev) => prev.map((c) => (c.id === id ? { ...c, image } : c)));
+        onUpdateCategoryImage={(id, image, field = 'image') => {
+          setStoreCategories((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: image } : c)));
         }}
       />
       </AdminErrorBoundary>
@@ -1096,11 +1153,33 @@ export default function App() {
         setVegOnly={setVegOnly}
         nonVegOnly={nonVegOnly}
         setNonVegOnly={setNonVegOnly}
-        onOpenRewards={() => setIsRewardsModalOpen(true)}
         onOpenAdmin={() => setCurrentView('admin')}
+        outletDistanceKm={outletInfo.distanceKm}
+        gpsState={gpsState}
+        onDetectLocation={requestGps}
       />
 
-      {/* QR outlet lock active in background — banner hidden, order direct locked outlet jayega. */}
+      {/* Table QR lock banner — customer ko pata rahe order kis table pe jayega */}
+      {qrTable && (
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3">
+          <div className="flex items-center justify-between gap-3 bg-slate-900 text-white rounded-2xl px-4 py-2.5 shadow-md">
+            <span className="flex items-center gap-2 text-xs font-bold">
+              <Armchair className="w-4 h-4 text-amber-400" />
+              <span>{qrTable.name} • Dine-in locked (QR scan)</span>
+            </span>
+            <button
+              onClick={() => {
+                clearOutletQrLock();
+                setQrOutletId(null);
+                setQrTableId(null);
+              }}
+              className="text-[11px] font-bold text-amber-300 hover:text-amber-200 underline underline-offset-2 cursor-pointer shrink-0"
+            >
+              Change
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content Areas based on active tab */}
       {activeTab === 'menu' && (
@@ -1346,16 +1425,6 @@ export default function App() {
 
           </div>
 
-          {/* 7 Cheese Promise — quality + lowest price cards */}
-          <PromiseSection
-            onOpenDeals={() => setIsDealsModalOpen(true)}
-            onOpenRewards={() => setIsRewardsModalOpen(true)}
-            onBrowseMenu={() => {
-              setSelectedCategory('all');
-              const el = document.getElementById('menu-items-section');
-              if (el) el.scrollIntoView({ behavior: 'smooth' });
-            }}
-          />
         </main>
       )}
 
@@ -1445,43 +1514,117 @@ export default function App() {
         </div>
       )}
 
-      {/* Make Your Own Pizza Tab */}
+      {/* Make Your Own Pizza Tab — GenZ builder hype */}
       {activeTab === 'makeyourown' && (
-        <div className="max-w-3xl mx-auto px-4 py-8">
-          <div className="bg-gradient-to-br from-[#18181b] via-[#2a1215] to-[#18181b] text-white rounded-3xl p-6 sm:p-10 relative overflow-hidden shadow-2xl border border-white/10">
-            <div className="relative z-10">
-              <span className="bg-amber-400 text-slate-950 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">
-                Build It Your Way
-              </span>
-              <h1 className="text-3xl sm:text-4xl font-black text-white mt-3 leading-tight">
-                Make Your Own Pizza
+        <div className="w-full bg-[#FAF7F0] text-stone-900 relative overflow-hidden">
+          {/* soft warm glow */}
+          <div className="pointer-events-none absolute -top-32 right-0 w-96 h-96 rounded-full bg-amber-200/40 blur-3xl" />
+
+          <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 pt-10 sm:pt-14 pb-10">
+              {/* eyebrow */}
+              <div className="flex items-center gap-2">
+                <span className="h-px w-8 bg-[#C2410C]" />
+                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-[#C2410C]">
+                  Handcrafted, your way
+                </span>
+              </div>
+
+              <h1 className="mt-3 font-display leading-[1.05] tracking-tight">
+                <span className="block text-4xl sm:text-6xl font-bold text-stone-900">
+                  Craft your
+                </span>
+                <span className="block text-4xl sm:text-6xl font-bold italic text-[#C2410C]">
+                  own pizza
+                </span>
               </h1>
-              <p className="text-slate-300 text-sm mt-2 max-w-md leading-relaxed">
-                Fresh base se start karo — size, crust, extra 7-cheese layer aur unlimited toppings apni pasand se chuno.
+              <p className="mt-4 max-w-lg text-sm sm:text-base text-stone-600 leading-relaxed">
+                Some days, only your own creation hits the spot. Start with our
+                fresh, hand-tossed base, then layer on the cheese and toppings
+                you love — baked fresh, exactly how you imagined.
               </p>
 
-              <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {['1. Size', '2. Crust', '3. Cheese', '4. Toppings'].map((step) => (
-                  <div key={step} className="bg-white/10 border border-white/15 rounded-xl px-3 py-2.5 text-center">
-                    <span className="text-xs font-black text-amber-300">{step}</span>
-                  </div>
-                ))}
+              {/* trust row */}
+              <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-bold text-stone-700">
+                <span className="flex items-center gap-1.5">
+                  <span className="text-amber-500 text-sm">★</span>
+                  <span>4.9 · 2,100+ reviews</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-stone-500" />
+                  <span>Ready in about 30 mins</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Baked fresh on order</span>
+                </span>
               </div>
 
-              <div className="mt-6 flex items-center gap-3">
-                <span className="text-slate-400 line-through text-lg font-mono">₹199</span>
-                <span className="text-3xl font-black text-amber-400 font-mono">₹149</span>
-                <span className="text-xs text-slate-400 font-medium">onwards</span>
+              {/* steps */}
+              <div className="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                {[
+                  { n: '01', icon: Ruler, t: 'Size', d: 'Regular to Large' },
+                  { n: '02', icon: Layers, t: 'Crust', d: 'Hand-tossed to Cheese Burst' },
+                  { n: '03', icon: Pizza, t: 'Cheese', d: 'Extra 7-cheese layer' },
+                  { n: '04', icon: Sparkles, t: 'Toppings', d: 'Unlimited add-ons' },
+                ].map((s) => {
+                  const Icon = s.icon;
+                  return (
+                    <div key={s.n} className="bg-white rounded-2xl border border-stone-200/80 p-5 shadow-xs hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between">
+                        <span className="font-display text-2xl font-bold text-stone-300">{s.n}</span>
+                        <span className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center">
+                          <Icon className="w-4 h-4 text-[#C2410C]" />
+                        </span>
+                      </div>
+                      <div className="mt-3 text-base font-black text-stone-900">{s.t}</div>
+                      <div className="text-xs text-stone-500 mt-0.5">{s.d}</div>
+                    </div>
+                  );
+                })}
               </div>
-              <button
-                id="btn-start-make-your-own"
-                onClick={() => handleOpenCustomize(MAKE_YOUR_OWN_BASE)}
-                className="mt-5 bg-[#ED1C24] hover:bg-[#c91430] text-white font-black px-8 py-3.5 rounded-full text-base shadow-lg transition-all cursor-pointer"
-              >
-                Start Building →
-              </button>
+
+              {/* price + CTA */}
+              <div className="mt-8 flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-stone-400 line-through text-lg font-mono">₹199</span>
+                  <span className="font-display text-4xl font-bold text-stone-900">₹149</span>
+                  <span className="text-xs text-stone-500 font-medium">onwards</span>
+                </div>
+                <button
+                  id="btn-start-make-your-own"
+                  onClick={() => handleOpenCustomize(MAKE_YOUR_OWN_BASE)}
+                  className="group sm:ml-auto inline-flex items-center justify-center gap-2 bg-[#ED1C24] hover:bg-[#c91430] text-white font-black px-8 py-4 rounded-full text-base shadow-md shadow-red-500/20 transition-all cursor-pointer active:scale-95"
+                >
+                  <span>Start Building</span>
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+              <p className="mt-3 text-[11px] text-stone-500 font-medium">
+                No preservatives • Real mozzarella • Made fresh when you order
+              </p>
+          </div>
+
+          {/* promise strip */}
+          <div className="relative z-10 border-y border-stone-200 bg-[#F3EDE2] text-stone-600 overflow-hidden">
+            <div className="flex w-max whitespace-nowrap py-2.5 animate-myo-ticker">
+              <span className="text-[11px] font-bold uppercase tracking-[0.18em]">
+                Fresh dough daily ✦ Real mozzarella ✦ No preservatives ✦ Baked on order ✦ Fresh dough daily ✦ Real mozzarella ✦ No preservatives ✦ Baked on order ✦&nbsp;
+              </span>
+              <span aria-hidden="true" className="text-[11px] font-bold uppercase tracking-[0.18em]">
+                Fresh dough daily ✦ Real mozzarella ✦ No preservatives ✦ Baked on order ✦ Fresh dough daily ✦ Real mozzarella ✦ No preservatives ✦ Baked on order ✦&nbsp;
+              </span>
             </div>
           </div>
+
+          <style>{`
+            @keyframes myoTicker {
+              from { transform: translateX(0); }
+              to { transform: translateX(-50%); }
+            }
+            .animate-myo-ticker {
+              animation: myoTicker 18s linear infinite;
+            }
+          `}</style>
         </div>
       )}
 
@@ -1548,23 +1691,52 @@ export default function App() {
         </div>
       )}
 
-      {/* Rewards Tab view */}
-      {activeTab === 'rewards' && (
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-md">
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-              Cheesy Rewards Hub
-            </h1>
-            <p className="text-xs text-slate-500 mt-1">
-              Earn 10 points for every ₹100 spent. Redeem points for free cheesy delights!
-            </p>
-            <div className="mt-4">
+      {/* Profile Tab view */}
+      {activeTab === 'profile' && (
+        <div className="max-w-4xl mx-auto px-4 py-8 space-y-4">
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-md flex items-center gap-4">
+            <div className="w-14 h-14 rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-xl shrink-0">
+              7
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-xl font-black text-slate-900 tracking-tight">
+                My Profile
+              </h1>
+              <p className="text-xs text-slate-500 mt-0.5 truncate">
+                {currentAddress.address}, {currentAddress.city} • {pastOrders.length} {pastOrders.length === 1 ? 'order' : 'orders'}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs">
+              <h2 className="text-sm font-black text-slate-900">Saved Addresses</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                {addresses.length} {addresses.length === 1 ? 'address' : 'addresses'} saved for faster checkout.
+              </p>
               <button
-                id="btn-open-rewards-full"
-                onClick={() => setIsRewardsModalOpen(true)}
-                className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-black px-5 py-2.5 rounded-xl text-xs shadow-md transition-colors"
+                id="btn-profile-manage-addresses"
+                onClick={() => setIsAddressModalOpen(true)}
+                className="mt-3 bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer"
               >
-                View Cheesy Rewards Tiers ({points} / 600 Pts)
+                Manage Addresses
+              </button>
+            </div>
+
+            <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs">
+              <h2 className="text-sm font-black text-slate-900">Order History</h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Track, reorder or view bills from past orders.
+              </p>
+              <button
+                id="btn-profile-view-orders"
+                onClick={() => {
+                  setActiveTab('reorder');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="mt-3 bg-[#ED1C24] hover:bg-[#c91430] text-white font-black px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                View Past Orders
               </button>
             </div>
           </div>
@@ -1633,13 +1805,6 @@ export default function App() {
         onDeleteAddress={handleDeleteAddress}
       />
 
-      <RewardsModal
-        isOpen={isRewardsModalOpen}
-        onClose={() => setIsRewardsModalOpen(false)}
-        points={points}
-        onRedeemReward={handleRedeemReward}
-      />
-
       <DealsModal
         isOpen={isDealsModalOpen}
         onClose={() => setIsDealsModalOpen(false)}
@@ -1674,7 +1839,6 @@ export default function App() {
         cartCount={cartItemCount}
         cartTotal={cartTotal}
         onOpenCart={() => setIsCartOpen(true)}
-        points={points}
       />
 
       {/* PWA: install prompt, update prompt, offline badge */}

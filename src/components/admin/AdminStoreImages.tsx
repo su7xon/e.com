@@ -8,7 +8,7 @@ interface AdminStoreImagesProps {
   slides: BannerSlide[];
   onUpdateSlideImage: (id: string, image: string) => void;
   categories: CategoryItem[];
-  onUpdateCategoryImage: (id: string, image: string) => void;
+  onUpdateCategoryImage: (id: string, image: string, field?: 'image' | 'bannerImage') => void;
 }
 
 export const AdminStoreImages: React.FC<AdminStoreImagesProps> = ({
@@ -18,14 +18,15 @@ export const AdminStoreImages: React.FC<AdminStoreImagesProps> = ({
   onUpdateCategoryImage,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [fileTarget, setFileTarget] = useState<{ kind: 'slide' | 'category'; id: string } | null>(null);
+  const [fileTarget, setFileTarget] = useState<{ kind: 'slide' | 'category' | 'category-banner'; id: string } | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [savedTick, setSavedTick] = useState<string | null>(null);
 
-  const applyImage = (kind: 'slide' | 'category', id: string, image: string) => {
+  const applyImage = (kind: 'slide' | 'category' | 'category-banner', id: string, image: string) => {
     if (!image.trim()) return;
     if (kind === 'slide') onUpdateSlideImage(id, image.trim());
-    else onUpdateCategoryImage(id, image.trim());
+    else if (kind === 'category') onUpdateCategoryImage(id, image.trim(), 'image');
+    else onUpdateCategoryImage(id, image.trim(), 'bannerImage');
     setSavedTick(`${kind}-${id}`);
     setTimeout(() => setSavedTick(null), 2000);
   };
@@ -48,7 +49,7 @@ export const AdminStoreImages: React.FC<AdminStoreImagesProps> = ({
     }
   };
 
-  const pickFile = (kind: 'slide' | 'category', id: string) => {
+  const pickFile = (kind: 'slide' | 'category' | 'category-banner', id: string) => {
     setFileTarget({ kind, id });
     // Let state settle before opening the picker
     setTimeout(() => fileInputRef.current?.click(), 0);
@@ -139,57 +140,100 @@ export const AdminStoreImages: React.FC<AdminStoreImagesProps> = ({
         </div>
       </div>
 
-      {/* Categories (craving + marquee share these) */}
+      {/* Categories — craving cutout + marquee card photo alag alag */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs">
         <h3 className="text-sm font-black text-slate-900">Category Images</h3>
-        <p className="text-xs text-slate-500 mt-0.5 mb-4">Used in “What are you craving for?”, “Browse Our Category” and menu headers.</p>
+        <p className="text-xs text-slate-500 mt-0.5 mb-4">Craving = “What are you craving for?” cutout. Card = “Browse Our Category” photo.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {categories.map((c) => {
             const key = `category-${c.id}`;
+            const bannerKey = `category-banner-${c.id}`;
+            const bannerImg = c.bannerImage || c.image;
+            const urlVal = (v: string) => (v.startsWith('data:') ? '' : v);
+            const bindUrl = (
+              current: string,
+              kind: 'category' | 'category-banner',
+              tickKey: string,
+            ) => ({
+              defaultValue: urlVal(current),
+              placeholder: 'Paste image URL',
+              onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  applyImage(kind, c.id, (e.target as HTMLInputElement).value);
+                }
+              },
+              onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
+                if (e.target.value.trim() && e.target.value.trim() !== current) {
+                  applyImage(kind, c.id, e.target.value);
+                }
+              },
+              className:
+                'w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-400',
+            });
             return (
-              <div key={c.id} className="flex gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200/70">
-                <img
-                  src={c.image}
-                  alt={c.name}
-                  className="w-16 h-16 rounded-full object-cover border border-slate-200 shrink-0"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-black text-slate-900 truncate">{c.name}</div>
-                  <div className="flex gap-2 mt-1.5">
-                    <div className="relative flex-1">
-                      <Link2 className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="text"
-                        defaultValue={c.image.startsWith('data:') ? '' : c.image}
-                        placeholder="Paste image URL"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            applyImage('category', c.id, (e.target as HTMLInputElement).value);
-                          }
-                        }}
-                        onBlur={(e) => {
-                          if (e.target.value.trim() && e.target.value.trim() !== c.image) {
-                            applyImage('category', c.id, e.target.value);
-                          }
-                        }}
-                        className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-400"
-                      />
+              <div key={c.id} className="p-3 rounded-2xl bg-slate-50 border border-slate-200/70 space-y-2.5">
+                <div className="text-xs font-black text-slate-900 truncate">{c.name}</div>
+                {/* Craving cutout */}
+                <div className="flex gap-3 items-center">
+                  <img
+                    src={c.image}
+                    alt={`${c.name} craving`}
+                    className="w-12 h-12 rounded-full object-cover border border-slate-200 shrink-0 bg-white"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Craving photo</div>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Link2 className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input type="text" {...bindUrl(c.image, 'category', key)} />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => pickFile('category', c.id)}
+                        disabled={uploadingId === key}
+                        className="flex items-center gap-1 bg-slate-900 hover:bg-slate-700 disabled:opacity-60 text-white px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0"
+                      >
+                        {uploadingId === key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                      </button>
+                      {savedTick === key && (
+                        <span className="flex items-center gap-1 text-[10px] font-black text-emerald-700 shrink-0">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Live
+                        </span>
+                      )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => pickFile('category', c.id)}
-                      disabled={uploadingId === key}
-                      className="flex items-center gap-1 bg-slate-900 hover:bg-slate-700 disabled:opacity-60 text-white px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0"
-                    >
-                      {uploadingId === key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                    </button>
-                    {savedTick === key && (
-                      <span className="flex items-center gap-1 text-[10px] font-black text-emerald-700 shrink-0">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Live
-                      </span>
-                    )}
+                  </div>
+                </div>
+                {/* Marquee card */}
+                <div className="flex gap-3 items-center">
+                  <img
+                    src={bannerImg}
+                    alt={`${c.name} card`}
+                    className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Category card photo</div>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Link2 className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input type="text" {...bindUrl(bannerImg, 'category-banner', bannerKey)} />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => pickFile('category-banner', c.id)}
+                        disabled={uploadingId === bannerKey}
+                        className="flex items-center gap-1 bg-slate-900 hover:bg-slate-700 disabled:opacity-60 text-white px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0"
+                      >
+                        {uploadingId === bannerKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                      </button>
+                      {savedTick === bannerKey && (
+                        <span className="flex items-center gap-1 text-[10px] font-black text-emerald-700 shrink-0">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Live
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

@@ -74,6 +74,8 @@ export interface CategoryItem {
   name: string;
   tag?: string;
   image: string;
+  /** Browse Our Category card photo (marquee). Falls back to image when empty. */
+  bannerImage?: string;
   startingPrice?: number;
   filterKey: MenuItem['category'] | 'all';
 }
