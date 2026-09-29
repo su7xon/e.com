@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { CartItem, Coupon, UserAddress, DeliveryDetails, OrderType, MenuItem } from '../types';
 import { COUPONS, MENU_ITEMS } from '../data/mockData';
+import { needsCustomize } from '../lib/customize';
 import { VegNonVegIcon } from './VegNonVegIcon';
 import { InteractiveMapPicker } from './InteractiveMapPicker';
 
@@ -39,6 +40,8 @@ interface BillingPageProps {
   onPlaceOrder: (notes: string, paymentMethod?: string, delivery?: DeliveryDetails) => void;
   onGoBack: () => void;
   onAddToCart: (item: MenuItem) => void;
+  onOpenCustomize?: (item: MenuItem) => void;
+  onOpenQuickView?: (item: MenuItem) => void;
   availableCoupons?: Coupon[];
   availableMenuItems?: MenuItem[];
 }
@@ -57,6 +60,8 @@ export const BillingPage: React.FC<BillingPageProps> = ({
   onPlaceOrder,
   onGoBack,
   onAddToCart,
+  onOpenCustomize,
+  onOpenQuickView,
   availableCoupons,
   availableMenuItems,
 }) => {
@@ -211,7 +216,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
         </button>
 
         {orderType === 'DELIVERY' && cartItems.length > 0 && (
-          <div className="rounded-2xl px-4 py-2.5 text-white text-xs font-bold bg-gradient-to-r from-[#ED1C24] via-[#7a1fa2] to-[#005580] shadow-sm">
+          <div className="rounded-2xl px-4 py-2.5 text-white text-xs font-bold bg-gradient-to-r from-[#ED1C24] via-[#9a1220] to-[#ED1C24] shadow-sm">
             {deliveryFee === 0 ? (
               <span>Lowest Prices & FREE Delivery unlocked — Congratulations!</span>
             ) : (
@@ -421,7 +426,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                             ) : (
                               <button
                                 id={`btn-billing-sweet-add-${sweet.id}`}
-                                onClick={() => onAddToCart(sweet)}
+                                onClick={() => (needsCustomize(sweet) && onOpenCustomize ? onOpenCustomize(sweet) : onAddToCart(sweet))}
                                 className="w-full bg-[#ED1C24] hover:bg-[#c91430] active:scale-95 text-white text-[11px] font-black py-1.5 rounded-lg shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-1"
                               >
                                 <Plus className="w-3 h-3 stroke-[3]" />
@@ -450,7 +455,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                     type="button"
                     id="btn-billing-toggle-coupons"
                     onClick={() => setShowAllCoupons(!showAllCoupons)}
-                    className="text-[11px] font-bold text-[#005580] hover:text-[#003d5c] flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors"
+                    className="text-[11px] font-bold text-[#ED1C24] hover:text-[#c91430] flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors"
                   >
                     <span>{showAllCoupons ? 'Show Less' : `View All (${couponList.length})`}</span>
                     {showAllCoupons ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -490,11 +495,11 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                         setCouponError('');
                       }}
                       placeholder="Enter Promo Code"
-                      className="flex-1 bg-slate-50 border border-slate-200 text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580] font-mono font-bold uppercase"
+                      className="flex-1 bg-slate-50 border border-slate-200 text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24] font-mono font-bold uppercase"
                     />
                     <button
                       type="submit"
-                      className="bg-[#005580] text-white text-sm font-black px-5 py-2.5 rounded-xl hover:bg-[#003d5c] transition-colors cursor-pointer"
+                      className="bg-[#ED1C24] text-white text-sm font-black px-5 py-2.5 rounded-xl hover:bg-[#c91430] transition-colors cursor-pointer"
                     >
                       Apply
                     </button>
@@ -540,7 +545,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                       <button
                         type="button"
                         onClick={() => setShowAllCoupons(true)}
-                        className="text-[11px] font-bold text-[#005580] hover:text-[#003d5c] flex items-center gap-1 hover:underline cursor-pointer"
+                        className="text-[11px] font-bold text-[#ED1C24] hover:text-[#c91430] flex items-center gap-1 hover:underline cursor-pointer"
                       >
                         <span>View all coupons ({couponList.length})</span>
                         <ChevronDown className="w-3 h-3" />
@@ -554,16 +559,16 @@ export const BillingPage: React.FC<BillingPageProps> = ({
             {/* Delivery Address */}
             <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
-                <MapPin className="w-4 h-4 text-[#005580]" />
+                <MapPin className="w-4 h-4 text-[#ED1C24]" />
                 <span className="text-sm font-black uppercase tracking-wider text-slate-800">
                   Delivery Address
                 </span>
               </div>
 
-              <div className="bg-gradient-to-r from-blue-50/90 via-sky-50/40 to-amber-50/30 border border-blue-200/80 rounded-xl p-3.5 flex items-center justify-between gap-3">
+              <div className="bg-gradient-to-r from-red-50/90 via-amber-50/40 to-amber-50/30 border border-red-200/80 rounded-xl p-3.5 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="bg-blue-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
+                    <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
                       {currentAddress.label}
                     </span>
                     {currentAddress.lat && (
@@ -572,7 +577,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                       </span>
                     )}
                     {orderType === 'DELIVERY' && (
-                      <span className="text-[10px] text-blue-600 font-bold flex items-center gap-1">
+                      <span className="text-[10px] text-red-600 font-bold flex items-center gap-1">
                         <Bike className="w-3 h-3" />
                         {isFreeDeliveryEligible ? 'FREE Delivery' : `₹${deliveryFee} Delivery`}
                       </span>
@@ -586,14 +591,14 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsMapPickerOpen(true)}
-                    className="bg-[#005580] hover:bg-[#003d5c] text-white text-xs font-black px-3 py-1.5 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
+                    className="bg-[#ED1C24] hover:bg-[#c91430] text-white text-xs font-black px-3 py-1.5 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
                   >
                     <Navigation className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
                     <span>Live Map</span>
                   </button>
                   <button
                     onClick={onOpenAddressModal}
-                    className="text-sm font-bold text-[#005580] hover:underline cursor-pointer"
+                    className="text-sm font-bold text-[#ED1C24] hover:underline cursor-pointer"
                   >
                     Change
                   </button>
@@ -612,7 +617,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                     value={receiverName}
                     onChange={(e) => { setReceiverName(e.target.value); setFormError(''); }}
                     placeholder="Receiver name *"
-                    className="bg-slate-50 border border-slate-200 text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580]"
+                    className="bg-slate-50 border border-slate-200 text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24]"
                   />
                   <input
                     value={receiverPhone}
@@ -620,14 +625,14 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                     placeholder="10-digit mobile *"
                     inputMode="numeric"
                     maxLength={13}
-                    className="bg-slate-50 border border-slate-200 text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580] font-mono"
+                    className="bg-slate-50 border border-slate-200 text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24] font-mono"
                   />
                 </div>
                 <input
                   value={receiverLandmark}
                   onChange={(e) => setReceiverLandmark(e.target.value)}
                   placeholder="Landmark — e.g. Near Hanuman Mandir, 2nd floor"
-                  className="mt-2 w-full bg-slate-50 border border-slate-200 text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580]"
+                  className="mt-2 w-full bg-slate-50 border border-slate-200 text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24]"
                 />
                 {formError && (
                   <p className="text-xs text-red-600 font-bold mt-2">{formError}</p>
@@ -648,7 +653,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                 value={cookingNotes}
                 onChange={(e) => setCookingNotes(e.target.value)}
                 placeholder="e.g., Leave at door, extra chilli flakes, ring doorbell..."
-                className="w-full bg-slate-50 border border-slate-200 text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580]"
+                className="w-full bg-slate-50 border border-slate-200 text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24]"
               />
             </div>
 
@@ -662,12 +667,12 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                   onClick={() => setPaymentMethod('upi')}
                   className={`flex flex-col items-center gap-2 p-3 sm:p-4 rounded-xl border-2 transition-all cursor-pointer ${
                     paymentMethod === 'upi'
-                      ? 'border-[#005580] bg-blue-50 shadow-sm'
+                      ? 'border-[#ED1C24] bg-red-50 shadow-sm'
                       : 'border-slate-200 bg-white hover:border-slate-300'
                   }`}
                 >
-                  <Smartphone className={`w-6 h-6 ${paymentMethod === 'upi' ? 'text-[#005580]' : 'text-slate-500'}`} />
-                  <span className={`text-xs font-bold ${paymentMethod === 'upi' ? 'text-[#005580]' : 'text-slate-600'}`}>
+                  <Smartphone className={`w-6 h-6 ${paymentMethod === 'upi' ? 'text-[#ED1C24]' : 'text-slate-500'}`} />
+                  <span className={`text-xs font-bold ${paymentMethod === 'upi' ? 'text-[#ED1C24]' : 'text-slate-600'}`}>
                     UPI
                   </span>
                 </button>
@@ -676,12 +681,12 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                   onClick={() => setPaymentMethod('card')}
                   className={`flex flex-col items-center gap-2 p-3 sm:p-4 rounded-xl border-2 transition-all cursor-pointer ${
                     paymentMethod === 'card'
-                      ? 'border-[#005580] bg-blue-50 shadow-sm'
+                      ? 'border-[#ED1C24] bg-red-50 shadow-sm'
                       : 'border-slate-200 bg-white hover:border-slate-300'
                   }`}
                 >
-                  <CreditCard className={`w-6 h-6 ${paymentMethod === 'card' ? 'text-[#005580]' : 'text-slate-500'}`} />
-                  <span className={`text-xs font-bold ${paymentMethod === 'card' ? 'text-[#005580]' : 'text-slate-600'}`}>
+                  <CreditCard className={`w-6 h-6 ${paymentMethod === 'card' ? 'text-[#ED1C24]' : 'text-slate-500'}`} />
+                  <span className={`text-xs font-bold ${paymentMethod === 'card' ? 'text-[#ED1C24]' : 'text-slate-600'}`}>
                     Card
                   </span>
                 </button>
@@ -690,12 +695,12 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                   onClick={() => setPaymentMethod('cod')}
                   className={`flex flex-col items-center gap-2 p-3 sm:p-4 rounded-xl border-2 transition-all cursor-pointer ${
                     paymentMethod === 'cod'
-                      ? 'border-[#005580] bg-blue-50 shadow-sm'
+                      ? 'border-[#ED1C24] bg-red-50 shadow-sm'
                       : 'border-slate-200 bg-white hover:border-slate-300'
                   }`}
                 >
-                  <Banknote className={`w-6 h-6 ${paymentMethod === 'cod' ? 'text-[#005580]' : 'text-slate-500'}`} />
-                  <span className={`text-xs font-bold ${paymentMethod === 'cod' ? 'text-[#005580]' : 'text-slate-600'}`}>
+                  <Banknote className={`w-6 h-6 ${paymentMethod === 'cod' ? 'text-[#ED1C24]' : 'text-slate-500'}`} />
+                  <span className={`text-xs font-bold ${paymentMethod === 'cod' ? 'text-[#ED1C24]' : 'text-slate-600'}`}>
                     Cash
                   </span>
                 </button>
@@ -708,7 +713,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
             {/* Bill Summary Card */}
             <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm lg:sticky lg:top-20">
               <div className="flex items-center gap-2 border-b border-slate-100 pb-3 mb-3">
-                <ShieldCheck className="w-4 h-4 text-[#005580]" />
+                <ShieldCheck className="w-4 h-4 text-[#ED1C24]" />
                 <span className="text-sm font-black uppercase tracking-wider text-slate-800">
                   Bill Summary
                 </span>
@@ -748,7 +753,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
 
                 <div className="border-t border-slate-200 pt-3 flex justify-between text-base font-black text-slate-900">
                   <span>Grand Total</span>
-                  <span className="font-mono text-lg text-[#005580]">₹{grandTotal}</span>
+                  <span className="font-mono text-lg text-[#ED1C24]">₹{grandTotal}</span>
                 </div>
               </div>
 
@@ -815,7 +820,8 @@ export const BillingPage: React.FC<BillingPageProps> = ({
             {suggestedItems.map((item) => (
               <div
                 key={item.id}
-                className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-shadow group"
+                onClick={() => (needsCustomize(item) ? onOpenCustomize?.(item) : onOpenQuickView?.(item))}
+                className="bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm hover:shadow-md transition-shadow group cursor-pointer"
               >
                 {/* Image */}
                 <div className="aspect-[4/3] overflow-hidden bg-slate-100 relative">
@@ -856,7 +862,11 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                       )}
                     </div>
                     <button
-                      onClick={() => onAddToCart(item)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (needsCustomize(item) && onOpenCustomize) onOpenCustomize(item);
+                        else onAddToCart(item);
+                      }}
                       className="bg-white border-2 border-[#e31837] text-[#e31837] hover:bg-[#e31837] hover:text-white px-2.5 py-1 rounded-lg text-[10px] sm:text-xs font-black transition-all cursor-pointer"
                     >
                       + ADD

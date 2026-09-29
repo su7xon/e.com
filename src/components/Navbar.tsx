@@ -6,8 +6,7 @@ import {
   ShoppingBag, 
   Clock,
   Sparkles,
-  X,
-  ShieldCheck
+  X
 } from 'lucide-react';
 import { OrderType, UserAddress, MenuItem } from '../types';
 import { SevenCheeseLogo } from './SevenCheeseLogo';
@@ -26,7 +25,6 @@ interface NavbarProps {
   setVegOnly: (val: boolean) => void;
   nonVegOnly: boolean;
   setNonVegOnly: (val: boolean) => void;
-  onOpenAdmin?: () => void;
   /** Live outlet distance (GPS / selected address se computed). Na ho to address ka purana distanceKm. */
   outletDistanceKm?: number;
   gpsState?: 'idle' | 'locating' | 'locked' | 'denied';
@@ -52,7 +50,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   setVegOnly,
   nonVegOnly,
   setNonVegOnly,
-  onOpenAdmin,
   outletDistanceKm,
   gpsState,
   onDetectLocation,
@@ -184,19 +181,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </span>
               )}
             </button>
-
-            {/* Admin POS Shortcut Button */}
-            {onOpenAdmin && (
-              <button
-                id="btn-nav-admin-action"
-                onClick={onOpenAdmin}
-                className="flex items-center gap-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-700 px-2 sm:px-2.5 py-1.5 rounded-xl transition-all font-bold text-xs cursor-pointer shadow-xs"
-                title="Open 7 Cheese Admin POS Panel"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
-                <span className="hidden sm:inline">Admin POS</span>
-              </button>
-            )}
           </div>
 
         </div>

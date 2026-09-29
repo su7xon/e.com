@@ -68,11 +68,6 @@ export const CravingCategories: React.FC<CravingCategoriesProps> = ({
                 >
                   {cat.name}
                 </span>
-                {cat.startingPrice && (
-                  <span className="text-[10px] sm:text-[11px] font-medium text-stone-400">
-                    ₹{cat.startingPrice} onwards
-                  </span>
-                )}
               </button>
             );
           })}

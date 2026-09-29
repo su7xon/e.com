@@ -61,11 +61,6 @@ export const CategoryMarquee: React.FC<CategoryMarqueeProps> = ({ onSelectCatego
                 <h3 className="text-white text-sm sm:text-base font-black leading-tight drop-shadow-lg">
                   {cat.name}
                 </h3>
-                {cat.startingPrice && (
-                  <span className="text-amber-400 text-xs sm:text-sm font-black font-mono mt-0.5 block">
-                    Starting ₹{cat.startingPrice}
-                  </span>
-                )}
               </div>
             </button>
           ))}

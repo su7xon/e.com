@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Check, Sparkles, ShieldCheck, Flame, Plus, Clock } from 'lucide-react';
 import { MenuItem, PizzaSize, PizzaCrust, ExtraTopping, CartItem } from '../types';
 import { AVAILABLE_TOPPINGS, SIZE_PRICE_MODIFIERS, CRUST_PRICE_MODIFIERS } from '../data/mockData';
+import { PIZZA_CATEGORIES } from '../lib/customize';
 import { VegNonVegIcon } from './VegNonVegIcon';
 
 interface CustomizeModalProps {
@@ -20,6 +21,11 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
   onConfirmAddToCart,
 }) => {
   if (!isOpen || !item) return null;
+
+  // Only real pizzas get size/crust/cheese/toppings steps.
+  // Drinks, desserts, sides etc. kabhi pizza options na dikhaye —
+  // chahe Firestore me isCustomizable true bhi ho.
+  const isPizzaItem = PIZZA_CATEGORIES.includes(item.category);
 
   const [selectedSize, setSelectedSize] = useState<PizzaSize>(item.defaultSize || 'Regular');
   const [selectedCrust, setSelectedCrust] = useState<PizzaCrust>(item.defaultCrust || 'New Hand Tossed');
@@ -55,14 +61,16 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
     return size === 'Regular' ? 49 : size === 'Medium' ? 69 : 99;
   };
 
-  // Base price for selected size
-  const baseSizePrice = item.sizePrices && item.sizePrices[selectedSize]
-    ? item.sizePrices[selectedSize]!
-    : item.price + (SIZE_PRICE_MODIFIERS[selectedSize] || 0);
+  // Base price for selected size (pizzas only — drinks/sides stay flat)
+  const baseSizePrice = isPizzaItem
+    ? (item.sizePrices && item.sizePrices[selectedSize]
+      ? item.sizePrices[selectedSize]!
+      : item.price + (SIZE_PRICE_MODIFIERS[selectedSize] || 0))
+    : item.price;
 
-  const crustMod = getCrustModifier(selectedCrust, selectedSize);
-  const cheeseMod = extraCheese ? getCheeseModifier(selectedSize) : 0;
-  const toppingsMod = selectedToppings.reduce((acc, t) => acc + t.price, 0);
+  const crustMod = isPizzaItem ? getCrustModifier(selectedCrust, selectedSize) : 0;
+  const cheeseMod = extraCheese && isPizzaItem ? getCheeseModifier(selectedSize) : 0;
+  const toppingsMod = isPizzaItem ? selectedToppings.reduce((acc, t) => acc + t.price, 0) : 0;
   const totalPrice = baseSizePrice + crustMod + cheeseMod + toppingsMod;
 
   const toggleTopping = (topping: ExtraTopping) => {
@@ -82,24 +90,26 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
       image: item.image,
       basePrice: item.price,
       price: totalPrice,
-      size: selectedSize,
-      crust: selectedCrust,
-      extraCheese,
-      extraToppings: selectedToppings,
+      size: isPizzaItem ? selectedSize : undefined,
+      crust: isPizzaItem ? selectedCrust : undefined,
+      extraCheese: isPizzaItem ? extraCheese : false,
+      extraToppings: isPizzaItem ? selectedToppings : [],
       quantity: 1,
     };
     onConfirmAddToCart(newCartItem);
     onClose();
   };
 
-  const buildSummary = [
-    selectedSize,
-    selectedCrust,
-    extraCheese ? 'Extra cheese' : null,
-    selectedToppings.length ? `${selectedToppings.length} topping${selectedToppings.length > 1 ? 's' : ''}` : null,
-  ]
-    .filter(Boolean)
-    .join('  •  ');
+  const buildSummary = isPizzaItem
+    ? [
+        selectedSize,
+        selectedCrust,
+        extraCheese ? 'Extra cheese' : null,
+        selectedToppings.length ? `${selectedToppings.length} topping${selectedToppings.length > 1 ? 's' : ''}` : null,
+      ]
+        .filter(Boolean)
+        .join('  •  ')
+    : (item.subCategoryTitle || 'Ready to add');
 
   const stepHead = (n: string, title: string, hint: string) => (
     <div className="flex items-baseline justify-between mb-3">
@@ -112,7 +122,7 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div
         id="modal-customize-container"
         className="bg-[#FDFBF7] rounded-t-3xl sm:rounded-3xl w-full max-w-3xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200"
@@ -156,9 +166,10 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-7">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-7">
 
-          {/* Step 1: Size — visual circles */}
+          {/* Step 1: Size — visual circles (pizzas only) */}
+          {isPizzaItem && (
           <div>
             {stepHead('01', 'Pick your size', 'Required')}
             <div className="grid grid-cols-3 gap-2.5">
@@ -200,8 +211,10 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
               })}
             </div>
           </div>
+          )}
 
-          {/* Step 2: Crust */}
+          {/* Step 2: Crust (pizzas only) */}
+          {isPizzaItem && (
           <div>
             {stepHead('02', 'Choose your crust', 'Required')}
             <div className="space-y-2">
@@ -260,8 +273,10 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
               )}
             </div>
           </div>
+          )}
 
-          {/* Step 3: Extra cheese — switch */}
+          {/* Step 3: Extra cheese — switch (pizzas only) */}
+          {isPizzaItem && (
           <div className="bg-white border border-amber-200/80 rounded-2xl p-3.5 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
@@ -292,8 +307,10 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
               />
             </button>
           </div>
+          )}
 
-          {/* Step 4: Toppings — chips */}
+          {/* Step 4: Toppings — chips (pizzas only) */}
+          {isPizzaItem && (
           <div>
             {stepHead('03', 'Load your toppings', `${selectedToppings.length} added · optional`)}
             <div className="bg-white rounded-2xl border border-stone-200/80 divide-y divide-stone-100 overflow-hidden">
@@ -340,6 +357,7 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
               })}
             </div>
           </div>
+          )}
 
           {/* Assurance strip */}
           <div className="flex items-center justify-center gap-5 text-[11px] font-bold text-stone-500 pb-1">

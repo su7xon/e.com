@@ -297,7 +297,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
         className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] h-[680px] border border-slate-200 animate-in zoom-in-95 duration-200 relative"
       >
         {/* Header */}
-        <div className="bg-[#005580] text-white px-4 py-3 flex items-center justify-between shadow-md shrink-0 z-10">
+        <div className="bg-[#ED1C24] text-white px-4 py-3 flex items-center justify-between shadow-md shrink-0 z-10">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center">
               <Compass className="w-4 h-4 text-amber-300" />
@@ -306,7 +306,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
               <h2 className="text-sm sm:text-base font-black tracking-tight leading-tight">
                 Select Exact Delivery Location
               </h2>
-              <span className="text-[11px] text-blue-200 font-medium">
+              <span className="text-[11px] text-red-100 font-medium">
                 GPS drops the exact pin • this address will be used at checkout
               </span>
             </div>
@@ -331,7 +331,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search area, landmark or society..."
-                className="w-full pl-9 pr-3 py-2 bg-slate-100 hover:bg-slate-50 focus:bg-white text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580] transition-colors"
+                className="w-full pl-9 pr-3 py-2 bg-slate-100 hover:bg-slate-50 focus:bg-white text-xs rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24] transition-colors"
               />
               {searchQuery && (
                 <button
@@ -349,7 +349,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
             <button
               type="submit"
               disabled={isSearching || !searchQuery.trim()}
-              className="bg-[#005580] hover:bg-[#003d5c] disabled:opacity-50 text-white text-xs font-black px-4 py-2 rounded-xl transition-colors shrink-0 cursor-pointer flex items-center gap-1.5"
+              className="bg-[#ED1C24] hover:bg-[#c91430] disabled:opacity-50 text-white text-xs font-black px-4 py-2 rounded-xl transition-colors shrink-0 cursor-pointer flex items-center gap-1.5"
             >
               {isSearching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <span>Search</span>}
             </button>
@@ -362,7 +362,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
                   key={idx}
                   type="button"
                   onClick={() => handleSelectSearchResult(result)}
-                  className="w-full text-left p-2.5 hover:bg-blue-50 transition-colors flex items-start gap-2 text-xs"
+                  className="w-full text-left p-2.5 hover:bg-red-50 transition-colors flex items-start gap-2 text-xs"
                 >
                   <MapPin className="w-4 h-4 text-[#ED1C24] shrink-0 mt-0.5" />
                   <span className="text-slate-800 line-clamp-2 leading-snug">{result.display_name}</span>
@@ -434,7 +434,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
               type="button"
               onClick={handleDetectGPS}
               disabled={isLocating}
-              className="bg-white hover:bg-slate-50 active:scale-95 text-[#005580] p-2.5 rounded-2xl shadow-xl border border-slate-200/80 flex items-center gap-2 text-xs font-black transition-all cursor-pointer"
+              className="bg-white hover:bg-slate-50 active:scale-95 text-[#ED1C24] p-2.5 rounded-2xl shadow-xl border border-slate-200/80 flex items-center gap-2 text-xs font-black transition-all cursor-pointer"
             >
               <Navigation className={`w-4 h-4 text-[#ED1C24] ${isLocating ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">{isLocating ? 'GPS lock...' : 'Use My Exact Location'}</span>
@@ -470,10 +470,10 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
 
         {/* Bottom confirm form — scrolls internally on short screens so button never clips */}
         <div className="p-3.5 sm:p-4 bg-white border-t border-slate-200 shrink-0 z-10 space-y-3 overflow-y-auto max-h-[60vh]">
-          <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-blue-50/80 border border-blue-200/80">
-            <MapPin className="w-4 h-4 text-[#005580] shrink-0 mt-0.5" />
+          <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-red-50/80 border border-red-200/80">
+            <MapPin className="w-4 h-4 text-[#ED1C24] shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
-              <span className="text-[10px] font-black uppercase tracking-wider text-blue-900 block">
+              <span className="text-[10px] font-black uppercase tracking-wider text-red-900 block">
                 Selected Landmark / Area
               </span>
               <p className="text-xs font-extrabold text-slate-900 truncate">{roadArea || 'Locating...'}</p>
@@ -496,7 +496,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
                   value={houseNo}
                   onChange={(e) => setHouseNo(e.target.value)}
                   placeholder="e.g. Flat 302, Royal Residency"
-                  className="w-full bg-slate-100 text-xs px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580]"
+                  className="w-full bg-slate-100 text-xs px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24]"
                 />
               </div>
               <div>
@@ -509,7 +509,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
                   value={landmark}
                   onChange={(e) => setLandmark(e.target.value)}
                   placeholder="e.g. Near Big Bazaar, Gate No 2"
-                  className="w-full bg-slate-100 text-xs px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580]"
+                  className="w-full bg-slate-100 text-xs px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24]"
                 />
               </div>
             </div>
@@ -522,7 +522,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
                     type="button"
                     onClick={() => setLabel(tag)}
                     className={`px-3 py-1 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1 ${
-                      label === tag ? 'bg-[#005580] text-white shadow-2xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      label === tag ? 'bg-[#ED1C24] text-white shadow-2xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
                     {tag === 'Home' ? <Home className="w-3 h-3" /> : tag === 'Work' ? <Briefcase className="w-3 h-3" /> : <Building className="w-3 h-3" />}

@@ -5,9 +5,11 @@ import { OUTLETS, Outlet } from './outlets';
 interface AdminLoginProps {
   onLogin: (outlet: Outlet) => void;
   onBackToStore: () => void;
+  /** rider mode: delivery staff login screen (/delivery) */
+  mode?: 'admin' | 'rider';
 }
 
-export const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onBackToStore }) => {
+export const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onBackToStore, mode = 'admin' }) => {
   const [selectedId, setSelectedId] = useState(OUTLETS[0].id);
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -32,8 +34,8 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onBackToStore }
           <div className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-[#ED1C24] to-red-500 flex items-center justify-center text-white font-black text-xl shadow-lg">
             7
           </div>
-          <h1 className="text-white font-black text-lg mt-3">7 Cheese Admin POS</h1>
-          <p className="text-slate-400 text-xs mt-1">Enter password to open POS</p>
+          <h1 className="text-white font-black text-lg mt-3">{mode === 'rider' ? 'Rider Login' : '7 Cheese Admin POS'}</h1>
+          <p className="text-slate-400 text-xs mt-1">{mode === 'rider' ? 'Enter password to open delivery queue' : 'Enter password to open POS'}</p>
         </div>
 
         <form onSubmit={handleLogin} className="p-5 space-y-4">
@@ -77,7 +79,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onBackToStore }
             className="w-full flex items-center justify-center gap-2 bg-[#ED1C24] hover:bg-[#c91430] active:scale-95 text-white py-3 rounded-2xl text-sm font-black shadow-md shadow-red-500/20 transition-all cursor-pointer"
           >
             <LogIn className="w-4 h-4" />
-            <span>Open POS Panel</span>
+            <span>{mode === 'rider' ? 'Open Delivery Queue' : 'Open POS Panel'}</span>
           </button>
 
           <button

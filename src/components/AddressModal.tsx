@@ -120,7 +120,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
           className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
         >
           {/* Header */}
-          <div className="bg-[#005580] text-white p-4 flex items-center justify-between">
+          <div className="bg-[#ED1C24] text-white p-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MapPin className="w-5 h-5 text-amber-300" />
               <h2 className="text-base font-black tracking-tight">
@@ -138,9 +138,9 @@ export const AddressModal: React.FC<AddressModalProps> = ({
 
           <div className="p-4 space-y-3.5">
             {/* Live Map GPS Detection Banner */}
-            <div className="bg-gradient-to-r from-blue-50 via-amber-50/50 to-red-50 p-3 rounded-2xl border border-blue-200/80 flex items-center justify-between gap-2.5">
+            <div className="bg-gradient-to-r from-red-50 via-amber-50/50 to-red-50 p-3 rounded-2xl border border-red-200/80 flex items-center justify-between gap-2.5">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-[#005580] text-white flex items-center justify-center shrink-0 shadow-2xs">
+                <div className="w-9 h-9 rounded-xl bg-[#ED1C24] text-white flex items-center justify-center shrink-0 shadow-2xs">
                   <Navigation className="w-4 h-4 text-amber-300 animate-pulse" />
                 </div>
                 <div className="min-w-0">
@@ -184,7 +184,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                         key={addr.id}
                         className={`w-full p-3 rounded-2xl border flex items-start justify-between gap-2 transition-all ${
                           isSelected
-                            ? 'border-[#005580] bg-blue-50/70 ring-2 ring-[#005580]'
+                            ? 'border-[#ED1C24] bg-red-50/70 ring-2 ring-[#ED1C24]'
                             : 'border-slate-200 bg-white'
                         }`}
                       >
@@ -198,7 +198,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                         >
                           <div
                             className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                              isSelected ? 'bg-[#005580] text-white' : 'bg-slate-100 text-slate-600'
+                              isSelected ? 'bg-[#ED1C24] text-white' : 'bg-slate-100 text-slate-600'
                             }`}
                           >
                             <Icon className="w-4 h-4" />
@@ -227,14 +227,14 @@ export const AddressModal: React.FC<AddressModalProps> = ({
 
                         <div className="flex flex-col gap-1 shrink-0">
                           {isSelected && (
-                            <Check className="w-4 h-4 text-[#005580] self-center" />
+                            <Check className="w-4 h-4 text-[#ED1C24] self-center" />
                           )}
                           <button
                             id={`btn-edit-addr-${addr.id}`}
                             onClick={() => startEdit(addr)}
                             title="Edit address"
                             aria-label="Edit address"
-                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-blue-100 text-slate-500 hover:text-[#005580] transition-colors cursor-pointer"
+                            className="p-1.5 rounded-lg bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-[#ED1C24] transition-colors cursor-pointer"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
@@ -257,7 +257,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                   <button
                     id="btn-show-add-address"
                     onClick={() => setShowAddForm(true)}
-                    className="flex-1 flex items-center justify-center gap-1.5 border-2 border-dashed border-slate-300 hover:border-[#005580] text-slate-700 hover:text-[#005580] p-2.5 rounded-2xl text-xs font-bold transition-colors cursor-pointer"
+                    className="flex-1 flex items-center justify-center gap-1.5 border-2 border-dashed border-slate-300 hover:border-[#ED1C24] text-slate-700 hover:text-[#ED1C24] p-2.5 rounded-2xl text-xs font-bold transition-colors cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Enter Manually</span>
@@ -265,7 +265,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsMapPickerOpen(true)}
-                    className="flex-1 flex items-center justify-center gap-1.5 bg-[#005580] hover:bg-[#003d5c] text-white p-2.5 rounded-2xl text-xs font-black transition-colors cursor-pointer shadow-xs"
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-[#ED1C24] hover:bg-[#c91430] text-white p-2.5 rounded-2xl text-xs font-black transition-colors cursor-pointer shadow-xs"
                   >
                     <MapPin className="w-3.5 h-3.5 text-amber-300" />
                     <span>Locate on Map</span>
@@ -279,7 +279,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setIsMapPickerOpen(true)}
-                    className="text-xs font-black text-[#005580] hover:underline flex items-center gap-1 cursor-pointer"
+                    className="text-xs font-black text-[#ED1C24] hover:underline flex items-center gap-1 cursor-pointer"
                   >
                     <Compass className="w-3.5 h-3.5" />
                     <span>Pick on Map</span>
@@ -294,7 +294,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                       onClick={() => setLabel(l)}
                       className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all ${
                         label === l
-                          ? 'bg-[#005580] text-white'
+                          ? 'bg-[#ED1C24] text-white'
                           : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                       }`}
                     >
@@ -314,7 +314,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                     value={addressLine}
                     onChange={(e) => setAddressLine(e.target.value)}
                     placeholder="Flat No, Building, Street, Area"
-                    className="w-full bg-slate-100 text-xs p-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580]"
+                    className="w-full bg-slate-100 text-xs p-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24]"
                   />
                 </div>
 
@@ -329,7 +329,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                       required
                       value={city}
                       onChange={(e) => setCity(e.target.value)}
-                      className="w-full bg-slate-100 text-xs p-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580]"
+                      className="w-full bg-slate-100 text-xs p-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24]"
                     />
                   </div>
                   <div>
@@ -342,7 +342,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                       required
                       value={pincode}
                       onChange={(e) => setPincode(e.target.value)}
-                      className="w-full bg-slate-100 text-xs p-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580]"
+                      className="w-full bg-slate-100 text-xs p-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24]"
                     />
                   </div>
                 </div>
@@ -357,7 +357,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                     value={landmark}
                     onChange={(e) => setLandmark(e.target.value)}
                     placeholder="e.g. Opposite Metro Pillar 142"
-                    className="w-full bg-slate-100 text-xs p-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#005580]"
+                    className="w-full bg-slate-100 text-xs p-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24]"
                   />
                 </div>
 

@@ -35,7 +35,7 @@ const STAGES = [
     label: 'Preparing & Hand-Tossing',
     desc: 'Chef tossing fresh dough & layering sauces',
     icon: ChefHat,
-    color: 'text-blue-500',
+    color: 'text-red-500',
   },
   {
     key: 'BAKING',
@@ -126,7 +126,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
           {/* Live ETA Card */}
           <div className="mt-4 bg-white/10 backdrop-blur-xs border border-white/20 rounded-2xl p-3 sm:p-4 flex items-center justify-between">
             <div>
-              <span className="text-xs text-blue-100 font-medium block">
+              <span className="text-xs text-red-100 font-medium block">
                 Estimated Delivery
               </span>
               <span className="text-2xl sm:text-3xl font-black text-amber-300 font-sans tracking-tight">
@@ -138,7 +138,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                 <span className="w-1.5 h-1.5 rounded-full bg-slate-900 animate-ping" />
                 Live Tracking
               </span>
-              <span className="text-xs text-blue-100 block mt-1 font-mono">
+              <span className="text-xs text-red-100 block mt-1 font-mono">
                 Hot & Fresh
               </span>
             </div>
@@ -192,14 +192,14 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                     onClick={() => handleStageClick(idx)}
                     className={`w-full flex items-start gap-3 p-2 rounded-xl text-left transition-all z-10 relative cursor-pointer ${
                       isCurrent
-                        ? 'bg-blue-50/80 border border-blue-200'
+                        ? 'bg-red-50/80 border border-red-200'
                         : 'hover:bg-slate-50'
                     }`}
                   >
                     <div
                       className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border-2 transition-all ${
                         isCurrent
-                          ? 'border-[#005580] bg-[#005580] text-white ring-4 ring-blue-100 scale-110'
+                          ? 'border-[#ED1C24] bg-[#ED1C24] text-white ring-4 ring-red-100 scale-110'
                           : isPassed
                           ? 'border-emerald-500 bg-emerald-500 text-white'
                           : 'border-slate-300 bg-white text-slate-400'
@@ -213,7 +213,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                         <span
                           className={`text-xs font-bold leading-tight ${
                             isCurrent
-                              ? 'text-[#005580] font-black'
+                              ? 'text-[#ED1C24] font-black'
                               : isPassed
                               ? 'text-slate-800'
                               : 'text-slate-400'
@@ -316,7 +316,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
           <button
             id="btn-tracker-done"
             onClick={onClose}
-            className="bg-[#005580] text-white font-bold text-xs sm:text-sm px-5 py-2.5 rounded-xl hover:bg-[#003d5c] transition-colors"
+            className="bg-[#ED1C24] text-white font-bold text-xs sm:text-sm px-5 py-2.5 rounded-xl hover:bg-[#c91430] transition-colors"
           >
             Close Tracker
           </button>

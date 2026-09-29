@@ -1,12 +1,14 @@
 import React from 'react';
 import { Plus, Minus, ChevronRight, Star, Sparkles } from 'lucide-react';
 import { MenuItem, CartItem } from '../types';
+import { needsCustomize } from '../lib/customize';
 import { VegNonVegIcon } from './VegNonVegIcon';
 
 interface ProductCardProps {
   item: MenuItem;
   onAddToCart: (item: MenuItem) => void;
   onOpenCustomize: (item: MenuItem) => void;
+  onOpenQuickView: (item: MenuItem) => void;
   quantityInCart: number;
   onUpdateQuantity: (productId: string, delta: number) => void;
 }
@@ -15,12 +17,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   item,
   onAddToCart,
   onOpenCustomize,
+  onOpenQuickView,
   quantityInCart,
   onUpdateQuantity,
 }) => {
   const handleCardClick = () => {
-    if (item.isCustomizable) onOpenCustomize(item);
-    else onAddToCart(item);
+    // Pizza = customize modal, baaki = quick view (Eat/Add + Also Try)
+    if (needsCustomize(item)) onOpenCustomize(item);
+    else onOpenQuickView(item);
   };
 
   return (
@@ -87,7 +91,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between">
         <div>
           {/* Item Name */}
-          <h3 className="font-extrabold text-slate-900 text-sm sm:text-base leading-snug group-hover:text-[#005580] transition-colors line-clamp-1">
+          <h3 className="font-extrabold text-slate-900 text-sm sm:text-base leading-snug group-hover:text-[#ED1C24] transition-colors line-clamp-1">
             {item.name}
           </h3>
 
@@ -103,15 +107,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             </p>
           )}
 
-          {/* Size / Crust Selector Trigger (Matches Screenshot 3: "Regular | New Hand Tossed >") */}
-          {item.isCustomizable && (
+          {/* Size / Crust Selector Trigger (pizzas only — drinks/sides pe nahi) */}
+          {needsCustomize(item) && (
             <button
               id={`btn-customize-link-${item.id}`}
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenCustomize(item);
               }}
-              className="mt-2 text-[11px] font-semibold text-slate-700 hover:text-[#005580] inline-flex items-center gap-1 border-b border-dashed border-slate-400 pb-0.5 transition-colors cursor-pointer"
+              className="mt-2 text-[11px] font-semibold text-slate-700 hover:text-[#ED1C24] inline-flex items-center gap-1 border-b border-dashed border-slate-400 pb-0.5 transition-colors cursor-pointer"
             >
               <span>{item.defaultSize || 'Regular'} | {item.defaultCrust || 'New Hand Tossed'}</span>
               <ChevronRight className="w-3 h-3 text-slate-500" />
@@ -132,7 +136,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 </span>
               )}
             </div>
-            {item.isCustomizable && (
+            {needsCustomize(item) && (
               <span className="text-[10px] text-slate-500 font-medium">
                 Customise available
               </span>
@@ -143,7 +147,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <div>
             {quantityInCart === 0 ? (
               <div className="flex items-center gap-1.5">
-                {item.isCustomizable ? (
+                {needsCustomize(item) ? (
                   <button
                     id={`btn-add-${item.id}`}
                     onClick={(e) => {

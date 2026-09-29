@@ -67,7 +67,7 @@ export const DealsModal: React.FC<DealsModalProps> = ({
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-mono font-black text-sm text-[#005580] bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-200">
+                      <span className="font-mono font-black text-sm text-[#ED1C24] bg-red-100 px-2 py-0.5 rounded-lg border border-red-200">
                         {coupon.code}
                       </span>
                     </div>

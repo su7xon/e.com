@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Send, Trash2, Loader2, Plus } from 'lucide-react';
 import { chatWithGroq, GroqChatMessage } from '../lib/groq';
+import { needsCustomize } from '../lib/customize';
 import type { Coupon, MenuItem } from '../types';
 
 interface ChatAssistantProps {
@@ -8,6 +9,7 @@ interface ChatAssistantProps {
   coupons: Coupon[];
   onAddToCart: (item: MenuItem) => void;
   onOpenCart: () => void;
+  onOpenCustomize?: (item: MenuItem) => void;
   onSelectCategory?: (key: string) => void;
 }
 
@@ -111,6 +113,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
   menuItems,
   coupons,
   onAddToCart,
+  onOpenCustomize,
   onSelectCategory,
 }) => {
   const [open, setOpen] = useState(false);
@@ -193,7 +196,12 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
 
   const handleAdd = (id: string) => {
     const item = menuItems.find((m) => m.id === id);
-    if (item) {
+    if (!item) return;
+    // Pizza hamesha modal se — chatbot se bhi direct add nahi.
+    if (needsCustomize(item) && onOpenCustomize) {
+      onOpenCustomize(item);
+      setMsgs((p) => [...p, { role: 'assistant', content: `${item.name} ke liye size/crust select karo! 🍕`, addId: null }]);
+    } else {
       onAddToCart(item);
       setMsgs((p) => [...p, { role: 'assistant', content: `${item.name} cart me add ho gaya! Cart khol ke checkout karo. 🛒`, addId: null }]);
     }

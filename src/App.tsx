@@ -26,6 +26,7 @@ import { CravingCategories } from './components/CravingCategories';
 import { CategoryMarquee } from './components/CategoryMarquee';
 import { ProductCard } from './components/ProductCard';
 import { CustomizeModal } from './components/CustomizeModal';
+import { QuickViewModal } from './components/QuickViewModal';
 import { CartDrawer } from './components/CartDrawer';
 import { OrderTrackerModal } from './components/OrderTrackerModal';
 import { AddressModal } from './components/AddressModal';
@@ -36,6 +37,7 @@ import { ChatAssistant } from './components/ChatAssistant';
 import { PwaInstallBanner, PwaOfflineBadge, PwaUpdatePrompt } from './components/PwaManager';
 import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminLogin } from './components/admin/AdminLogin';
+import { AdminDelivery } from './components/admin/AdminDelivery';
 import { AdminOrder, SEED_ADMIN_ORDERS } from './components/admin/adminData';
 import { Outlet, getOutletById, findNearestOutlet, resolveOutletForOrder, parseOutletQrParam, parseTableQrParam, getTableById, clearOutletQrLock } from './components/admin/outlets';
 import {
@@ -50,6 +52,7 @@ import {
   deleteOrderFromFirestore,
   subscribeToFirestoreOrders,
 } from './lib/firebase';
+import { needsCustomize } from './lib/customize';
 import { 
   Filter, 
   Flame, 
@@ -63,7 +66,9 @@ import {
   ShieldCheck,
   Ruler,
   ArrowRight,
-  Armchair
+  Armchair,
+  Bike,
+  LogOut
 } from 'lucide-react';
 
 // Error Boundary to catch React render crashes (white screen fix)
@@ -118,13 +123,29 @@ export default function App() {
     url ? url.replace('/src/assets/images/', '/images/') : url;
   const migrateItems = <T extends { image?: string }>(items: T[]): T[] =>
     items.map((it) => (it.image?.includes('/src/assets/') ? { ...it, image: fixImg(it.image) as string } : it));
+  // URL routes: /admin = POS panel, /delivery (ya /rider) = rider queue. Baki sab = store.
+  type AppView = 'home' | 'billing' | 'admin' | 'delivery';
+  const VIEW_PATHS: Record<AppView, string> = { home: '/', billing: '/', admin: '/admin', delivery: '/delivery' };
+  const getRouteView = (): 'admin' | 'delivery' | null => {
+    try {
+      const p = window.location.pathname.replace(/\/+$/, '') || '/';
+      if (p === '/admin') return 'admin';
+      if (p === '/delivery' || p === '/rider') return 'delivery';
+    } catch {
+      // ignore
+    }
+    return null;
+  };
   // Navigation & Mode (reload pe bhi wahi view — admin me the to admin me hi raho)
   const [orderType, setOrderType] = useState<OrderType>('DELIVERY');
   const [activeTab, setActiveTab] = useState<'menu' | 'reorder' | 'makeyourown' | 'combos' | 'profile'>('menu');
-  const [currentView, setCurrentView] = useState<'home' | 'billing' | 'admin'>(() => {
+  const [currentView, setCurrentView] = useState<AppView>(() => {
+    // URL route sabse pehle — link se khula to wahi view.
+    const routed = getRouteView();
+    if (routed) return routed;
     try {
       const saved = sessionStorage.getItem('seven_cheese_current_view');
-      if (saved === 'admin' || saved === 'billing') return saved;
+      if (saved === 'admin' || saved === 'billing' || saved === 'delivery') return saved;
     } catch {
       // ignore
     }
@@ -137,6 +158,29 @@ export default function App() {
       // ignore
     }
   }, [currentView]);
+
+  // View badlo + URL bhi sync rakho (back/forward button kaam kare).
+  const goView = (v: AppView) => {
+    setCurrentView(v);
+    try {
+      const path = VIEW_PATHS[v];
+      if (window.location.pathname !== path) window.history.pushState({}, '', path);
+    } catch {
+      // ignore
+    }
+  };
+  // Browser back/forward: URL se view wapas nikalo.
+  useEffect(() => {
+    const sync = () => {
+      const r = getRouteView();
+      setCurrentView((prev) => {
+        if (r) return r;
+        return prev === 'admin' || prev === 'delivery' ? 'home' : prev;
+      });
+    };
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
 
   // Logged-in outlet (admin POS). Kept in sessionStorage so login survives refresh.
   const [adminOutlet, setAdminOutlet] = useState<Outlet | null>(() => {
@@ -151,7 +195,7 @@ export default function App() {
   const handleAdminLogout = () => {
     sessionStorage.removeItem('seven_cheese_admin_outlet');
     setAdminOutlet(null);
-    setCurrentView('home'); // logout ke baad reload pe login gate pe nahi, store pe aao
+    goView('home'); // logout ke baad reload pe login gate pe nahi, store pe aao
   };
 
   // QR-locked outlet: customer ne outlet QR scan kiya to order hamesha usi outlet ka.
@@ -686,6 +730,9 @@ export default function App() {
   // Modals Visibility
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
   const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
+  // Quick view (simple items: Eat Now + Add + Also Try)
+  const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
+  const [quickViewItem, setQuickViewItem] = useState<MenuItem | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isOrderTrackerOpen, setIsOrderTrackerOpen] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
@@ -712,6 +759,20 @@ export default function App() {
   const handleOpenCustomize = (item: MenuItem) => {
     setCustomizingItem(item);
     setIsCustomizeOpen(true);
+  };
+
+  const handleOpenQuickView = (item: MenuItem) => {
+    setQuickViewItem(item);
+    setIsQuickViewOpen(true);
+  };
+
+  // Eat Now: cart me dalke sidha checkout (billing) page
+  const handleEatNow = (item: MenuItem) => {
+    handleSimpleAddToCart(item);
+    setIsQuickViewOpen(false);
+    setIsCartOpen(false);
+    goView('billing');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSimpleAddToCart = (item: MenuItem) => {
@@ -764,7 +825,8 @@ export default function App() {
       if (delta > 0) {
         const product = menuItems.find((m) => m.id === productId) || MENU_ITEMS.find((m) => m.id === productId);
         if (product) {
-          if (product.isCustomizable) {
+          // Pizza hamesha modal se — flag chhoota ho to bhi direct add nahi.
+          if (needsCustomize(product)) {
             handleOpenCustomize(product);
           } else {
             handleSimpleAddToCart(product);
@@ -925,7 +987,7 @@ export default function App() {
     setCartItems([]);
     setAppliedCoupon(null);
     setIsCartOpen(false);
-    setCurrentView('home');
+    goView('home');
     setIsOrderTrackerOpen(true);
   };
 
@@ -986,9 +1048,9 @@ export default function App() {
   }, [menuItems, searchQuery]);
 
   const handleSelectSuggestion = (item: MenuItem) => {
-    // Product card tap jaisa behavior: customizable = modal, warna direct add
-    if (item.isCustomizable) handleOpenCustomize(item);
-    else handleSimpleAddToCart(item);
+    // Product card tap jaisa behavior: pizza = customize modal, baaki = quick view
+    if (needsCustomize(item)) handleOpenCustomize(item);
+    else handleOpenQuickView(item);
   };
   // Featured Hero banner selection
   const handleSelectFeatured = (productId: string) => {
@@ -1021,10 +1083,12 @@ export default function App() {
           }}
           onPlaceOrder={(notes, method, delivery) => {
             handlePlaceOrder(notes, method, delivery);
-            setCurrentView('home');
+            goView('home');
           }}
-          onGoBack={() => setCurrentView('home')}
+          onGoBack={() => goView('home')}
           onAddToCart={handleSimpleAddToCart}
+          onOpenCustomize={handleOpenCustomize}
+          onOpenQuickView={handleOpenQuickView}
           availableCoupons={coupons}
           availableMenuItems={menuItems}
         />
@@ -1054,10 +1118,26 @@ export default function App() {
         <PwaOfflineBadge />
         <PwaUpdatePrompt />
         <PwaInstallBanner />
+        <CustomizeModal
+          item={customizingItem}
+          isOpen={isCustomizeOpen}
+          onClose={() => setIsCustomizeOpen(false)}
+          onConfirmAddToCart={handleAddCustomizedToCart}
+        />
+        <QuickViewModal
+          item={quickViewItem}
+          isOpen={isQuickViewOpen}
+          onClose={() => setIsQuickViewOpen(false)}
+          menuItems={menuItems}
+          onAddToCart={handleSimpleAddToCart}
+          onEatNow={handleEatNow}
+          onOpenCustomize={handleOpenCustomize}
+        />
         <ChatAssistant
           menuItems={menuItems}
           coupons={coupons}
           onAddToCart={handleSimpleAddToCart}
+          onOpenCustomize={handleOpenCustomize}
           onOpenCart={() => setIsCartOpen(true)}
         />
       </>
@@ -1070,7 +1150,7 @@ export default function App() {
       <>
         <AdminLogin
           onLogin={handleAdminLogin}
-          onBackToStore={() => setCurrentView('home')}
+          onBackToStore={() => goView('home')}
         />
         <PwaOfflineBadge />
         <PwaUpdatePrompt />
@@ -1083,7 +1163,7 @@ export default function App() {
   if (currentView === 'admin' && adminOutlet) {
     return (
       <>
-      <AdminErrorBoundary onReset={() => setCurrentView('home')}>
+      <AdminErrorBoundary onReset={() => goView('home')}>
       <AdminLayout
         outlet={adminOutlet}
         orders={adminOrders}
@@ -1135,7 +1215,7 @@ export default function App() {
         onDeleteCoupon={(code) => {
           setCoupons((prev) => prev.filter((c) => c.code !== code));
         }}
-        onBackToStore={() => setCurrentView('home')}
+        onBackToStore={() => goView('home')}
         onLogout={handleAdminLogout}
         slides={heroSlides}
         onUpdateSlideImage={(id, image) => {
@@ -1150,6 +1230,83 @@ export default function App() {
         <PwaOfflineBadge />
         <PwaUpdatePrompt />
       </>
+    );
+  }
+
+  // Rider view (/delivery ya /rider): login gate, phir sirf delivery queue — menu/POS access nahi.
+  if (currentView === 'delivery' && !adminOutlet) {
+    return (
+      <>
+        <AdminLogin
+          mode="rider"
+          onLogin={handleAdminLogin}
+          onBackToStore={() => goView('home')}
+        />
+        <PwaOfflineBadge />
+        <PwaUpdatePrompt />
+      </>
+    );
+  }
+
+  if (currentView === 'delivery' && adminOutlet) {
+    const riderOrders = adminOrders.filter((o) => !o.outletId || o.outletId === adminOutlet.id);
+    return (
+      <div className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-10">
+        {/* Rider header */}
+        <header className="sticky top-0 z-40 bg-slate-900 text-white shadow-md">
+          <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-[#ED1C24] flex items-center justify-center shrink-0">
+                <Bike className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-sm font-black tracking-tight leading-tight truncate">
+                  Rider • {adminOutlet.shortName}
+                </h1>
+                <span className={`text-[10px] font-bold ${orderSyncStatus === 'live' ? 'text-emerald-400' : orderSyncStatus === 'connecting' ? 'text-amber-400' : 'text-red-400'}`}>
+                  {orderSyncStatus === 'live' ? '● Live orders' : orderSyncStatus === 'connecting' ? '● Connecting…' : '● Offline — retry'}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {orderSyncStatus === 'error' && (
+                <button
+                  onClick={handleRetrySync}
+                  className="text-[11px] font-bold bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-xl cursor-pointer"
+                >
+                  Retry
+                </button>
+              )}
+              <button
+                onClick={() => goView('home')}
+                className="text-[11px] font-bold bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-xl cursor-pointer"
+              >
+                Store
+              </button>
+              <button
+                onClick={handleAdminLogout}
+                className="flex items-center gap-1 text-[11px] font-bold bg-[#ED1C24] hover:bg-[#c91430] px-2.5 py-1.5 rounded-xl cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-3xl mx-auto px-3 sm:px-4 py-4">
+          <AdminDelivery
+            orders={riderOrders}
+            onUpdateOrderStatus={(id, status) => {
+              setAdminOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+              updateOrderStatusInFirestore(id, status).catch(() => {});
+            }}
+          />
+        </main>
+
+        <PwaOfflineBadge />
+        <PwaUpdatePrompt />
+      </div>
     );
   }
 
@@ -1171,7 +1328,6 @@ export default function App() {
         setVegOnly={setVegOnly}
         nonVegOnly={nonVegOnly}
         setNonVegOnly={setNonVegOnly}
-        onOpenAdmin={() => setCurrentView('admin')}
         outletDistanceKm={outletInfo.distanceKm}
         gpsState={gpsState}
         onDetectLocation={requestGps}
@@ -1377,7 +1533,7 @@ export default function App() {
                     setNonVegOnly(false);
                     setSelectedCategory('all');
                   }}
-                  className="mt-4 bg-[#005580] text-white text-xs font-black px-4 py-2 rounded-xl hover:bg-[#003d5c] transition-colors"
+                  className="mt-4 bg-[#ED1C24] text-white text-xs font-black px-4 py-2 rounded-xl hover:bg-[#c91430] transition-colors"
                 >
                   Reset All Filters
                 </button>
@@ -1395,6 +1551,7 @@ export default function App() {
                       item={item}
                       onAddToCart={handleSimpleAddToCart}
                       onOpenCustomize={handleOpenCustomize}
+                      onOpenQuickView={handleOpenQuickView}
                       quantityInCart={qty}
                       onUpdateQuantity={(pid, delta) => handleUpdateProductQuantity(pid, delta)}
                     />
@@ -1772,6 +1929,16 @@ export default function App() {
         onConfirmAddToCart={handleAddCustomizedToCart}
       />
 
+      <QuickViewModal
+        item={quickViewItem}
+        isOpen={isQuickViewOpen}
+        onClose={() => setIsQuickViewOpen(false)}
+        menuItems={menuItems}
+        onAddToCart={handleSimpleAddToCart}
+        onEatNow={handleEatNow}
+        onOpenCustomize={handleOpenCustomize}
+      />
+
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
@@ -1792,12 +1959,15 @@ export default function App() {
         onPlaceOrder={(notes, method, delivery) => handlePlaceOrder(notes, method, delivery)}
         onProceedToCheckout={() => {
           setIsCartOpen(false);
-          setCurrentView('billing');
+          goView('billing');
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         onQuickAdd={(pid) => {
           const it = menuItems.find((m) => m.id === pid) || MENU_ITEMS.find((m) => m.id === pid);
-          if (it) handleSimpleAddToCart(it);
+          if (!it) return;
+          // Customizable items (pizza) kabhi direct add nahi — modal kholo taaki size/crust select ho.
+          if (needsCustomize(it)) handleOpenCustomize(it);
+          else handleSimpleAddToCart(it);
         }}
         onUpgradeItem={handleUpgradeCartItem}
         availableCoupons={coupons}
@@ -1842,6 +2012,7 @@ export default function App() {
         menuItems={menuItems}
         coupons={coupons}
         onAddToCart={handleSimpleAddToCart}
+        onOpenCustomize={handleOpenCustomize}
         onOpenCart={() => setIsCartOpen(true)}
         onSelectCategory={(key) => {
           setSelectedCategory(key);
