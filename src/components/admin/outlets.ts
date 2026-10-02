@@ -222,14 +222,16 @@ export function getTableQrUrl(outletId: string, tableId: string, token?: string)
   return `${base}?outlet=${encodeURIComponent(outletId)}&qrt=${encodeURIComponent(t)}&table=${encodeURIComponent(tableId)}`;
 }
 
-/** URL (?table=...) se table lock padho. Galat id pe null. */
+/**
+ * Table lock — URL (?table=...) only, i.e. a fresh QR scan.
+ * Never from stale localStorage, otherwise a normal visit days later
+ * would still be stuck in dine-in mode with the address pill hidden.
+ */
 export function parseTableQrParam(outletId?: string): string | null {
   try {
     const p = new URLSearchParams(window.location.search);
     const tid = p.get('table');
     if (tid && outletId && getTableById(outletId, tid)) return tid;
-    const stored = localStorage.getItem('seven_cheese_qr_table');
-    if (stored && outletId && getTableById(outletId, stored)) return stored;
     return null;
   } catch {
     return null;

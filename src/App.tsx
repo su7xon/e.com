@@ -225,16 +225,11 @@ export default function App() {
   });
   const qrOutlet = qrOutletId ? getOutletById(qrOutletId) || null : null;
 
-  // Table-locked QR: customer ne table QR scan kiya to order ussi table ke naam pe.
+  // Table lock = fresh QR scan only (URL param). No localStorage persistence,
+  // so a normal visit always shows the Deliver-to pill and DELIVERY mode.
   const [qrTableId, setQrTableId] = useState<string | null>(() => {
     const oid = parseOutletQrParam();
-    const tid = oid ? parseTableQrParam(oid) : null;
-    try {
-      if (tid) localStorage.setItem('seven_cheese_qr_table', tid);
-    } catch {
-      // ignore
-    }
-    return tid;
+    return oid ? parseTableQrParam(oid) : null;
   });
   const qrTable = qrOutletId && qrTableId ? getTableById(qrOutletId, qrTableId) || null : null;
 
@@ -243,13 +238,7 @@ export default function App() {
     const reparse = () => {
       const oid = parseOutletQrParam();
       setQrOutletId(oid);
-      const tid = oid ? parseTableQrParam(oid) : null;
-      try {
-        if (tid) localStorage.setItem('seven_cheese_qr_table', tid);
-      } catch {
-        // ignore
-      }
-      setQrTableId(tid);
+      setQrTableId(oid ? parseTableQrParam(oid) : null);
     };
     window.addEventListener('popstate', reparse);
     return () => window.removeEventListener('popstate', reparse);
