@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, ArrowRight, Sparkles, Flame, Percent, Bike } from 'lucide-react';
+import { ArrowRight, Sparkles, Flame } from 'lucide-react';
 import { MenuItem } from '../types';
 
 interface HeroBannerProps {
@@ -28,66 +28,84 @@ export interface BannerSlide {
 
 export const DEFAULT_SLIDES: BannerSlide[] = [
   {
-    id: 'slide-7cheese-signature',
-    badge: 'HOUSE SIGNATURE • 7 ARTISANAL CHEESES',
-    titlePart1: 'The Original',
-    titleHighlight: '7 CHEESE PIZZA',
-    titlePart2: 'Special',
-    subtitle: '7 Cheeses: Mozzarella, Cheddar, Gouda, Parmesan, Provolone, Fontina & Ricotta!',
+    id: 'slide-hero-banner-1',
+    badge: '7 CHEESE PIZZA',
+    titlePart1: 'Banner',
+    titleHighlight: '1',
+    titlePart2: '',
+    subtitle: '',
     priceOld: 419,
     priceNew: 329,
-    promoCode: '7CHEESE50',
-    feature1: '7 Handcrafted Cheeses',
-    feature2: 'Golden Garlic Butter Herb Crust',
+    feature1: '',
+    feature2: '',
     bgGradient: 'from-amber-950 via-[#1c0f05] to-[#0d0702]',
-    image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=900&auto=format&fit=crop&q=80',
+    image: '/images/hero-banner-1.png',
     productId: 'p-7cheese-signature',
+    fullImage: true,
   },
   {
-    id: 'slide-pan-mania',
-    badge: 'VALUE PAN PIZZA MANIA',
-    titlePart1: 'Crispy Pan Pizzas',
-    titleHighlight: 'STARTING @ ₹79',
-    titlePart2: 'Hot & Fresh',
-    subtitle: 'Crispy pan crusts loaded with Onion, Capsicum, Golden Corn & Fresh Paneer!',
+    id: 'slide-hero-banner-2',
+    badge: '7 CHEESE PIZZA',
+    titlePart1: 'Banner',
+    titleHighlight: '2',
+    titlePart2: '',
+    subtitle: '',
     priceOld: 99,
     priceNew: 79,
-    feature1: 'Fresh Hand-Stretched Pan Base',
-    feature2: 'Bubbly Hot Cheese',
+    feature1: '',
+    feature2: '',
     bgGradient: 'from-zinc-950 via-[#1f1610] to-[#0a0705]',
-    image: 'https://images.unsplash.com/photo-1534308983496-4fabb1a015ee?w=900&auto=format&fit=crop&q=80',
+    image: '/images/hero-banner-2.png',
     productId: 'pan-onion',
+    fullImage: true,
   },
   {
-    id: 'slide-tandoori-chicken',
-    badge: 'TANDOORI GRILL SPECIAL',
-    titlePart1: 'Clay-Oven',
-    titleHighlight: 'TANDOORI CHICKEN',
-    titlePart2: 'Feast',
-    subtitle: 'Smoky spiced chicken tikka with roasted capsicum, onions & cheese sauce!',
+    id: 'slide-hero-banner-3',
+    badge: '7 CHEESE PIZZA',
+    titlePart1: 'Banner',
+    titleHighlight: '3',
+    titlePart2: '',
+    subtitle: '',
     priceOld: 249,
     priceNew: 189,
-    promoCode: 'CHEESEFEST',
-    feature1: 'Smoky Tandoori Tikka',
-    feature2: 'Authentic Desi Spices',
+    feature1: '',
+    feature2: '',
     bgGradient: 'from-red-950 via-[#26050a] to-[#120204]',
-    image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=900&auto=format&fit=crop&q=80',
+    image: '/images/hero-banner-3.png',
     productId: 'p-tandoori-chicken',
+    fullImage: true,
   },
   {
-    id: 'slide-wraps-burgers',
-    badge: 'NEW CRAVINGS • WRAPS & BURGERS',
-    titlePart1: 'Cheesy Wraps',
-    titleHighlight: '& CRISPY BURGERS',
-    titlePart2: 'From ₹50',
-    subtitle: 'Tandoori, Schezwan, Makhani wraps & golden crumbed crispy burgers!',
+    id: 'slide-hero-banner-4',
+    badge: '7 CHEESE PIZZA',
+    titlePart1: 'Banner',
+    titleHighlight: '4',
+    titlePart2: '',
+    subtitle: '',
     priceOld: 70,
     priceNew: 50,
-    feature1: 'Signature Sauce Drizzles',
-    feature2: '100% Fresh Ingredients',
+    feature1: '',
+    feature2: '',
     bgGradient: 'from-emerald-950 via-[#0a1f13] to-[#041009]',
-    image: 'https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=900&auto=format&fit=crop&q=80',
+    image: '/images/hero-banner-4.png',
     productId: 'b-veg-normal',
+    fullImage: true,
+  },
+  {
+    id: 'slide-hero-banner-5',
+    badge: '7 CHEESE PIZZA',
+    titlePart1: 'Banner',
+    titleHighlight: '5',
+    titlePart2: '',
+    subtitle: '',
+    priceOld: 419,
+    priceNew: 329,
+    feature1: '',
+    feature2: '',
+    bgGradient: 'from-amber-950 via-[#1c0f05] to-[#0d0702]',
+    image: '/images/hero-banner-5.png',
+    productId: 'p-7cheese-signature',
+    fullImage: true,
   },
 ];
 
@@ -101,7 +119,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpen
     if (isPaused) return;
     const interval = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % safeSlides.length);
-    }, 5000);
+    }, 3000);
     return () => clearInterval(interval);
   }, [isPaused, safeSlides.length]);
 
@@ -109,9 +127,13 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpen
 
   return (
     <div className="w-full">
-      {/* Main Hero Slider Container - Exactly 12:7 ratio on mobile */}
+      {/* Main Hero Slider Container - Exactly 12:7 ratio on mobile (text slides only) */}
       <div
-        className="relative w-full bg-slate-950 overflow-hidden select-none aspect-[12/7] sm:aspect-auto min-h-[190px] sm:min-h-[380px] md:min-h-[432px] sm:h-[380px] md:h-[432px] lg:h-[468px] flex items-center py-2 sm:py-0"
+        className={
+          slide.fullImage
+            ? 'relative w-full bg-slate-950 overflow-hidden select-none block'
+            : 'relative w-full bg-slate-950 overflow-hidden select-none aspect-[12/7] sm:aspect-auto min-h-[190px] sm:min-h-[380px] md:min-h-[432px] sm:h-[380px] md:h-[432px] lg:h-[468px] flex items-center py-2 sm:py-0'
+        }
         onMouseEnter={() => setIsPaused(true)}
         onMouseLeave={() => setIsPaused(false)}
       >
@@ -120,18 +142,18 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpen
           className={`absolute inset-0 bg-gradient-to-r ${slide.bgGradient} transition-colors duration-700`}
         />
 
-        {/* Full-bleed offer image slide (no text box, no crop) */}
+        {/* Full banner image slide — zero crop, poori image dikhe (LUNCH text safe) */}
         {slide.fullImage && (
           <button
             id={`btn-hero-order-${slide.id}`}
             onClick={() => onSelectFeatured(slide.productId)}
-            className="relative block w-full h-full cursor-pointer"
+            className="relative block w-full cursor-pointer"
             aria-label={`${slide.titlePart1} ${slide.titleHighlight} ${slide.titlePart2}`}
           >
             <img
               src={slide.image}
               alt={`${slide.titlePart1} ${slide.titleHighlight} ${slide.titlePart2}`}
-              className="w-full h-full object-cover object-center sm:object-[center_20%]"
+              className="w-full h-auto object-contain block"
               referrerPolicy="no-referrer"
             />
           </button>
@@ -227,29 +249,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpen
 
         </div>
 
-        {/* Carousel Arrows */}
-        <button
-          id="btn-hero-prev"
-            onClick={() => setCurrentSlide((prev) => (prev === 0 ? safeSlides.length - 1 : prev - 1))}
-          className="absolute left-1 sm:left-4 top-1/2 -translate-y-1/2 w-6 h-6 sm:w-10 sm:h-10 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-xs transition-colors z-20"
-          aria-label="Previous Offer"
-        >
-          <ChevronLeft className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
-        </button>
-        <button
-          id="btn-hero-next"
-            onClick={() => setCurrentSlide((prev) => (prev + 1) % safeSlides.length)}
-          className="absolute right-1 sm:right-4 top-1/2 -translate-y-1/2 w-6 h-6 sm:w-10 sm:h-10 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-xs transition-colors z-20"
-          aria-label="Next Offer"
-        >
-          <ChevronRight className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
-        </button>
-
-        {/* Slide Counter & Dots */}
+        {/* Slide Dots only */}
         <div className="absolute bottom-1.5 sm:bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 sm:gap-2 z-20 bg-black/50 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full backdrop-blur-xs">
-          <span className="text-[9px] sm:text-[11px] font-bold text-slate-200">
-              {currentSlide + 1}/{safeSlides.length}
-          </span>
           <div className="flex items-center gap-1 sm:gap-1.5">
               {safeSlides.map((s, idx) => (
               <button
@@ -265,83 +266,6 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpen
         </div>
       </div>
 
-      {/* Free Delivery & Lowest Price Ribbon */}
-      <div className="bg-[#18181b] text-white px-3 py-1.5 sm:py-2 text-xs font-bold border-t border-b border-white/10 shadow-xs overflow-hidden">
-        {/* Mobile View: Exactly 1 single line continuous ticker */}
-        <div className="sm:hidden relative w-full overflow-hidden flex items-center py-0.5">
-          <div className="animate-ribbon-ticker flex items-center gap-3 whitespace-nowrap will-change-transform">
-            {[1, 2].map((k) => (
-              <div key={k} className="flex items-center gap-2 text-[11px] shrink-0">
-                <span className="bg-[#ED1C24] text-white px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider shrink-0">
-                  GUARANTEE
-                </span>
-                <span className="text-zinc-200 shrink-0">
-                  LOWEST PRICES ONLY ON 7 CHEESE PIZZA APP
-                </span>
-                <span className="text-zinc-500 shrink-0">|</span>
-                <span className="text-amber-400 flex items-center gap-1 shrink-0">
-                  <Bike className="w-3.5 h-3.5" />
-                  EXPRESS DELIVERY ABOVE ₹99
-                </span>
-                <span className="text-zinc-500 shrink-0">|</span>
-                <button
-                  onClick={onOpenDeals}
-                  className="text-amber-400 active:text-amber-300 underline flex items-center gap-0.5 font-bold text-[11px] shrink-0 cursor-pointer"
-                >
-                  <span>View All 7 Cheese Coupons & Offers</span>
-                  <ArrowRight className="w-3 h-3" />
-                </button>
-                <span className="text-zinc-600 shrink-0 mx-2">•</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Laptop / Desktop View: Completely unchanged */}
-        <div className="hidden sm:flex max-w-7xl mx-auto items-center justify-between gap-1 text-left">
-          <div className="flex items-center gap-2">
-            <span className="bg-[#ED1C24] text-white px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider">
-              GUARANTEE
-            </span>
-            <span className="text-zinc-200">
-              LOWEST PRICES ONLY ON 7 CHEESE PIZZA APP
-            </span>
-            <span className="text-zinc-600">|</span>
-            <span className="text-amber-400 flex items-center gap-1">
-              <Bike className="w-3.5 h-3.5" />
-              EXPRESS DELIVERY ABOVE ₹99
-            </span>
-          </div>
-
-          <button
-            id="btn-view-all-deals"
-            onClick={onOpenDeals}
-            className="text-amber-400 hover:text-amber-300 hover:underline flex items-center gap-1 font-bold text-xs cursor-pointer"
-          >
-            <span>View All 7 Cheese Coupons & Offers</span>
-            <ArrowRight className="w-3 h-3" />
-          </button>
-        </div>
-      </div>
-
-      {/* Ribbon Ticker CSS Animation */}
-      <style>{`
-        @keyframes ribbonTicker {
-          0% {
-            transform: translateX(0);
-          }
-          100% {
-            transform: translateX(-50%);
-          }
-        }
-        .animate-ribbon-ticker {
-          animation: ribbonTicker 22s linear infinite;
-          width: max-content;
-        }
-        .animate-ribbon-ticker:hover, .animate-ribbon-ticker:active {
-          animation-play-state: paused;
-        }
-      `}</style>
     </div>
   );
 };
