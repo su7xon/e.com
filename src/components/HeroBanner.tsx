@@ -112,6 +112,7 @@ export const DEFAULT_SLIDES: BannerSlide[] = [
 export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpenDeals, slides = DEFAULT_SLIDES }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
+  const touchStartX = React.useRef<number | null>(null);
 
   const safeSlides = slides.length > 0 ? slides : DEFAULT_SLIDES;
 
@@ -122,6 +123,24 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpen
     }, 3000);
     return () => clearInterval(interval);
   }, [isPaused, safeSlides.length]);
+
+  // Haath se swipe: left = next, right = prev (40px threshold).
+  // Swipe pe banner tap (order popup) trigger na ho — isliye swiped flag.
+  const swipedRef = React.useRef(false);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    swipedRef.current = false;
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current == null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(dx) < 40) return;
+    swipedRef.current = true;
+    setCurrentSlide((prev) =>
+      dx < 0 ? (prev + 1) % safeSlides.length : (prev - 1 + safeSlides.length) % safeSlides.length
+    );
+  };
 
   const slide = safeSlides[currentSlide % safeSlides.length];
 
@@ -136,6 +155,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpen
         }
         onMouseEnter={() => setIsPaused(true)}
         onMouseLeave={() => setIsPaused(false)}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
       >
         {/* Background Gradient & Food Image */}
         <div
@@ -146,8 +167,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpen
         {slide.fullImage && (
           <button
             id={`btn-hero-order-${slide.id}`}
-            onClick={() => onSelectFeatured(slide.productId)}
-            className="relative block w-full cursor-pointer"
+            onClick={() => {
+              if (swipedRef.current) {
+                swipedRef.current = false;
+                return;
+              }
+              onSelectFeatured(slide.productId);
+            }}
+            className="relative block w-full cursor-pointer touch-pan-y"
             aria-label={`${slide.titlePart1} ${slide.titleHighlight} ${slide.titlePart2}`}
           >
             <img
