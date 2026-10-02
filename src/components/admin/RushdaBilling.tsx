@@ -88,7 +88,11 @@ function load<T>(key: string, fallback: T): T {
     const raw = localStorage.getItem(key);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as T;
-    return parsed ?? fallback;
+    if (parsed == null) return fallback;
+    // Corrupt shape guard: array fallback mile to non-array parsed mat lao
+    // (warna archive.forEach jaise crash — Admin Panel Crash fix).
+    if (Array.isArray(fallback) && !Array.isArray(parsed)) return fallback;
+    return parsed;
   } catch {
     return fallback;
   }
@@ -180,14 +184,18 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
 
   const activeParty = parties.find((p) => p.id === partyId) ?? parties[0];
 
+  const safeMenu = Array.isArray(menuItems) ? menuItems : [];
+  const safeOrders = Array.isArray(orders) ? orders : [];
+  const safeArchive = Array.isArray(archive) ? archive : [];
+
   const categories = useMemo(
-    () => Array.from(new Set(menuItems.map((m) => m.category))).sort(),
-    [menuItems]
+    () => Array.from(new Set(safeMenu.map((m) => m.category))).sort(),
+    [safeMenu]
   );
 
   const filteredMenu = useMemo(() => {
     const q = itemSearch.trim().toLowerCase();
-    return menuItems.filter((m) => {
+    return safeMenu.filter((m) => {
       if (catFilter !== 'all' && m.category !== catFilter) return false;
       if (!q) return true;
       return (
@@ -196,7 +204,7 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
         m.description.toLowerCase().includes(q)
       );
     }).slice(0, 60);
-  }, [menuItems, itemSearch, catFilter]);
+  }, [safeMenu, itemSearch, catFilter]);
 
   const addLine = (menu: MenuItem, qty = 1, rateOverride?: number) => {
     const rate = rateOverride ?? menu.price;
@@ -367,7 +375,7 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
   const handleSaveItem = () => {
     const code = fCode.trim().toLowerCase().replace(/\s+/g, '-');
     if (!code || !fName.trim() || fRate === '') return;
-    const existing = menuItems.find((m) => m.id === code);
+    const existing = safeMenu.find((m) => m.id === code);
     const payload: MenuItem = {
       id: code,
       name: fName.trim(),
@@ -389,11 +397,11 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
 
   const masterRows = useMemo(() => {
     const q = masterSearch.trim().toLowerCase();
-    if (!q) return menuItems;
-    return menuItems.filter((m) =>
+    if (!q) return safeMenu;
+    return safeMenu.filter((m) =>
       m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q) || m.category.toLowerCase().includes(q)
     );
-  }, [menuItems, masterSearch]);
+  }, [safeMenu, masterSearch]);
 
   // ---- party / offer forms ----
   const [pName, setPName] = useState('');
@@ -439,14 +447,14 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
     const rows: RepRow[] = [];
     const inRange = (iso: string) => iso >= repFrom && iso <= repTo;
     // full-fidelity counter bills first
-    archive.forEach((b) => {
-      if (!inRange(b.billDateIso)) return;
+    safeArchive.forEach((b) => {
+      if (!b || !inRange(b.billDateIso ?? '')) return;
       if (repSaleType !== 'all' && b.saleType !== repSaleType) return;
       if (!repCash && b.saleType === 'CASH') return;
       if (!repCredit && b.saleType === 'CREDIT') return;
       if (!repCancel && b.status === 'CANCELLED') return;
-      if (repPhone && !b.partyPhone.includes(repPhone)) return;
-      b.lines.forEach((l) => {
+      if (repPhone && !(b.partyPhone || '').includes(repPhone)) return;
+      (Array.isArray(b.lines) ? b.lines : []).forEach((l) => {
         if (repCat !== 'all' && l.category !== repCat) return;
         if (repSize !== 'all' && l.size !== repSize) return;
         if (repItem && !l.name.toLowerCase().includes(repItem.toLowerCase())) return;
@@ -462,9 +470,9 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
       });
     });
     // online / legacy orders without archive entry (fallback, no double count)
-    const archivedIds = new Set(archive.map((a) => a.orderId));
-    orders.forEach((o) => {
-      if (archivedIds.has(o.id)) return;
+    const archivedIds = new Set(safeArchive.map((a) => a?.orderId));
+    safeOrders.forEach((o) => {
+      if (!o || archivedIds.has(o.id)) return;
       const iso = o.billDateIso ?? todayIso();
       if (!inRange(iso)) return;
       const st = o.saleType ?? (o.paymentStatus === 'PENDING' ? 'CREDIT' : 'CASH');
@@ -473,8 +481,9 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
       if (!repCredit && st === 'CREDIT') return;
       if (!repCancel && o.status === 'CANCELLED') return;
       if (repPhone && !(o.customerPhone || '').includes(repPhone)) return;
-      o.items.forEach((it) => {
-        const menu = menuItems.find((m) => m.name === it.name);
+      (Array.isArray(o.items) ? o.items : []).forEach((it) => {
+        if (!it) return;
+        const menu = safeMenu.find((m) => m.name === it.name);
         const cat = menu?.category ?? '-';
         const size = it.size ?? 'NA';
         if (repCat !== 'all' && cat !== repCat) return;
@@ -491,7 +500,7 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
       });
     });
     return rows;
-  }, [archive, orders, menuItems, repFrom, repTo, repSaleType, repCat, repItem, repSize, repPhone, repCash, repCredit, repCancel]);
+  }, [safeArchive, safeOrders, safeMenu, repFrom, repTo, repSaleType, repCat, repItem, repSize, repPhone, repCash, repCredit, repCancel]);
 
   const summaryRows = useMemo(() => {
     if (repView === 'detail') return reportRows;
