@@ -19,7 +19,6 @@ interface UiMsg {
   addId?: string | null;
 }
 
-const QUICK = ['Veg options?', 'Best deals?', '7 Cheese special?', 'Track my order?'];
 const AVATAR = '/images/chatbot-avatar.jpeg';
 const STORE_KEY = 'seven_cheese_chat_v1';
 const ADD_TAG = /\[ADD:([a-zA-Z0-9_-]+)\]\s*$/;
@@ -292,19 +291,6 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
               </div>
             )}
             <div ref={bottomRef} />
-          </div>
-
-          {/* Quick replies */}
-          <div className="px-3 pt-2 flex gap-1.5 overflow-x-auto no-scrollbar bg-slate-50">
-            {QUICK.map((q) => (
-              <button
-                key={q}
-                onClick={() => send(q)}
-                className="shrink-0 text-[11px] font-bold bg-white border border-red-200 text-[#ED1C24] px-2.5 py-1 rounded-full hover:bg-red-50 cursor-pointer"
-              >
-                {q}
-              </button>
-            ))}
           </div>
 
           {/* Input */}
