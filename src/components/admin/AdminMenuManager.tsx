@@ -69,7 +69,6 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
     { id: 'sides', label: 'Sides & Breads' },
     { id: 'drinks', label: 'Beverages' },
     { id: 'desserts', label: 'Desserts' },
-    { id: 'dips', label: 'Dips' },
   ];
 
   const filteredItems = menuItems.filter((item) => {
