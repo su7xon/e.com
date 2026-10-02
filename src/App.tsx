@@ -33,6 +33,7 @@ import { AddressModal } from './components/AddressModal';
 import { DealsModal } from './components/DealsModal';
 import { BottomNav } from './components/BottomNav';
 import { BillingPage } from './components/BillingPage';
+import { LocationPrompt } from './components/LocationPrompt';
 import { ChatAssistant } from './components/ChatAssistant';
 import { PwaInstallBanner, PwaOfflineBadge, PwaUpdatePrompt } from './components/PwaManager';
 import { AdminLayout } from './components/admin/AdminLayout';
@@ -733,11 +734,23 @@ export default function App() {
     );
   }, []);
 
-  // First mount pe ek bar auto-ask (sirf jab purana fix saved nahi hai)
-  useEffect(() => {
-    if (!userGps) requestGps();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Location prompt dismissal — once per session, so it never nags.
+  // The prompt card itself calls requestGps on Allow (user gesture = reliable browser prompt).
+  const [locPromptDismissed, setLocPromptDismissed] = useState(() => {
+    try {
+      return sessionStorage.getItem('seven_cheese_loc_prompt') === 'off';
+    } catch {
+      return false;
+    }
+  });
+  const dismissLocPrompt = () => {
+    setLocPromptDismissed(true);
+    try {
+      sessionStorage.setItem('seven_cheese_loc_prompt', 'off');
+    } catch {
+      // ignore
+    }
+  };
 
   // Badge distance priority: real GPS fix > selected address ka GPS pin > purana hardcoded distanceKm
   const outletInfo = useMemo(() => {
@@ -2092,6 +2105,16 @@ export default function App() {
           if (el) el.scrollIntoView({ behavior: 'smooth' });
         }}
       />
+
+      {/* First-visit location permission — Allow = GPS fix for outlet distance + routing */}
+      {!locPromptDismissed && (
+        <LocationPrompt
+          gpsState={gpsState}
+          hasFix={!!userGps}
+          onAllow={requestGps}
+          onDismiss={dismissLocPrompt}
+        />
+      )}
 
       {/* Bottom Sticky Navigation */}
       <BottomNav
