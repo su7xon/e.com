@@ -432,15 +432,25 @@ export default function App() {
             return next;
           });
         }
+        // Tombstoned ids Firestore me abhi bhi dikhe to dobara delete (dusre device / fail retry se bache).
+        const stillThere = remote.filter((r) => deletedIdsRef.current.includes(r.id));
+        stillThere.forEach((r) => deleteOrderFromFirestore(r.id).catch(() => {}));
         if (!remote.length) return;
         setAdminOrders((prev) => {
-          const remoteById = new Map(remote.map((o) => [o.id, o]));
-          const prevIds = new Set(prev.map((o) => o.id));
-          const mergedPrev = prev.map((o) =>
+          const tombs = new Set(deletedIdsRef.current);
+          const liveRemote = remote.filter((r) => !tombs.has(r.id));
+          if (!liveRemote.length && prev.every((o) => !tombs.has(o.id))) {
+            const cleaned = prev.filter((o) => !tombs.has(o.id));
+            return cleaned.length === prev.length ? prev : cleaned;
+          }
+          const remoteById = new Map(liveRemote.map((o) => [o.id, o]));
+          const cleanPrev = prev.filter((o) => !tombs.has(o.id));
+          const prevIds = new Set(cleanPrev.map((o) => o.id));
+          const mergedPrev = cleanPrev.map((o) =>
             remoteById.has(o.id) ? ({ ...o, ...remoteById.get(o.id) } as AdminOrder) : o
           );
-          const fresh = remote.filter((r) => !prevIds.has(r.id));
-          if (!fresh.length && mergedPrev.every((o, i) => o === prev[i])) return prev;
+          const fresh = liveRemote.filter((r) => !prevIds.has(r.id));
+          if (!fresh.length && mergedPrev.every((o, i) => o === cleanPrev[i]) && cleanPrev.length === prev.length) return prev;
           return [...fresh, ...mergedPrev];
         });
       },
@@ -474,13 +484,36 @@ export default function App() {
     safeSet('seven_cheese_coupons', JSON.stringify(coupons));
   }, [coupons]);
 
+  // Delete tombstones: delete kiya order Firestore fail / dusre device retry se wapas na aaye.
+  // Permanent list — merge/subscription har jagah ise filter karta hai.
+  const readTombstones = (): string[] => {
+    try {
+      const p = JSON.parse(localStorage.getItem('seven_cheese_deleted_orders') || '[]');
+      return Array.isArray(p) ? p.filter((x) => typeof x === 'string') : [];
+    } catch {
+      return [];
+    }
+  };
+  const [deletedOrderIds, setDeletedOrderIds] = useState<string[]>(readTombstones);
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>(() => {
+    try {
+      const p = JSON.parse(localStorage.getItem('seven_cheese_pending_deletes') || '[]');
+      return Array.isArray(p) ? p.filter((x) => typeof x === 'string') : [];
+    } catch {
+      return [];
+    }
+  });
+
   // Admin Live Orders State (starts empty, only real orders placed by customers)
   const [adminOrders, setAdminOrders] = useState<AdminOrder[]>(() => {
+    const tombs = new Set(readTombstones());
     const saved = localStorage.getItem('seven_cheese_admin_orders');
     if (!saved) return [];
     try {
       const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) ? parsed.filter((o: AdminOrder) => !o.id.startsWith('ord-70')) : [];
+      return Array.isArray(parsed)
+        ? parsed.filter((o: AdminOrder) => !o.id.startsWith('ord-70') && !tombs.has(o.id))
+        : [];
     } catch {
       return [];
     }
@@ -495,6 +528,62 @@ export default function App() {
   adminOrdersRef.current = adminOrders;
   const syncStatusRef = React.useRef(orderSyncStatus);
   syncStatusRef.current = orderSyncStatus;
+  const deletedIdsRef = React.useRef(deletedOrderIds);
+  deletedIdsRef.current = deletedOrderIds;
+
+  // Shared delete: local + tombstone + Firestore. Fail ho to retry queue me,
+  // taaki refresh / dusre device se order wapas na aaye.
+  const handleDeleteAdminOrder = (id: string) => {
+    setDeletedOrderIds((prev) => {
+      const next = prev.includes(id) ? prev : [...prev, id].slice(-500);
+      safeSet('seven_cheese_deleted_orders', JSON.stringify(next));
+      return next;
+    });
+    setPendingDeleteIds((prev) => {
+      const next = prev.includes(id) ? prev : [...prev, id];
+      safeSet('seven_cheese_pending_deletes', JSON.stringify(next));
+      return next;
+    });
+    setAdminOrders((prev) => prev.filter((o) => o.id !== id));
+    setPendingOrderIds((prev) => {
+      if (!prev.includes(id)) return prev;
+      const next = prev.filter((x) => x !== id);
+      safeSet('seven_cheese_pending_orders', JSON.stringify(next));
+      return next;
+    });
+    deleteOrderFromFirestore(id)
+      .then(() => {
+        setPendingDeleteIds((prev) => {
+          const next = prev.filter((x) => x !== id);
+          safeSet('seven_cheese_pending_deletes', JSON.stringify(next));
+          return next;
+        });
+      })
+      .catch((err) => {
+        console.error('[orders] delete failed, will retry:', err);
+        setOrderSyncStatus('error');
+        setOrderSyncError(err?.code || err?.message || 'delete-failed');
+      });
+  };
+
+  // Retry pending Firestore deletes every 10s (offline / rules fail case).
+  useEffect(() => {
+    if (!pendingDeleteIds.length) return;
+    const t = window.setInterval(() => {
+      pendingDeleteIds.forEach((id) => {
+        deleteOrderFromFirestore(id)
+          .then(() => {
+            setPendingDeleteIds((prev) => {
+              const next = prev.filter((x) => x !== id);
+              safeSet('seven_cheese_pending_deletes', JSON.stringify(next));
+              return next;
+            });
+          })
+          .catch(() => {});
+      });
+    }, 10000);
+    return () => window.clearInterval(t);
+  }, [pendingDeleteIds.length]);
 
   // Browser se direct REST ping — SDK timeout ka asli karan badge me likh deta hai:
   // http-200 = net+rules OK | http-403 = Rules locked | http-404 = Firestore DB bani hi nahi | net-blocked = adblock/firewall/ISP
@@ -1176,16 +1265,7 @@ export default function App() {
           setAdminOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
           updateOrderStatusInFirestore(id, status).catch(() => {});
         }}
-        onDeleteOrder={(id) => {
-          setAdminOrders((prev) => prev.filter((o) => o.id !== id));
-          setPendingOrderIds((prev) => {
-            if (!prev.includes(id)) return prev;
-            const next = prev.filter((x) => x !== id);
-            safeSet('seven_cheese_pending_orders', JSON.stringify(next));
-            return next;
-          });
-          deleteOrderFromFirestore(id).catch(() => {});
-        }}
+        onDeleteOrder={handleDeleteAdminOrder}
         onAddItem={(item) => {
           // Shared catalog: yahan add hoga to dono outlets + customer store me dikhega.
           setMenuItems((prev) => [item, ...prev]);
@@ -1301,16 +1381,7 @@ export default function App() {
               setAdminOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
               updateOrderStatusInFirestore(id, status).catch(() => {});
             }}
-            onDeleteOrder={(id) => {
-              setAdminOrders((prev) => prev.filter((o) => o.id !== id));
-              setPendingOrderIds((prev) => {
-                if (!prev.includes(id)) return prev;
-                const next = prev.filter((x) => x !== id);
-                safeSet('seven_cheese_pending_orders', JSON.stringify(next));
-                return next;
-              });
-              deleteOrderFromFirestore(id).catch(() => {});
-            }}
+            onDeleteOrder={handleDeleteAdminOrder}
           />
         </main>
 
