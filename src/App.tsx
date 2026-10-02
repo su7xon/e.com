@@ -129,7 +129,13 @@ export default function App() {
   const getRouteView = (): 'admin' | 'delivery' | null => {
     try {
       const p = window.location.pathname.replace(/\/+$/, '') || '/';
-      if (p === '/admin') return 'admin';
+      // Legacy printed QRs point at /admin?outlet=.. — those are customers, open the store.
+      // Real admin entry is plain /admin (no QR params).
+      if (p === '/admin') {
+        const q = new URLSearchParams(window.location.search);
+        if (q.has('outlet') || q.has('table')) return null;
+        return 'admin';
+      }
       if (p === '/delivery' || p === '/rider') return 'delivery';
     } catch {
       // ignore
@@ -140,9 +146,17 @@ export default function App() {
   const [orderType, setOrderType] = useState<OrderType>('DELIVERY');
   const [activeTab, setActiveTab] = useState<'menu' | 'reorder' | 'makeyourown' | 'combos' | 'profile'>('menu');
   const [currentView, setCurrentView] = useState<AppView>(() => {
-    // URL route sabse pehle — link se khula to wahi view.
+    // URL route first — a link always wins over the saved view.
     const routed = getRouteView();
     if (routed) return routed;
+    // QR scan (/?outlet=.. or legacy /admin?outlet=..) always opens the store,
+    // even if this browser last showed the admin panel.
+    try {
+      const q = new URLSearchParams(window.location.search);
+      if (q.has('outlet') || q.has('table')) return 'home';
+    } catch {
+      // ignore
+    }
     try {
       const saved = sessionStorage.getItem('seven_cheese_current_view');
       if (saved === 'admin' || saved === 'billing' || saved === 'delivery') return saved;

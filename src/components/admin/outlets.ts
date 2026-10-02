@@ -67,13 +67,10 @@ export function regenerateOutletQrToken(outletId: string): string {
   return t;
 }
 
-/** Customer scan URL — is link se aaya order hamesha isi outlet ka banega. */
+/** Customer scan URL — always the store root (/), never /admin, so scanning opens the menu, not the admin panel. */
 export function getOutletQrUrl(outletId: string, token?: string): string {
   const t = token ?? getOutletQrToken(outletId);
-  const base =
-    typeof window !== 'undefined'
-      ? window.location.origin + window.location.pathname
-      : '/';
+  const base = typeof window !== 'undefined' ? window.location.origin + '/' : '/';
   return `${base}?outlet=${encodeURIComponent(outletId)}&qrt=${encodeURIComponent(t)}`;
 }
 
@@ -218,13 +215,10 @@ export function getTableById(outletId: string, tableId: string): OutletTable | u
   return getOutletTables(outletId).find((t) => t.id === tableId);
 }
 
-/** Table QR link — scan karne wala order hamesha isi outlet + isi table ke naam pe banega. */
+/** Table QR link — always the store root (/). Scanning opens the menu locked to this outlet + table, never the admin panel. */
 export function getTableQrUrl(outletId: string, tableId: string, token?: string): string {
   const t = token ?? getOutletQrToken(outletId);
-  const base =
-    typeof window !== 'undefined'
-      ? window.location.origin + window.location.pathname
-      : '/';
+  const base = typeof window !== 'undefined' ? window.location.origin + '/' : '/';
   return `${base}?outlet=${encodeURIComponent(outletId)}&qrt=${encodeURIComponent(t)}&table=${encodeURIComponent(tableId)}`;
 }
 
