@@ -20,7 +20,12 @@ import {
   SIZE_PRICE_MODIFIERS,
   CRUST_PRICE_MODIFIERS
 } from './data/mockData';
+import { isOfferActive, isScheduleActive, SLIDE_SCHEDULES } from './utils/offerSchedule';
 import { Navbar } from './components/Navbar';
+import { OffersStrip } from './components/OffersStrip';
+import { OutletPicker } from './components/OutletPicker';
+import { ProfileDrawer, CustomerProfile } from './components/ProfileDrawer';
+import { FilterSheet } from './components/FilterSheet';
 import { HeroBanner, DEFAULT_SLIDES, BannerSlide } from './components/HeroBanner';
 import { CravingCategories } from './components/CravingCategories';
 import { CategoryMarquee } from './components/CategoryMarquee';
@@ -40,7 +45,7 @@ import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminLogin } from './components/admin/AdminLogin';
 import { AdminDelivery } from './components/admin/AdminDelivery';
 import { AdminOrder, SEED_ADMIN_ORDERS } from './components/admin/adminData';
-import { Outlet, getOutletById, findNearestOutlet, resolveOutletForOrder, parseOutletQrParam, parseTableQrParam, getTableById } from './components/admin/outlets';
+import { Outlet, listOutletsByDistance, getOutletById, findNearestOutlet, resolveOutletForOrder, parseOutletQrParam, parseTableQrParam, getTableById } from './components/admin/outlets';
 import {
   saveMenuItemToFirestore,
   deleteMenuItemFromFirestore,
@@ -261,7 +266,7 @@ export default function App() {
       const savedById = new Map(parsed.map((s: BannerSlide) => [s.id, s]));
       return DEFAULT_SLIDES.map((d) => {
         const s = savedById.get(d.id) as BannerSlide | undefined;
-        return s?.image ? { ...d, image: s.image } : d;
+        return s ? { ...d, image: s.image || d.image, schedule: s.schedule ?? d.schedule } : d;
       });
     } catch {
       return DEFAULT_SLIDES;
@@ -283,7 +288,7 @@ export default function App() {
         .map((c: CategoryItem) => {
           const d = defaultsById.get(c.id);
           if (!d) return c;
-          return { ...d, ...c, image: c.image || d.image, bannerImage: (c as CategoryItem).bannerImage || d.bannerImage || d.image };
+          return { ...d, ...c, name: c.name === 'Desserts & Dips' ? d.name : c.name, image: (c.image === '/images/menu/p-dip-cheese.jpg' || c.image === '/images/dips.svg' ? d.image : c.image) || d.image, bannerImage: (c as CategoryItem).bannerImage || d.bannerImage || d.image };
         })
         .concat(CRAVING_CATEGORIES.filter((d) => !parsed.some((c: CategoryItem) => c.id === d.id)));
     } catch {
@@ -750,6 +755,27 @@ export default function App() {
     return resolveOutletForOrder(currentAddress.lat, currentAddress.lng);
   }, [userGps, currentAddress.lat, currentAddress.lng]);
 
+  // Takeaway / Dine-in: customer picks a store (nearest first); the choice is remembered.
+  const [isOutletPickerOpen, setIsOutletPickerOpen] = useState(false);
+  const [pickupOutletId, setPickupOutletId] = useState<string | null>(() => {
+    try {
+      const id = localStorage.getItem('seven_cheese_pickup_outlet');
+      return id && getOutletById(id) ? id : null;
+    } catch {
+      return null;
+    }
+  });
+  const pickupLoc =
+    userGps ??
+    (typeof currentAddress.lat === 'number' && typeof currentAddress.lng === 'number'
+      ? { lat: currentAddress.lat, lng: currentAddress.lng }
+      : null);
+  const outletChoices = useMemo(
+    () => listOutletsByDistance(pickupLoc?.lat, pickupLoc?.lng),
+    [pickupLoc?.lat, pickupLoc?.lng],
+  );
+  const pickupOutlet = (pickupOutletId ? getOutletById(pickupOutletId) : null) ?? outletChoices[0]?.outlet ?? null;
+
   // Cart & Customization State
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
     const saved = localStorage.getItem('seven_cheese_cart') || localStorage.getItem('dominos_cart');
@@ -761,6 +787,23 @@ export default function App() {
     }
   });
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+
+  // Clock for day/time scheduled offers (Tuesday, Friday, lunch 11am-2pm); ticks every minute.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  const activeCoupons = useMemo(() => coupons.filter((c) => isOfferActive(c, now)), [coupons, now]);
+  const activeMenuItems = useMemo(() => menuItems.filter((m) => isOfferActive(m, now)), [menuItems, now]);
+  const activeSlides = useMemo(() => {
+    const list = heroSlides.filter((s) => isScheduleActive(SLIDE_SCHEDULES[s.schedule ?? 'always'], now));
+    return list.length > 0 ? list : heroSlides.filter((s) => !s.schedule || s.schedule === 'always');
+  }, [heroSlides, now]);
+  // An applied coupon that goes out of its window is dropped automatically.
+  useEffect(() => {
+    if (appliedCoupon && !isOfferActive(appliedCoupon, now)) setAppliedCoupon(null);
+  }, [appliedCoupon, now]);
 
   // Past Orders & Active Order
   const [pastOrders, setPastOrders] = useState<ActiveOrder[]>(() => {
@@ -830,6 +873,7 @@ export default function App() {
   const [vegOnly, setVegOnly] = useState(false);
   const [nonVegOnly, setNonVegOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'popular' | 'price-low' | 'price-high' | 'rating'>('popular');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   // Modals Visibility
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
@@ -839,6 +883,25 @@ export default function App() {
   const [quickViewItem, setQuickViewItem] = useState<MenuItem | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isOrderTrackerOpen, setIsOrderTrackerOpen] = useState(false);
+
+  // Header profile icon → account drawer. Name/phone saved from checkout or edited in the drawer.
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(() => {
+    try {
+      const saved = localStorage.getItem('seven_cheese_customer');
+      return saved ? (JSON.parse(saved) as CustomerProfile) : null;
+    } catch {
+      return null;
+    }
+  });
+  const saveCustomerProfile = (p: CustomerProfile) => {
+    setCustomerProfile(p);
+    try {
+      localStorage.setItem('seven_cheese_customer', JSON.stringify(p));
+    } catch {
+      // ignore
+    }
+  };
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isDealsModalOpen, setIsDealsModalOpen] = useState(false);
 
@@ -980,17 +1043,18 @@ export default function App() {
 
   const handlePlaceOrder = (notes: string, paymentMethod?: string, delivery?: DeliveryDetails) => {
     const subtotal = cartTotal;
-    const isFreeDel = subtotal >= 99 || appliedCoupon?.code === 'FREEDEL';
+    const couponValid = appliedCoupon && isOfferActive(appliedCoupon, new Date()) ? appliedCoupon : null;
+    const isFreeDel = subtotal >= 99 || couponValid?.code === 'FREEDEL';
     const deliveryFee = orderType === 'DELIVERY' ? (isFreeDel ? 0 : 40) : 0;
     const taxesAndCharges = Math.round(subtotal * 0.05 + 15);
     
     let discount = 0;
-    if (appliedCoupon && subtotal >= appliedCoupon.minOrder) {
-      if (appliedCoupon.discountType === 'percentage') {
-        const calc = Math.round((subtotal * appliedCoupon.value) / 100);
-        discount = appliedCoupon.maxDiscount ? Math.min(calc, appliedCoupon.maxDiscount) : calc;
+    if (couponValid && subtotal >= couponValid.minOrder) {
+      if (couponValid.discountType === 'percentage') {
+        const calc = Math.round((subtotal * couponValid.value) / 100);
+        discount = couponValid.maxDiscount ? Math.min(calc, couponValid.maxDiscount) : calc;
       } else {
-        discount = appliedCoupon.value;
+        discount = couponValid.value;
       }
     }
     const finalTotal = Math.max(0, subtotal + deliveryFee + taxesAndCharges - discount);
@@ -1017,11 +1081,17 @@ export default function App() {
     };
 
     // Assign outlet: QR scan lock wins, else nearest from GPS, else Outlet 1.
-    const orderOutlet = qrOutlet ?? resolveOutletForOrder(currentAddress.lat, currentAddress.lng).outlet;
+    const orderOutlet =
+      qrOutlet ??
+      (orderType !== 'DELIVERY' ? pickupOutlet : null) ??
+      resolveOutletForOrder(currentAddress.lat, currentAddress.lng).outlet;
 
     // Real receiver details from checkout (Domino's-style form) — no more dummy data.
     const receiverName = delivery?.name?.trim() || 'Walk-in Customer';
     const receiverPhone = delivery?.phone?.trim() || '';
+    if (delivery?.name?.trim() && receiverPhone) {
+      saveCustomerProfile({ name: delivery.name.trim(), phone: receiverPhone });
+    }
     const orderLandmark = delivery?.landmark?.trim() || '';
     const fullDeliveryAddress =
       `${currentAddress.address}, ${currentAddress.city} - ${currentAddress.pincode}` +
@@ -1097,7 +1167,7 @@ export default function App() {
 
   // Filtered Products (menu dono outlets me same — shared catalog)
   const filteredProducts = useMemo(() => {
-    return menuItems.filter((item) => {
+    return activeMenuItems.filter((item) => {
       // Search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -1113,20 +1183,23 @@ export default function App() {
 
       // Category filter
       if (selectedCategory !== 'all') {
-        if (selectedCategory === 'signature-7-cheese' && item.category !== 'signature-7-cheese') return false;
-        if (selectedCategory === 'veg-pizza' && item.category !== 'veg-pizza' && item.category !== 'signature-7-cheese') return false;
-        if (selectedCategory === 'chicken-pizza' && item.category !== 'chicken-pizza' && item.category !== 'non-veg-pizza') return false;
-        if (selectedCategory === 'non-veg-pizza' && item.category !== 'non-veg-pizza' && item.category !== 'chicken-pizza') return false;
-        if (selectedCategory === 'pan-pizza' && item.category !== 'pan-pizza') return false;
-        if (selectedCategory === 'burgers' && item.category !== 'burgers') return false;
-        if (selectedCategory === 'wraps' && item.category !== 'wraps') return false;
-        if (selectedCategory === 'starters-sides' && item.category !== 'starters-sides' && item.category !== 'sides') return false;
-        if (selectedCategory === 'sides' && item.category !== 'sides' && item.category !== 'starters-sides') return false;
-        if (selectedCategory === 'pasta' && item.category !== 'pasta') return false;
-        if (selectedCategory === 'chicken-corner' && item.category !== 'chicken-corner') return false;
-        if (selectedCategory === 'drinks' && item.category !== 'drinks') return false;
-        if (selectedCategory === 'desserts' && item.category !== 'desserts') return false;
-        if (selectedCategory === 'combos' && item.category !== 'combos') return false;
+        // Dips are their own category; older cached/Firestore menus still tag them starters-sides.
+        const cat = item.id.startsWith('p-dip-') || item.subCategoryTitle === 'Signature Dips' ? 'dips' : item.category;
+        if (selectedCategory === 'signature-7-cheese' && cat !== 'signature-7-cheese') return false;
+        if (selectedCategory === 'veg-pizza' && cat !== 'veg-pizza' && cat !== 'signature-7-cheese') return false;
+        if (selectedCategory === 'chicken-pizza' && cat !== 'chicken-pizza' && cat !== 'non-veg-pizza') return false;
+        if (selectedCategory === 'non-veg-pizza' && cat !== 'non-veg-pizza' && cat !== 'chicken-pizza') return false;
+        if (selectedCategory === 'pan-pizza' && cat !== 'pan-pizza') return false;
+        if (selectedCategory === 'burgers' && cat !== 'burgers') return false;
+        if (selectedCategory === 'wraps' && cat !== 'wraps') return false;
+        if (selectedCategory === 'starters-sides' && cat !== 'starters-sides' && cat !== 'sides') return false;
+        if (selectedCategory === 'sides' && cat !== 'sides' && cat !== 'starters-sides') return false;
+        if (selectedCategory === 'pasta' && cat !== 'pasta') return false;
+        if (selectedCategory === 'chicken-corner' && cat !== 'chicken-corner') return false;
+        if (selectedCategory === 'drinks' && cat !== 'drinks') return false;
+        if (selectedCategory === 'desserts' && cat !== 'desserts') return false;
+        if (selectedCategory === 'combos' && cat !== 'combos') return false;
+        if (selectedCategory === 'dips' && cat !== 'dips') return false;
       }
 
       return true;
@@ -1136,20 +1209,20 @@ export default function App() {
       if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0);
       return 0; // popular/default
     });
-  }, [menuItems, searchQuery, vegOnly, nonVegOnly, selectedCategory, sortBy]);
+  }, [activeMenuItems, searchQuery, vegOnly, nonVegOnly, selectedCategory, sortBy]);
 
   // Amazon-style live suggestions: naam + description + toppings me match, top 6
   const searchSuggestions = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return [];
-    return menuItems
+    return activeMenuItems
       .filter((m) => {
         if (m.name.toLowerCase().includes(q)) return true;
         if (m.description.toLowerCase().includes(q)) return true;
         return m.toppings?.some((t) => t.toLowerCase().includes(q)) ?? false;
       })
       .slice(0, 6);
-  }, [menuItems, searchQuery]);
+  }, [activeMenuItems, searchQuery]);
 
   const handleSelectSuggestion = (item: MenuItem) => {
     // Product card tap jaisa behavior: pizza = customize modal, baaki = quick view
@@ -1316,6 +1389,9 @@ export default function App() {
         onUpdateSlideImage={(id, image) => {
           setHeroSlides((prev) => prev.map((s) => (s.id === id ? { ...s, image } : s)));
         }}
+        onUpdateSlideSchedule={(id, schedule) => {
+          setHeroSlides((prev) => prev.map((s) => (s.id === id ? { ...s, schedule } : s)));
+        }}
         categories={storeCategories}
         onUpdateCategoryImage={(id, image, field = 'image') => {
           setStoreCategories((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: image } : c)));
@@ -1430,6 +1506,39 @@ export default function App() {
         suggestions={searchSuggestions}
         onSelectSuggestion={handleSelectSuggestion}
         isTableLocked={!!qrTable}
+        pickupStoreName={pickupOutlet?.shortName}
+        onPickStore={() => !qrOutlet && setIsOutletPickerOpen(true)}
+        onOpenProfile={() => setIsProfileOpen(true)}
+      />
+      <ProfileDrawer
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        profile={customerProfile}
+        onSaveProfile={saveCustomerProfile}
+        hasActiveOrder={!!activeOrder}
+        onOpenDeals={() => setIsDealsModalOpen(true)}
+        onTrackOrder={() => setIsOrderTrackerOpen(true)}
+        onOrderHistory={() => {
+          setActiveTab('reorder');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onManageAddresses={() => setIsAddressModalOpen(true)}
+        onOpenChat={() => window.dispatchEvent(new Event('seven-cheese:open-chat'))}
+      />
+      <OutletPicker
+        isOpen={isOutletPickerOpen}
+        mode={orderType === 'DINE_IN' ? 'DINE_IN' : 'TAKEAWAY'}
+        outlets={outletChoices}
+        selectedId={pickupOutlet?.id ?? null}
+        hasLocation={!!pickupLoc}
+        locating={gpsState === 'locating'}
+        onDetectLocation={requestGps}
+        onSelect={(id) => {
+          setPickupOutletId(id);
+          try { localStorage.setItem('seven_cheese_pickup_outlet', id); } catch { /* ignore */ }
+          setIsOutletPickerOpen(false);
+        }}
+        onClose={() => setIsOutletPickerOpen(false)}
       />
 
       {/* Main Content Areas based on active tab */}
@@ -1437,10 +1546,11 @@ export default function App() {
         <main className="w-full">
           {/* Hero Banner with 7 Cheese Pizza carousel promotions */}
           <HeroBanner
-            slides={heroSlides}
+            slides={activeSlides}
             onSelectFeatured={handleSelectFeatured}
             onOpenDeals={() => setIsDealsModalOpen(true)}
           />
+          <OffersStrip coupons={activeCoupons} onView={() => setIsDealsModalOpen(true)} />
 
           {/* Browse Our Category - Moving Marquee */}
           <CategoryMarquee
@@ -1493,49 +1603,6 @@ export default function App() {
                 )}
               </div>
 
-              {/* Quick Filters (Veg / Non-Veg & Sort) */}
-              <div className="flex items-center gap-2.5 text-xs font-semibold text-slate-600 ml-auto">
-                <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                  <button
-                    id="btn-quick-veg"
-                    onClick={() => {
-                      setVegOnly(!vegOnly);
-                      if (nonVegOnly) setNonVegOnly(false);
-                    }}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                      vegOnly ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-700 hover:text-emerald-700'
-                    }`}
-                  >
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
-                    Veg
-                  </button>
-                  <button
-                    id="btn-quick-nonveg"
-                    onClick={() => {
-                      setNonVegOnly(!nonVegOnly);
-                      if (vegOnly) setVegOnly(false);
-                    }}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                      nonVegOnly ? 'bg-red-600 text-white shadow-xs' : 'text-slate-700 hover:text-red-700'
-                    }`}
-                  >
-                    <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />
-                    Non-Veg
-                  </button>
-                </div>
-
-                <select
-                  id="select-sort-by"
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as any)}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 focus:outline-none cursor-pointer"
-                >
-                  <option value="popular">Popularity</option>
-                  <option value="price-low">Price: Low to High</option>
-                  <option value="price-high">Price: High to Low</option>
-                  <option value="rating">Top Rated</option>
-                </select>
-              </div>
 
             </div>
           </div>
@@ -1563,7 +1630,7 @@ export default function App() {
                     : selectedCategory === 'wraps'
                     ? 'Signature Wraps'
                     : selectedCategory === 'starters-sides'
-                    ? 'Garlic Breads, Starters & Dips'
+                    ? 'Garlic Breads & Starters'
                     : selectedCategory === 'pasta'
                     ? 'Italian Pastas'
                     : selectedCategory === 'chicken-corner'
@@ -1572,6 +1639,8 @@ export default function App() {
                     ? 'Popping Boba Drinks, Shakes & Mocktails'
                     : selectedCategory === 'desserts'
                     ? 'Molten Desserts'
+                    : selectedCategory === 'dips'
+                    ? 'Signature Dips'
                     : selectedCategory === 'combos'
                     ? 'Party Combos & Value Meals'
                     : 'Our Special Pizzas & Bestsellers'}
@@ -1631,47 +1700,6 @@ export default function App() {
                     />
                   );
                 })}
-              </div>
-            )}
-
-            {/* Special Section: 7 Cheese Signature Feature */}
-            {selectedCategory === 'all' && (
-              <div className="mt-12 bg-gradient-to-r from-amber-500/10 via-red-500/10 to-amber-500/10 rounded-3xl border border-amber-300/40 p-5 sm:p-8 shadow-sm">
-                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-                  <div className="flex-1 text-center md:text-left">
-                    <span className="bg-amber-400 text-slate-950 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">
-                      🧀 House Speciality
-                    </span>
-                    <h3 className="text-2xl sm:text-3xl font-black text-slate-900 mt-2">
-                      Original 7 Cheese Signature Pizza
-                    </h3>
-                    <p className="text-sm text-slate-600 mt-1 max-w-lg">
-                      Crafted with a luxurious blend of Mozzarella, Cheddar, Gouda, Parmesan, Provolone, Fontina & Ricotta. Finished with fresh basil and herb garlic glaze.
-                    </p>
-                    <div className="mt-4 flex items-center justify-center md:justify-start gap-4">
-                      <span className="text-2xl font-black text-[#ED1C24] font-mono">₹329</span>
-                      <button
-                        id="btn-7cheese-special-add"
-                        onClick={() => {
-                          const item = MENU_ITEMS.find((m) => m.id === 'p-7cheese-signature');
-                          if (item) handleOpenCustomize(item);
-                        }}
-                        className="bg-[#ED1C24] hover:bg-[#c91430] text-white font-black px-6 py-2.5 rounded-xl shadow-md text-xs sm:text-sm transition-all cursor-pointer"
-                      >
-                        Customise & Order
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="w-full max-w-sm aspect-16/10 rounded-2xl overflow-hidden shadow-lg border-2 border-white">
-                    <img
-                      src="https://images.unsplash.com/photo-1513104890138-7c749659a591?w=700&auto=format&fit=crop&q=80"
-                      alt="7 Cheese Pizza"
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  </div>
-                </div>
               </div>
             )}
 
@@ -1944,57 +1972,6 @@ export default function App() {
       )}
 
       {/* Profile Tab view */}
-      {activeTab === 'profile' && (
-        <div className="max-w-4xl mx-auto px-4 py-8 space-y-4">
-          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-md flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-slate-900 text-white flex items-center justify-center font-black text-xl shrink-0">
-              7
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-xl font-black text-slate-900 tracking-tight">
-                My Profile
-              </h1>
-              <p className="text-xs text-slate-500 mt-0.5 truncate">
-                {currentAddress.address}, {currentAddress.city} • {pastOrders.length} {pastOrders.length === 1 ? 'order' : 'orders'}
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs">
-              <h2 className="text-sm font-black text-slate-900">Saved Addresses</h2>
-              <p className="text-xs text-slate-500 mt-1">
-                {addresses.length} {addresses.length === 1 ? 'address' : 'addresses'} saved for faster checkout.
-              </p>
-              <button
-                id="btn-profile-manage-addresses"
-                onClick={() => setIsAddressModalOpen(true)}
-                className="mt-3 bg-slate-900 hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer"
-              >
-                Manage Addresses
-              </button>
-            </div>
-
-            <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs">
-              <h2 className="text-sm font-black text-slate-900">Order History</h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Track, reorder or view bills from past orders.
-              </p>
-              <button
-                id="btn-profile-view-orders"
-                onClick={() => {
-                  setActiveTab('reorder');
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="mt-3 bg-[#ED1C24] hover:bg-[#c91430] text-white font-black px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer"
-              >
-                View Past Orders
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Modals and Drawers */}
       <CustomizeModal
         item={customizingItem}
@@ -2007,7 +1984,7 @@ export default function App() {
         item={quickViewItem}
         isOpen={isQuickViewOpen}
         onClose={() => setIsQuickViewOpen(false)}
-        menuItems={menuItems}
+        menuItems={activeMenuItems}
         onAddToCart={handleSimpleAddToCart}
         onEatNow={handleEatNow}
         onOpenCustomize={handleOpenCustomize}
@@ -2044,8 +2021,8 @@ export default function App() {
           else handleSimpleAddToCart(it);
         }}
         onUpgradeItem={handleUpgradeCartItem}
-        availableCoupons={coupons}
-        availableMenuItems={menuItems}
+        availableCoupons={activeCoupons}
+        availableMenuItems={activeMenuItems}
       />
 
       <OrderTrackerModal
@@ -2078,13 +2055,13 @@ export default function App() {
           setIsCartOpen(true);
         }}
         appliedCouponCode={appliedCoupon?.code}
-        coupons={coupons}
+        coupons={activeCoupons}
       />
 
       {/* Floating pizza assistant (Groq) */}
       <ChatAssistant
-        menuItems={menuItems}
-        coupons={coupons}
+        menuItems={activeMenuItems}
+        coupons={activeCoupons}
         onAddToCart={handleSimpleAddToCart}
         onOpenCustomize={handleOpenCustomize}
         onOpenCart={() => setIsCartOpen(true)}
@@ -2096,7 +2073,7 @@ export default function App() {
       />
 
       {/* First-visit location permission — Allow = GPS fix for outlet distance + routing */}
-      {!locPromptDismissed && (
+      {!locPromptDismissed && !qrOutletId && (
         <LocationPrompt
           gpsState={gpsState}
           hasFix={!!userGps}
@@ -2113,8 +2090,27 @@ export default function App() {
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         cartCount={cartItemCount}
+        cartThumbs={cartItems.map((c) => c.image)}
         cartTotal={cartTotal}
         onOpenCart={() => setIsCartOpen(true)}
+        onOpenFilters={() => {
+          setActiveTab('menu');
+          setIsFilterOpen(true);
+        }}
+        filtersActive={vegOnly || nonVegOnly || sortBy !== 'popular'}
+      />
+      <FilterSheet
+        isOpen={isFilterOpen}
+        onClose={() => {
+          setIsFilterOpen(false);
+          document.getElementById('menu-items-section')?.scrollIntoView({ behavior: 'smooth' });
+        }}
+        vegOnly={vegOnly}
+        setVegOnly={setVegOnly}
+        nonVegOnly={nonVegOnly}
+        setNonVegOnly={setNonVegOnly}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
       />
 
       {/* PWA: install prompt, update prompt, offline badge */}

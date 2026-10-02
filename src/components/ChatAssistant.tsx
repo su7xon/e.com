@@ -116,6 +116,12 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
   onSelectCategory,
 }) => {
   const [open, setOpen] = useState(false);
+  // Other UI (e.g. the profile drawer's "Need Help?") opens the chat via this event.
+  useEffect(() => {
+    const openChat = () => setOpen(true);
+    window.addEventListener('seven-cheese:open-chat', openChat);
+    return () => window.removeEventListener('seven-cheese:open-chat', openChat);
+  }, []);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [unread, setUnread] = useState(0);

@@ -86,12 +86,20 @@ export const CRAVING_CATEGORIES: CategoryItem[] = [
   },
   {
     id: 'cat-desserts',
-    name: 'Desserts & Dips',
+    name: 'Desserts',
     tag: 'MOLTEN',
     startingPrice: 30,
     image: '/images/desert.png',
     bannerImage: '/images/menu/p-dessert-choco-lava.jpg',
     filterKey: 'desserts',
+  },
+  {
+    id: 'cat-dips',
+    name: 'Dips',
+    startingPrice: 30,
+    image: '/images/dips.png',
+    bannerImage: '/images/menu/p-dip-cheese.jpg',
+    filterKey: 'dips',
   },
   {
     id: 'cat-combos',
@@ -1341,7 +1349,7 @@ export const MENU_ITEMS: MenuItem[] = [
   {
     id: 'p-dip-hot-garlic',
     name: 'Hot Garlic Dip',
-    category: 'starters-sides',
+    category: 'dips',
     subCategoryTitle: 'Signature Dips',
     isVeg: true,
     price: 30,
@@ -1354,7 +1362,7 @@ export const MENU_ITEMS: MenuItem[] = [
   {
     id: 'p-dip-cheese',
     name: 'Cheese Dip',
-    category: 'starters-sides',
+    category: 'dips',
     subCategoryTitle: 'Signature Dips',
     isVeg: true,
     price: 30,
@@ -1368,7 +1376,7 @@ export const MENU_ITEMS: MenuItem[] = [
   {
     id: 'p-dip-schezwan',
     name: 'Schezwan Dip',
-    category: 'starters-sides',
+    category: 'dips',
     subCategoryTitle: 'Signature Dips',
     isVeg: true,
     price: 30,
@@ -1381,7 +1389,7 @@ export const MENU_ITEMS: MenuItem[] = [
   {
     id: 'p-dip-honey-mustard',
     name: 'Honey Mustard Dip',
-    category: 'starters-sides',
+    category: 'dips',
     subCategoryTitle: 'Signature Dips',
     isVeg: true,
     price: 30,
@@ -1975,21 +1983,6 @@ export const MENU_ITEMS: MenuItem[] = [
   // 12. OFFER COMBOS (Admin Offers screen wale)
   // ==========================================
   {
-    id: 'p-offer-funday-friday',
-    name: 'Funday Friday BOGO',
-    category: 'combos',
-    subCategoryTitle: 'Offer Combos',
-    isVeg: true,
-    price: 299,
-    originalPrice: 598,
-    description: 'BUY ONE GET ONE FREE on Medium Pizzas. Friday only · Dine-in.',
-    image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop&q=80',
-    badge: 'BESTSELLER',
-    rating: 4.9,
-    reviewsCount: 3200,
-    isCustomizable: false,
-  },
-  {
     id: 'p-offer-lunch-regular-veg',
     name: 'Lunch Combo — Regular Veg',
     category: 'combos',
@@ -2066,11 +2059,12 @@ export const MENU_ITEMS: MenuItem[] = [
 
 // Bump this whenever the brochure menu changes so cached localStorage menus
 // and stale Firestore docs get purged on every device on next boot.
-export const MENU_VERSION = '2026-10-01-craving-img-3';
+export const MENU_VERSION = '2026-10-02-remove-funday-friday-item';
 
 // Ids removed from the brochure menu — filtered out of Firestore merges and
 // deleted from Firestore on version upgrade.
 export const REMOVED_MENU_IDS: string[] = [
+  'p-offer-funday-friday',
   'p-7cheese-signature',
   'p-7cheese-burst-supreme',
   'p-7cheese-chicken-overload',

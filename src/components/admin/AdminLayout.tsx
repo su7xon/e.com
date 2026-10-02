@@ -26,7 +26,7 @@ import { MenuItem, Coupon, CategoryItem } from '../../types';
 import { AdminOrder } from './adminData';
 import { Outlet } from './outlets';
 import { OutletQr } from './OutletQr';
-import { BannerSlide } from '../HeroBanner';
+import { BannerSlide, SlideSchedule } from '../HeroBanner';
 import { AdminDashboard } from './AdminDashboard';
 import { AdminLiveOrders } from './AdminLiveOrders';
 import { AdminDelivery } from './AdminDelivery';
@@ -59,6 +59,7 @@ interface AdminLayoutProps {
   onLogout: () => void;
   slides: BannerSlide[];
   onUpdateSlideImage: (id: string, image: string) => void;
+  onUpdateSlideSchedule: (id: string, schedule: SlideSchedule) => void;
   categories: CategoryItem[];
   onUpdateCategoryImage: (id: string, image: string, field?: 'image' | 'bannerImage') => void;
 }
@@ -84,6 +85,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   onLogout,
   slides,
   onUpdateSlideImage,
+  onUpdateSlideSchedule,
   categories,
   onUpdateCategoryImage
 }) => {
@@ -654,6 +656,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             <AdminStoreImages
               slides={slides}
               onUpdateSlideImage={onUpdateSlideImage}
+              onUpdateSlideSchedule={onUpdateSlideSchedule}
               categories={categories}
               onUpdateCategoryImage={onUpdateCategoryImage}
             />
