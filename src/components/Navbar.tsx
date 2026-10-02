@@ -25,14 +25,14 @@ interface NavbarProps {
   setVegOnly: (val: boolean) => void;
   nonVegOnly: boolean;
   setNonVegOnly: (val: boolean) => void;
-  /** Live outlet distance (GPS / selected address se computed). Na ho to address ka purana distanceKm. */
+  /** Live outlet distance (computed from GPS / selected address). Falls back to the address's saved distanceKm. */
   outletDistanceKm?: number;
   gpsState?: 'idle' | 'locating' | 'locked' | 'denied';
   onDetectLocation?: () => void;
   /** Amazon-style live suggestions for current searchQuery */
   suggestions?: MenuItem[];
   onSelectSuggestion?: (item: MenuItem) => void;
-  /** Table QR se aaya customer — address pill dikhane ka matlab nahi */
+  /** Customer arrived via table QR — no point showing the address pill */
   isTableLocked?: boolean;
 }
 
@@ -87,7 +87,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             </div>
 
-            {/* Address / Store Selector — table QR lock pe hide (dine-in me address ka matlab nahi) */}
+            {/* Address / Store Selector — hidden on table QR lock (address is meaningless for dine-in) */}
             {!isTableLocked && (
             <button
               id="btn-address-selector"
@@ -96,7 +96,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <div
                 className="hidden sm:flex flex-col items-center justify-center bg-slate-900 px-1.5 py-1 rounded text-[11px] font-bold text-amber-400 shrink-0 cursor-pointer"
-                title={gpsState === 'locked' ? 'GPS se live outlet distance' : 'Tap karke exact GPS distance nikalo'}
+                title={gpsState === 'locked' ? 'Live outlet distance from GPS' : 'Tap for exact GPS distance'}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (gpsState === 'locating') return;

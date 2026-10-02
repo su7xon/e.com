@@ -48,9 +48,9 @@ export interface MenuItem {
   defaultSize?: PizzaSize;
   defaultCrust?: PizzaCrust;
   sizePrices?: { Regular?: number; Medium?: number; Large?: number };
-  /** Outlet scope: jis outlet ne item banaya. Empty = shared (sab outlets me dikhega). */
+  /** Outlet scope: which outlet created the item. Empty = shared (visible in all outlets). */
   outletId?: string;
-  /** Shared item ko kisi outlet ne apne yahan hide kiya (delete = sirf apne outlet se hide). */
+  /** A shared item hidden by an outlet (delete = hide from own outlet only). */
   hiddenInOutlets?: string[];
 }
 

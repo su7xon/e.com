@@ -14,7 +14,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 }) => {
   const [period, setPeriod] = useState<'today' | 'yesterday' | 'week' | 'month' | 'all'>('today');
 
-  // Firestore se aadha-adhura purana doc bhi aa sakta hai (bina total) — NaN se bachao.
+  // Firestore can send a partial/legacy doc (without total) — guard against NaN.
   const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
   const grossRevenue = orders.reduce((acc, o) => acc + (o.status !== 'CANCELLED' ? num(o.total) : 0), 0);
   const deliveryOrders = orders.filter(o => o.orderType === 'DELIVERY');

@@ -124,8 +124,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpen
     return () => clearInterval(interval);
   }, [isPaused, safeSlides.length]);
 
-  // Haath se swipe: left = next, right = prev (40px threshold).
-  // Swipe pe banner tap (order popup) trigger na ho — isliye swiped flag.
+  // Manual swipe: left = next, right = previous (40px threshold).
+  // Swiped flag stops the banner tap (order popup) from firing on a swipe.
   const swipedRef = React.useRef(false);
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
@@ -163,7 +163,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onSelectFeatured, onOpen
           className={`absolute inset-0 bg-gradient-to-r ${slide.bgGradient} transition-colors duration-700`}
         />
 
-        {/* Full banner image slide — zero crop, poori image dikhe (LUNCH text safe) */}
+        {/* Full banner image slide — zero crop, whole image visible */}
         {slide.fullImage && (
           <button
             id={`btn-hero-order-${slide.id}`}

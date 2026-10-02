@@ -27,7 +27,7 @@ export const AdminReports: React.FC<AdminReportsProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  // Bina-total wale purane docs NaN na banaye — guard.
+  // Guard: legacy docs without a total must not produce NaN.
   const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
   const grossSales = orders.reduce((sum, o) => sum + (o.status !== 'CANCELLED' ? num(o.total) : 0), 0);
   const deliveryOrders = orders.filter(o => o.orderType === 'DELIVERY' && o.status !== 'CANCELLED');

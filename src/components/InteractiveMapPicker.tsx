@@ -274,7 +274,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
       city: city.trim() || 'Haldwani',
       pincode: pincode.trim() || '263139',
       landmark: landmark.trim() || undefined,
-      // Real outlet distance — hardcoded 2.3 nahi, GPS pin se compute
+      // Real outlet distance — computed from the GPS pin, not hardcoded 2.3
       distanceKm: findNearestOutlet(coords.lat, coords.lng).distanceKm,
       lat: coords.lat,
       lng: coords.lng,

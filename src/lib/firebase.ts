@@ -238,7 +238,7 @@ export async function fetchMenuItemsFromFirestore(): Promise<MenuItem[] | null> 
 
 /**
  * Live subscription for menuItems (har device, har outlet).
- * Admin Outlet-1 me add/delete kare to Outlet-2 / customer phone pe bhi live update.
+ * When admin adds/deletes in Outlet-1, Outlet-2 / customer phones update live too.
  * Returns unsubscribe. Never throws.
  */
 export function subscribeToFirestoreMenu(

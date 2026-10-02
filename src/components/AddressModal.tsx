@@ -78,7 +78,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
         pincode,
         landmark,
       };
-      // GPS pin ho to outlet distance live compute karo, warna purani value rakho
+      // Compute live outlet distance from the GPS pin when available, else keep the saved value
       if (typeof base.lat === 'number' && typeof base.lng === 'number') {
         updated.distanceKm = findNearestOutlet(base.lat, base.lng).distanceKm;
       }

@@ -23,7 +23,7 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
   if (!isOpen || !item) return null;
 
   // Only real pizzas get size/crust/cheese/toppings steps.
-  // Drinks, desserts, sides etc. kabhi pizza options na dikhaye —
+  // Drinks, desserts, sides etc. must never show pizza options —
   // chahe Firestore me isCustomizable true bhi ho.
   const isPizzaItem = PIZZA_CATEGORIES.includes(item.category);
 

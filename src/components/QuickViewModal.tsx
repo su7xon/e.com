@@ -30,7 +30,7 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
     setAddedTick(false);
   }, [isOpen, item?.id]);
 
-  // Also Try — random 6 foods (current item chhodke), har open pe nayi shuffle
+  // Also Try — 6 random foods (excluding the current item), reshuffled on every open
   const alsoTry = useMemo(() => {
     if (!item) return [];
     const pool = menuItems.filter((m) => m.id !== item.id);

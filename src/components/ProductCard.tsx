@@ -107,7 +107,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             </p>
           )}
 
-          {/* Size / Crust Selector Trigger (pizzas only — drinks/sides pe nahi) */}
+          {/* Size / Crust Selector Trigger (pizzas only — not on drinks/sides) */}
           {needsCustomize(item) && (
             <button
               id={`btn-customize-link-${item.id}`}
