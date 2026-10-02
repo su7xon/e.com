@@ -11,12 +11,14 @@ import {
   ChefHat,
   Search,
   CheckCircle,
+  Trash2,
 } from 'lucide-react';
 import { AdminOrder, formatTimeAgo } from './adminData';
 
 interface AdminDeliveryProps {
   orders: AdminOrder[];
   onUpdateOrderStatus: (orderId: string, newStatus: AdminOrder['status']) => void;
+  onDeleteOrder?: (orderId: string) => void;
 }
 
 type DeliveryFilter = 'READY' | 'ONWAY' | 'DONE' | 'ALL';
@@ -24,6 +26,7 @@ type DeliveryFilter = 'READY' | 'ONWAY' | 'DONE' | 'ALL';
 export const AdminDelivery: React.FC<AdminDeliveryProps> = ({
   orders,
   onUpdateOrderStatus,
+  onDeleteOrder,
 }) => {
   const [filter, setFilter] = useState<DeliveryFilter>('READY');
   const [searchQuery, setSearchQuery] = useState('');
@@ -137,14 +140,30 @@ export const AdminDelivery: React.FC<AdminDeliveryProps> = ({
                       <span>{o.createdAt} ({formatTimeAgo(o.id, o.timeAgo)})</span>
                     </div>
                   </div>
-                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
-                    o.status === 'NEW' ? 'bg-red-50 text-red-700 border border-red-200 animate-pulse' :
-                    o.status === 'KITCHEN' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
-                    o.status === 'DISPATCHED' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
-                    'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  }`}>
-                    {o.status}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                      o.status === 'NEW' ? 'bg-red-50 text-red-700 border border-red-200 animate-pulse' :
+                      o.status === 'KITCHEN' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
+                      o.status === 'DISPATCHED' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                      'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    }`}>
+                      {o.status}
+                    </span>
+                    {onDeleteOrder && (
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Delete order ${o.orderNumber}? Yeh sab devices se hat jayega.`)) {
+                            onDeleteOrder(o.id);
+                          }
+                        }}
+                        className="w-7 h-7 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 flex items-center justify-center transition-colors cursor-pointer"
+                        aria-label={`Delete order ${o.orderNumber}`}
+                        title="Delete order"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="py-3 border-b border-slate-100 space-y-2">

@@ -607,6 +607,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             <AdminDelivery
               orders={visibleOrders}
               onUpdateOrderStatus={onUpdateOrderStatus}
+              onDeleteOrder={onDeleteOrder}
             />
           )}
 

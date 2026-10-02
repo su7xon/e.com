@@ -1301,6 +1301,16 @@ export default function App() {
               setAdminOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
               updateOrderStatusInFirestore(id, status).catch(() => {});
             }}
+            onDeleteOrder={(id) => {
+              setAdminOrders((prev) => prev.filter((o) => o.id !== id));
+              setPendingOrderIds((prev) => {
+                if (!prev.includes(id)) return prev;
+                const next = prev.filter((x) => x !== id);
+                safeSet('seven_cheese_pending_orders', JSON.stringify(next));
+                return next;
+              });
+              deleteOrderFromFirestore(id).catch(() => {});
+            }}
           />
         </main>
 

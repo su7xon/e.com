@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  X, 
-  CheckCircle, 
-  Clock, 
-  Bike, 
-  Phone, 
-  Flame, 
-  Package, 
-  ChefHat, 
-  MapPin, 
+import {
+  X,
+  CheckCircle,
+  Clock,
+  Bike,
+  Flame,
+  Package,
+  ChefHat,
+  MapPin,
   Sparkles,
   ChevronRight,
   ShieldCheck
@@ -67,7 +66,6 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
   onAdvanceStatus,
 }) => {
   const [currentStageIndex, setCurrentStageIndex] = useState(1);
-  const [callRiderMsg, setCallRiderMsg] = useState(false);
 
   useEffect(() => {
     if (!order) return;
@@ -236,46 +234,6 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
               })}
             </div>
           </div>
-
-          {/* Delivery Rider Card */}
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 flex items-center justify-between">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-full bg-slate-300 flex items-center justify-center font-bold text-slate-700 shrink-0">
-                🛵
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-extrabold text-xs sm:text-sm text-slate-900 truncate">
-                    {order.riderName}
-                  </span>
-                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-1.5 rounded">
-                    4.9 ★
-                  </span>
-                </div>
-                <span className="text-[11px] text-slate-500 block">
-                  Delivery Partner • Contactless Delivery
-                </span>
-              </div>
-            </div>
-
-            <button
-              id="btn-call-rider"
-              onClick={() => {
-                setCallRiderMsg(true);
-                setTimeout(() => setCallRiderMsg(false), 3000);
-              }}
-              className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3 py-1.5 rounded-xl shadow-xs transition-colors shrink-0"
-            >
-              <Phone className="w-3.5 h-3.5" />
-              <span>Call</span>
-            </button>
-          </div>
-
-          {callRiderMsg && (
-            <div className="bg-emerald-100 text-emerald-900 p-2.5 rounded-xl text-xs font-semibold text-center animate-in fade-in">
-              Connecting call to {order.riderName} ({order.riderPhone})...
-            </div>
-          )}
 
           {/* Order Items Snapshot */}
           <div className="border border-slate-200 rounded-2xl p-3.5 space-y-2">
