@@ -96,7 +96,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       )}
 
       {/* Bottom Nav Bar */}
-      <nav className="bg-white text-slate-900 border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] px-2 sm:px-6 py-2">
+      <nav className="bg-white text-slate-900 border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] px-2 sm:px-6 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         <div className="max-w-md sm:max-w-2xl mx-auto flex items-stretch justify-between gap-1">
 
           {/* Menu */}

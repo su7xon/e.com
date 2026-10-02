@@ -60,7 +60,7 @@ export function usePwaInstall() {
   };
 }
 
-export const PwaInstallBanner: React.FC = () => {
+export const PwaInstallBanner: React.FC<{ hasCart?: boolean }> = ({ hasCart = false }) => {
   const { canInstall, promptInstall, dismiss } = usePwaInstall();
   const [apkAvailable, setApkAvailable] = useState(false);
   const [dismissed, setDismissed] = useState(
@@ -87,7 +87,7 @@ export const PwaInstallBanner: React.FC = () => {
   // Single Install button — seedha APK download (no alag APK button)
   if (dismissed || (!canInstall && !apkAvailable)) return null;
   return (
-    <div className="fixed bottom-20 sm:bottom-24 left-3 right-3 sm:left-auto sm:right-6 sm:max-w-sm z-50 animate-in slide-in-from-bottom-2 duration-200">
+    <div className={`fixed left-3 right-3 sm:left-auto sm:right-6 sm:max-w-sm z-[55] animate-in slide-in-from-bottom-2 duration-200 ${hasCart ? 'bottom-[228px] sm:bottom-[210px]' : 'bottom-[152px] sm:bottom-[150px]'}`}>
       <div className="bg-slate-950 text-white rounded-2xl shadow-2xl border border-white/10 p-4 flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 bg-[#111111]">
           <img src="/pwa-192x192.png" alt="7 Cheese Pizza" className="w-full h-full object-cover" />

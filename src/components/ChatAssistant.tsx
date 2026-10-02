@@ -7,6 +7,7 @@ import type { Coupon, MenuItem } from '../types';
 interface ChatAssistantProps {
   menuItems: MenuItem[];
   coupons: Coupon[];
+  hasCart?: boolean;
   onAddToCart: (item: MenuItem) => void;
   onOpenCart: () => void;
   onOpenCustomize?: (item: MenuItem) => void;
@@ -111,6 +112,7 @@ function offlineReply(q: string, menu: MenuItem[], coupons: Coupon[], lang: Chat
 export const ChatAssistant: React.FC<ChatAssistantProps> = ({
   menuItems,
   coupons,
+  hasCart = false,
   onAddToCart,
   onOpenCustomize,
   onSelectCategory,
@@ -220,7 +222,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
           id="btn-chat-open"
           onClick={() => setOpen(true)}
           aria-label="Open pizza assistant"
-          className="fixed bottom-24 right-4 z-50 w-14 h-14 rounded-full shadow-2xl overflow-hidden transition-transform hover:scale-105 cursor-pointer border-2 border-white bg-white p-0"
+          className={`fixed right-4 z-50 w-14 h-14 rounded-full shadow-2xl overflow-hidden transition-all hover:scale-105 cursor-pointer border-2 border-white bg-white p-0 ${hasCart ? 'bottom-[158px] sm:bottom-[148px]' : 'bottom-[88px] sm:bottom-[88px]'}`}
         >
           <img src={AVATAR} alt="Pizza assistant" className="w-full h-full object-cover" />
           {unread > 0 && (
@@ -233,7 +235,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
       )}
 
       {open && (
-        <div className="fixed z-50 bottom-20 right-3 left-3 sm:left-auto sm:right-5 sm:w-[380px] h-[530px] max-h-[68vh] bg-white rounded-3xl border border-slate-200 shadow-2xl flex flex-col overflow-hidden">
+        <div className={`fixed z-50 right-3 left-3 sm:left-auto sm:right-5 sm:w-[380px] h-[530px] max-h-[68vh] bg-white rounded-3xl border border-slate-200 shadow-2xl flex flex-col overflow-hidden ${hasCart ? 'bottom-[158px] sm:bottom-[148px]' : 'bottom-[88px] sm:bottom-[88px]'}`}>
           {/* Header */}
           <div className="bg-gradient-to-r from-[#ED1C24] to-[#a3121f] text-white px-4 py-3 flex items-center gap-3">
             <img src={AVATAR} alt="Cheesy assistant" className="w-9 h-9 rounded-full object-cover border-2 border-white/60 bg-white" />

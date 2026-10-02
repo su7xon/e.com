@@ -4,6 +4,7 @@ import { MapPin, Loader2 } from 'lucide-react';
 interface LocationPromptProps {
   gpsState: 'idle' | 'locating' | 'locked' | 'denied';
   hasFix: boolean;
+  hasCart?: boolean;
   onAllow: () => void;
   onDismiss: () => void;
 }
@@ -12,6 +13,7 @@ interface LocationPromptProps {
  * First-screen location gate (Domino's style): centered dialog over a dimmed page.
  * Allow -> browser location prompt -> coords saved for outlet distance + order routing.
  * Ask Later -> menu loads with the default outlet; the header badge can still detect location.
+ * NOTE: hasCart kept for compat — centered dialog needs no bottom offset, so no overlap.
  */
 export const LocationPrompt: React.FC<LocationPromptProps> = ({
   gpsState,

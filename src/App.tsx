@@ -1294,7 +1294,7 @@ export default function App() {
 
         <PwaOfflineBadge />
         <PwaUpdatePrompt />
-        <PwaInstallBanner />
+        <PwaInstallBanner hasCart={cartItemCount > 0} />
         <CustomizeModal
           item={customizingItem}
           isOpen={isCustomizeOpen}
@@ -1313,6 +1313,7 @@ export default function App() {
         <ChatAssistant
           menuItems={menuItems}
           coupons={coupons}
+          hasCart={cartItemCount > 0}
           onAddToCart={handleSimpleAddToCart}
           onOpenCustomize={handleOpenCustomize}
           onOpenCart={() => setIsCartOpen(true)}
@@ -1483,7 +1484,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-28 selection:bg-red-500 selection:text-white">
+    <div className={`min-h-screen bg-slate-100 text-slate-900 font-sans selection:bg-red-500 selection:text-white ${cartItemCount > 0 ? 'pb-[190px]' : 'pb-[120px]'}`}>
       
       {/* Top Navbar */}
       <Navbar
@@ -2062,6 +2063,7 @@ export default function App() {
       <ChatAssistant
         menuItems={activeMenuItems}
         coupons={activeCoupons}
+        hasCart={cartItemCount > 0}
         onAddToCart={handleSimpleAddToCart}
         onOpenCustomize={handleOpenCustomize}
         onOpenCart={() => setIsCartOpen(true)}
@@ -2077,6 +2079,7 @@ export default function App() {
         <LocationPrompt
           gpsState={gpsState}
           hasFix={!!userGps}
+          hasCart={cartItemCount > 0}
           onAllow={requestGps}
           onDismiss={dismissLocPrompt}
         />
@@ -2116,7 +2119,7 @@ export default function App() {
       {/* PWA: install prompt, update prompt, offline badge */}
       <PwaOfflineBadge />
       <PwaUpdatePrompt />
-      <PwaInstallBanner />
+      <PwaInstallBanner hasCart={cartItemCount > 0} />
 
     </div>
   );
