@@ -39,7 +39,7 @@ import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminLogin } from './components/admin/AdminLogin';
 import { AdminDelivery } from './components/admin/AdminDelivery';
 import { AdminOrder, SEED_ADMIN_ORDERS } from './components/admin/adminData';
-import { Outlet, getOutletById, findNearestOutlet, resolveOutletForOrder, parseOutletQrParam, parseTableQrParam, getTableById, clearOutletQrLock } from './components/admin/outlets';
+import { Outlet, getOutletById, findNearestOutlet, resolveOutletForOrder, parseOutletQrParam, parseTableQrParam, getTableById } from './components/admin/outlets';
 import {
   saveMenuItemToFirestore,
   deleteMenuItemFromFirestore,
@@ -66,7 +66,6 @@ import {
   ShieldCheck,
   Ruler,
   ArrowRight,
-  Armchair,
   Bike,
   LogOut
 } from 'lucide-react';
@@ -1430,28 +1429,6 @@ export default function App() {
         onSelectSuggestion={handleSelectSuggestion}
         isTableLocked={!!qrTable}
       />
-
-      {/* Table QR lock banner — customer ko pata rahe order kis table pe jayega */}
-      {qrTable && (
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3">
-          <div className="flex items-center justify-between gap-3 bg-slate-900 text-white rounded-2xl px-4 py-2.5 shadow-md">
-            <span className="flex items-center gap-2 text-xs font-bold">
-              <Armchair className="w-4 h-4 text-amber-400" />
-              <span>Dine-in • Table QR se order</span>
-            </span>
-            <button
-              onClick={() => {
-                clearOutletQrLock();
-                setQrOutletId(null);
-                setQrTableId(null);
-              }}
-              className="text-[11px] font-bold text-amber-300 hover:text-amber-200 underline underline-offset-2 cursor-pointer shrink-0"
-            >
-              Change
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Main Content Areas based on active tab */}
       {activeTab === 'menu' && (
