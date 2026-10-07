@@ -237,3 +237,20 @@ export function parseTableQrParam(outletId?: string): string | null {
     return null;
   }
 }
+
+export interface OutletWithDistance {
+  outlet: Outlet;
+  /** null when no location is known. */
+  distanceKm: number | null;
+}
+
+/** All outlets, nearest first. Without a location they keep their default order. */
+export function listOutletsByDistance(lat?: number, lng?: number): OutletWithDistance[] {
+  if (typeof lat !== 'number' || typeof lng !== 'number') {
+    return OUTLETS.map((outlet) => ({ outlet, distanceKm: null }));
+  }
+  return OUTLETS.map((outlet) => ({
+    outlet,
+    distanceKm: Math.round(geoDistanceKm(lat, lng, outlet.lat, outlet.lng) * 10) / 10,
+  })).sort((a, b) => (a.distanceKm as number) - (b.distanceKm as number));
+}

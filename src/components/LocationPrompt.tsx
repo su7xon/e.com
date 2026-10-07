@@ -1,17 +1,19 @@
-import React, { useEffect, useState } from 'react';
-import { MapPin, Navigation, X, Loader2, AlertCircle } from 'lucide-react';
+import React from 'react';
+import { MapPin, Loader2 } from 'lucide-react';
 
 interface LocationPromptProps {
   gpsState: 'idle' | 'locating' | 'locked' | 'denied';
   hasFix: boolean;
+  hasCart?: boolean;
   onAllow: () => void;
   onDismiss: () => void;
 }
 
 /**
- * First-visit location permission card.
- * Shows once per session when there is no saved GPS fix.
+ * First-screen location gate (Domino's style): centered dialog over a dimmed page.
  * Allow -> browser location prompt -> coords saved for outlet distance + order routing.
+ * Ask Later -> menu loads with the default outlet; the header badge can still detect location.
+ * NOTE: hasCart kept for compat — centered dialog needs no bottom offset, so no overlap.
  */
 export const LocationPrompt: React.FC<LocationPromptProps> = ({
   gpsState,
@@ -19,94 +21,54 @@ export const LocationPrompt: React.FC<LocationPromptProps> = ({
   onAllow,
   onDismiss,
 }) => {
-  const [show, setShow] = useState(false);
+  if (hasFix || gpsState === 'locked') return null;
 
-  useEffect(() => {
-    if (hasFix || gpsState === 'locked') {
-      setShow(false);
-      return;
-    }
-    const t = window.setTimeout(() => setShow(true), 1000);
-    return () => window.clearTimeout(t);
-  }, [hasFix, gpsState]);
-
-  if (!show) return null;
+  const denied = gpsState === 'denied';
+  const locating = gpsState === 'locating';
 
   return (
-    <div className="fixed inset-x-0 bottom-24 sm:bottom-6 z-40 px-3 sm:px-6 pointer-events-none">
-      <div className="pointer-events-auto max-w-md mx-auto bg-slate-900 text-white rounded-3xl p-4 sm:p-5 shadow-2xl border border-white/10 animate-in slide-in-from-bottom duration-300">
-        <div className="flex items-start gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-[#ED1C24] flex items-center justify-center shrink-0">
-            {gpsState === 'locating' ? (
-              <Loader2 className="w-5 h-5 text-white animate-spin" />
-            ) : (
-              <MapPin className="w-5 h-5 text-white" />
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-black tracking-tight">
-              {gpsState === 'denied' ? 'Location blocked' : 'Enable your location?'}
-            </h3>
-            <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
-              {gpsState === 'denied'
-                ? 'Browser blocked location access. Tap the lock icon in the address bar, allow location, then retry.'
-                : 'We use it for exact outlet distance, faster checkout and accurate delivery tracking.'}
-            </p>
-          </div>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="loc-gate-title"
+        className="w-full max-w-xs bg-white text-slate-800 rounded-md shadow-2xl p-5 text-center animate-in zoom-in-95 duration-200"
+      >
+        {locating ? (
+          <Loader2 className="w-5 h-5 text-[#ED1C24] mx-auto animate-spin" />
+        ) : (
+          <MapPin className="w-5 h-5 text-[#ED1C24] mx-auto" />
+        )}
+        <h3 id="loc-gate-title" className="mt-3 text-sm leading-relaxed">
+          {denied ? (
+            <>Location is blocked. Allow it from the lock icon in the address bar, then retry.</>
+          ) : locating ? (
+            <>Finding your location…</>
+          ) : (
+            <>
+              Allow <b>7 Cheese</b> to access this device&apos;s location?
+            </>
+          )}
+        </h3>
+        <p className="mt-1 text-[11px] text-slate-400">
+          Used for your nearest outlet, delivery distance and order tracking.
+        </p>
+
+        <div className="mt-5 flex items-center justify-between">
           <button
             onClick={onDismiss}
-            className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center shrink-0 cursor-pointer"
-            aria-label="Dismiss location prompt"
+            className="text-xs italic text-slate-600 underline underline-offset-4 cursor-pointer"
           >
-            <X className="w-3.5 h-3.5" />
+            {denied ? 'Continue without' : 'Ask Later'}
+          </button>
+          <button
+            onClick={onAllow}
+            disabled={locating}
+            className="bg-[#ED1C24] hover:bg-[#c91430] disabled:opacity-70 text-white text-sm font-bold px-6 py-2.5 rounded-md cursor-pointer"
+          >
+            {denied ? 'Retry' : locating ? 'Detecting…' : 'Allow'}
           </button>
         </div>
-
-        {gpsState === 'denied' ? (
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              onClick={onAllow}
-              className="flex-1 flex items-center justify-center gap-1.5 bg-white text-slate-900 font-black px-4 py-2.5 rounded-xl text-xs cursor-pointer"
-            >
-              <Navigation className="w-3.5 h-3.5" />
-              <span>Retry Location</span>
-            </button>
-            <button
-              onClick={onDismiss}
-              className="flex-1 bg-white/10 hover:bg-white/20 font-bold px-4 py-2.5 rounded-xl text-xs cursor-pointer"
-            >
-              Enter Manually
-            </button>
-          </div>
-        ) : (
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              onClick={onAllow}
-              disabled={gpsState === 'locating'}
-              className="flex-1 flex items-center justify-center gap-1.5 bg-[#ED1C24] hover:bg-[#c91430] disabled:opacity-70 text-white font-black px-4 py-2.5 rounded-xl text-xs cursor-pointer"
-            >
-              {gpsState === 'locating' ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Navigation className="w-3.5 h-3.5" />
-              )}
-              <span>{gpsState === 'locating' ? 'Detecting…' : 'Use My Location'}</span>
-            </button>
-            <button
-              onClick={onDismiss}
-              className="bg-white/10 hover:bg-white/20 font-bold px-4 py-2.5 rounded-xl text-xs cursor-pointer"
-            >
-              Later
-            </button>
-          </div>
-        )}
-
-        {gpsState !== 'denied' && gpsState !== 'locating' && (
-          <p className="mt-2 flex items-center gap-1 text-[10px] text-slate-400">
-            <AlertCircle className="w-3 h-3 shrink-0" />
-            <span>One tap — the browser asks once and remembers your choice.</span>
-          </p>
-        )}
       </div>
     </div>
   );

@@ -24,7 +24,11 @@ export interface BannerSlide {
   image: string;
   productId: string;
   fullImage?: boolean;
+  /** When to show this banner; omitted = always. Set from Admin → Store Images. */
+  schedule?: SlideSchedule;
 }
+
+export type SlideSchedule = 'always' | 'tuesday' | 'friday' | 'lunch';
 
 export const DEFAULT_SLIDES: BannerSlide[] = [
   {

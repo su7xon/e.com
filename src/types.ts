@@ -24,6 +24,7 @@ export type MenuCategoryType =
   | 'chicken-corner' 
   | 'drinks'
   | 'desserts' 
+  | 'dips'
   | 'combos'
   | 'veg' 
   | 'non-veg'
@@ -52,6 +53,10 @@ export interface MenuItem {
   outletId?: string;
   /** A shared item hidden by an outlet (delete = hide from own outlet only). */
   hiddenInOutlets?: string[];
+  /** Optional schedule for offer combos. */
+  days?: number[];
+  startTime?: string;
+  endTime?: string;
 }
 
 export interface CartItem {
@@ -89,6 +94,10 @@ export interface Coupon {
   title: string;
   description: string;
   tag?: string;
+  /** Optional schedule; omitted = always active (see utils/offerSchedule.ts). */
+  days?: number[];
+  startTime?: string;
+  endTime?: string;
 }
 
 export type OrderType = 'DELIVERY' | 'TAKEAWAY' | 'DINE_IN';

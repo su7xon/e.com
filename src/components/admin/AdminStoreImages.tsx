@@ -1,12 +1,13 @@
 import React, { useRef, useState } from 'react';
 import { Image as ImageIcon, Upload, Link2, CheckCircle2, Loader2 } from 'lucide-react';
 import { CategoryItem } from '../../types';
-import { BannerSlide } from '../HeroBanner';
+import { BannerSlide, SlideSchedule } from '../HeroBanner';
 import { optimizeImage, blobToDataURL } from '../../lib/imageOptimize';
 
 interface AdminStoreImagesProps {
   slides: BannerSlide[];
   onUpdateSlideImage: (id: string, image: string) => void;
+  onUpdateSlideSchedule: (id: string, schedule: SlideSchedule) => void;
   categories: CategoryItem[];
   onUpdateCategoryImage: (id: string, image: string, field?: 'image' | 'bannerImage') => void;
 }
@@ -14,6 +15,7 @@ interface AdminStoreImagesProps {
 export const AdminStoreImages: React.FC<AdminStoreImagesProps> = ({
   slides,
   onUpdateSlideImage,
+  onUpdateSlideSchedule,
   categories,
   onUpdateCategoryImage,
 }) => {
@@ -97,6 +99,19 @@ export const AdminStoreImages: React.FC<AdminStoreImagesProps> = ({
                     {s.titlePart1} {s.titleHighlight} {s.titlePart2}
                   </div>
                   <div className="text-[11px] text-slate-500 truncate">{s.badge}</div>
+                  <label className="flex items-center gap-2 mt-1.5 text-[11px] font-bold text-slate-600">
+                    Show when
+                    <select
+                      value={s.schedule ?? 'always'}
+                      onChange={(e) => onUpdateSlideSchedule(s.id, e.target.value as SlideSchedule)}
+                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-violet-400"
+                    >
+                      <option value="always">Always</option>
+                      <option value="tuesday">Tuesday only</option>
+                      <option value="friday">Friday only</option>
+                      <option value="lunch">Lunch 11am–2pm</option>
+                    </select>
+                  </label>
                   <div className="flex gap-2 mt-2">
                     <div className="relative flex-1">
                       <Link2 className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
