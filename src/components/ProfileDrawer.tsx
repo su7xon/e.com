@@ -75,7 +75,7 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-[55] bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-[57] bg-black/50" onClick={onClose}>
       <aside
         role="dialog"
         aria-modal="true"

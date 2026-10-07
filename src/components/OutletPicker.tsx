@@ -30,7 +30,7 @@ export const OutletPicker: React.FC<OutletPickerProps> = ({
   const highlighted = selectedId ?? outlets[0]?.outlet.id;
 
   return (
-    <div className="fixed inset-0 z-[55] bg-black/60 flex items-end sm:items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-[57] bg-black/60 flex items-end sm:items-center justify-center" onClick={onClose}>
       <div
         className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-4 sm:p-5 max-h-[80vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}

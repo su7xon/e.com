@@ -12,6 +12,11 @@ interface FilterSheetProps {
   setNonVegOnly: (v: boolean) => void;
   sortBy: SortOption;
   setSortBy: (s: SortOption) => void;
+  /** Resets every menu filter (food type, sort, category, search) and closes the sheet. */
+  onClearAll: () => void;
+  /** Name of the selected menu category, shown so users see what Clear all resets. */
+  activeCategoryName?: string;
+  onClearCategory?: () => void;
 }
 
 const SORTS: { value: SortOption; label: string }[] = [
@@ -31,6 +36,9 @@ export const FilterSheet: React.FC<FilterSheetProps> = ({
   setNonVegOnly,
   sortBy,
   setSortBy,
+  onClearAll,
+  activeCategoryName,
+  onClearCategory,
 }) => {
   if (!isOpen) return null;
 
@@ -40,7 +48,7 @@ export const FilterSheet: React.FC<FilterSheetProps> = ({
     }`;
 
   return (
-    <div className="fixed inset-0 z-[55] bg-black/50 flex items-end sm:items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-[57] bg-black/50 flex items-end sm:items-center justify-center" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
@@ -58,6 +66,19 @@ export const FilterSheet: React.FC<FilterSheetProps> = ({
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        {activeCategoryName && (
+          <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 text-xs">
+            <span className="text-slate-500">
+              Category: <b className="text-slate-900">{activeCategoryName}</b>
+            </span>
+            {onClearCategory && (
+              <button onClick={onClearCategory} aria-label="Clear category" className="text-slate-400 hover:text-slate-700 cursor-pointer">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )}
 
         <p className="mt-4 text-[11px] font-bold uppercase tracking-wider text-slate-400">Food type</p>
         <div className="mt-2 flex gap-2">
@@ -92,11 +113,7 @@ export const FilterSheet: React.FC<FilterSheetProps> = ({
 
         <div className="mt-5 flex gap-2">
           <button
-            onClick={() => {
-              setVegOnly(false);
-              setNonVegOnly(false);
-              setSortBy('popular');
-            }}
+            onClick={onClearAll}
             className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-700 cursor-pointer"
           >
             Clear all

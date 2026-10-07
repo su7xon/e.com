@@ -6,7 +6,7 @@ import { OFFER_SCHEDULES } from '../utils/offerSchedule';
 
 interface OffersStripProps {
   coupons: Coupon[];
-  onView: () => void;
+  onView: (coupon: Coupon) => void;
 }
 
 /** "Offers for you" row: only coupons active right now (callers pass the already-filtered list). */
@@ -31,7 +31,7 @@ export const OffersStrip: React.FC<OffersStripProps> = ({ coupons, onView }) => 
                 </p>
               </div>
               <button
-                onClick={onView}
+                onClick={() => onView(c)}
                 className="shrink-0 border border-[#8a5a2b] text-[#5a3818] rounded-lg px-3 py-1.5 text-xs font-bold cursor-pointer hover:bg-[#8a5a2b]/10"
               >
                 View

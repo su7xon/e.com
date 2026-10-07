@@ -26,6 +26,7 @@ import { OffersStrip } from './components/OffersStrip';
 import { OutletPicker } from './components/OutletPicker';
 import { ProfileDrawer, CustomerProfile } from './components/ProfileDrawer';
 import { FilterSheet } from './components/FilterSheet';
+import { OfferDetailSheet } from './components/OfferDetailSheet';
 import { HeroBanner, DEFAULT_SLIDES, BannerSlide } from './components/HeroBanner';
 import { CravingCategories } from './components/CravingCategories';
 import { CategoryMarquee } from './components/CategoryMarquee';
@@ -874,6 +875,8 @@ export default function App() {
   const [nonVegOnly, setNonVegOnly] = useState(false);
   const [sortBy, setSortBy] = useState<'popular' | 'price-low' | 'price-high' | 'rating'>('popular');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  // Offer tapped in "Offers for you" → its own detail sheet.
+  const [viewOffer, setViewOffer] = useState<Coupon | null>(null);
 
   // Modals Visibility
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
@@ -1551,7 +1554,7 @@ export default function App() {
             onSelectFeatured={handleSelectFeatured}
             onOpenDeals={() => setIsDealsModalOpen(true)}
           />
-          <OffersStrip coupons={activeCoupons} onView={() => setIsDealsModalOpen(true)} />
+          <OffersStrip coupons={activeCoupons} onView={setViewOffer} />
 
           {/* Browse Our Category - Moving Marquee */}
           <CategoryMarquee
@@ -2100,7 +2103,7 @@ export default function App() {
           setActiveTab('menu');
           setIsFilterOpen(true);
         }}
-        filtersActive={vegOnly || nonVegOnly || sortBy !== 'popular'}
+        filtersActive={vegOnly || nonVegOnly || sortBy !== 'popular' || selectedCategory !== 'all' || !!searchQuery.trim()}
       />
       <FilterSheet
         isOpen={isFilterOpen}
@@ -2114,6 +2117,36 @@ export default function App() {
         setNonVegOnly={setNonVegOnly}
         sortBy={sortBy}
         setSortBy={setSortBy}
+        activeCategoryName={
+          selectedCategory === 'all'
+            ? undefined
+            : storeCategories.find((c) => c.filterKey === selectedCategory)?.name || selectedCategory
+        }
+        onClearCategory={() => setSelectedCategory('all')}
+        onClearAll={() => {
+          setVegOnly(false);
+          setNonVegOnly(false);
+          setSortBy('popular');
+          setSelectedCategory('all');
+          setSearchQuery('');
+          setIsFilterOpen(false);
+          document.getElementById('menu-items-section')?.scrollIntoView({ behavior: 'smooth' });
+        }}
+      />
+      <OfferDetailSheet
+        coupon={viewOffer}
+        cartTotal={cartTotal}
+        appliedCode={appliedCoupon?.code}
+        onApply={(c) => {
+          setAppliedCoupon(c);
+          setViewOffer(null);
+          if (cartItems.length > 0) setIsCartOpen(true);
+        }}
+        onSeeAll={() => {
+          setViewOffer(null);
+          setIsDealsModalOpen(true);
+        }}
+        onClose={() => setViewOffer(null)}
       />
 
       {/* PWA: install prompt, update prompt, offline badge */}
