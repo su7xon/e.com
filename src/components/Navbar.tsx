@@ -68,6 +68,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenProfile,
 }) => {
   const [searchFocus, setSearchFocus] = React.useState(false);
+  // Phones: search is an icon in the address row; tapping it swaps the row for the search box.
+  const [mobileSearchOpen, setMobileSearchOpen] = React.useState(false);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const openMobileSearch = () => {
+    setMobileSearchOpen(true);
+    setTimeout(() => searchInputRef.current?.focus(), 0);
+  };
   const [stripHidden, setStripHidden] = React.useState(() => {
     try {
       return localStorage.getItem('seven_cheese_mode_strip_hidden') === '1';
@@ -94,16 +101,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
   return (
     <header className="sticky top-0 z-40 bg-white text-slate-900 shadow-md border-b border-slate-200">
-      {/* Single-row header: logo | address | search | profile (search goes on top on mobile) */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2">
+      {/* Single-row header: logo | address | search | profile. Phones: search is an icon that expands over the row. */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-1.5 sm:py-2">
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-4">
 
           {/* Search + dietary chips */}
-          <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-[240px] order-1 sm:order-2">
+          <div className={`${mobileSearchOpen ? 'flex' : 'hidden'} sm:flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-[240px] order-1 sm:order-2`}>
           <div className="relative flex-1 min-w-[120px]">
             <Search className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               id="input-search-pizza"
+              ref={searchInputRef}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -113,6 +121,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 if (e.key === 'Enter') {
                   (e.target as HTMLInputElement).blur();
                   scrollToMenu();
+                  setMobileSearchOpen(false);
                 }
               }}
               placeholder="Search pizza, wraps, burgers..."
@@ -138,6 +147,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     onMouseDown={(e) => {
                       e.preventDefault();
                       onSelectSuggestion?.(s);
+                      setMobileSearchOpen(false);
                     }}
                     className="w-full flex items-center gap-2.5 px-2.5 py-2 hover:bg-amber-50 active:bg-amber-100 transition-colors text-left cursor-pointer border-b border-slate-100 last:border-0"
                   >
@@ -174,7 +184,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             )}
           </div>
-          <div className="flex items-center gap-1.5 shrink-0 ">
+          <button
+            type="button"
+            onClick={() => {
+              searchInputRef.current?.blur();
+              setMobileSearchOpen(false);
+            }}
+            aria-label="Close search"
+            className="sm:hidden shrink-0 w-9 h-9 rounded-full border border-slate-200 bg-white flex items-center justify-center text-slate-600 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+          {/* Veg / Non-Veg chips: tablet & desktop only — phones use the bottom-bar Filter tab */}
+          <div className="hidden sm:flex items-center gap-1.5 shrink-0">
             <button
               id="btn-filter-veg"
               onClick={() => {
@@ -214,7 +236,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Brand Logo & Address */}
-          <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1 sm:flex-none order-2 sm:order-1">
+          <div className={`${mobileSearchOpen ? 'hidden' : 'flex'} sm:flex items-center gap-2 sm:gap-4 min-w-0 flex-1 sm:flex-none order-2 sm:order-1`}>
             {/* 7 Cheese Pizza Logo */}
             <div className="flex items-center shrink-0 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
               {/* Full logo for desktop / sm+ */}
@@ -260,13 +282,25 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
+          {/* Search icon (phones only) */}
+          {!mobileSearchOpen && (
+            <button
+              id="btn-mobile-search"
+              onClick={openMobileSearch}
+              aria-label="Search menu"
+              className="sm:hidden order-3 shrink-0 w-9 h-9 rounded-full border border-slate-200 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 cursor-pointer"
+            >
+              <Search className="w-4.5 h-4.5" />
+            </button>
+          )}
+
           {/* Collapsed mode strip: compact chip that shows the current mode and re-opens the strip */}
           {stripHidden && (
             <button
               id="btn-show-mode-strip"
               onClick={() => toggleStrip(false)}
               aria-label="Show order type"
-              className="order-3 shrink-0 flex items-center gap-1 h-9 px-2.5 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 cursor-pointer"
+              className={`${mobileSearchOpen ? 'hidden' : 'flex'} sm:flex order-3 shrink-0 items-center gap-1 h-9 px-2.5 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 cursor-pointer`}
             >
               {orderType === 'DELIVERY' ? 'Delivery' : orderType === 'TAKEAWAY' ? 'Takeaway' : 'Dine-in'}
               <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
@@ -278,7 +312,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             id="btn-header-profile"
             onClick={onOpenProfile}
             aria-label="Profile"
-            className="order-3 shrink-0 w-9 h-9 rounded-full border border-slate-200 bg-white hover:bg-slate-100 flex items-center justify-center text-slate-700 cursor-pointer"
+            className={`${mobileSearchOpen ? 'hidden' : 'flex'} sm:flex order-3 shrink-0 w-9 h-9 rounded-full border border-slate-200 bg-white hover:bg-slate-100 items-center justify-center text-slate-700 cursor-pointer`}
           >
             <User className="w-4.5 h-4.5" />
           </button>
@@ -287,7 +321,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Mode switcher: full-width segmented control under the header row (Domino's style).
             Customer can collapse it; the choice is remembered on this device. */}
         {stripHidden ? null : (
-        <div className="mt-2 flex items-stretch gap-1.5">
+        <div className="mt-1.5 sm:mt-2 flex items-stretch gap-1.5">
         <div className="flex-1 grid grid-cols-3 rounded-xl overflow-hidden border border-slate-200 text-center text-xs font-bold">
           {([['DELIVERY', 'Delivery', 'Now'], ['TAKEAWAY', 'Takeaway', 'Select Store'], ['DINE_IN', 'Dine-in', 'Select Store']] as const).map(([key, label, sub]) => (
             <button
@@ -297,12 +331,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                 setOrderType(key);
                 if (key !== 'DELIVERY') onPickStore?.();
               }}
-              className={`py-1.5 transition-colors cursor-pointer ${
+              className={`py-1.5 sm:py-1.5 transition-colors cursor-pointer ${
                 orderType === key ? 'bg-slate-800 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
               }`}
             >
               <span className="block leading-tight">{label}</span>
-              <span className={`block text-[10px] font-medium leading-tight ${orderType === key ? 'text-slate-300' : 'text-slate-400'}`}>{key === 'DELIVERY' ? sub : pickupStoreName || sub}</span>
+              <span className={`hidden sm:block text-[10px] font-medium leading-tight ${orderType === key ? 'text-slate-300' : 'text-slate-400'}`}>{key === 'DELIVERY' ? sub : pickupStoreName || sub}</span>
             </button>
           ))}
         </div>

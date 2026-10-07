@@ -19,16 +19,16 @@ export const CravingCategories: React.FC<CravingCategoriesProps> = ({
     <section className="bg-white py-6 px-3 sm:px-6 border-b border-slate-200">
       <div className="max-w-7xl mx-auto">
         {/* Section Header */}
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-xs sm:text-sm font-bold uppercase tracking-[0.2em] text-stone-500">
+        <div className="flex items-center justify-between gap-3 mb-5">
+          <h2 className="text-[11px] sm:text-sm font-bold uppercase tracking-[0.12em] sm:tracking-[0.2em] text-stone-500">
             What are you craving for?
           </h2>
           <button
             id="btn-category-reset-all"
             onClick={() => onSelectCategory('all')}
-            className="text-xs font-bold text-[#ED1C24] hover:text-red-700 hover:underline cursor-pointer"
+            className="shrink-0 whitespace-nowrap text-xs font-bold text-[#ED1C24] hover:text-red-700 hover:underline cursor-pointer"
           >
-            Explore All (50+ Items)
+            Explore All<span className="hidden sm:inline"> (50+ Items)</span>
           </button>
         </div>
 

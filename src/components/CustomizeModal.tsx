@@ -180,6 +180,7 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
                 const serves = size === 'Regular' ? 'Serves 1' : size === 'Medium' ? 'Serves 2' : 'Serves 4';
                 const circle =
                   size === 'Regular' ? 'w-9 h-9' : size === 'Medium' ? 'w-11 h-11' : 'w-[52px] h-[52px]';
+                const sliceCount = size === 'Regular' ? 4 : size === 'Medium' ? 6 : 8;
 
                 return (
                   <button
@@ -192,8 +193,37 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
                         : 'border-stone-200 bg-white hover:border-stone-300'
                     }`}
                   >
-                    <span className={`${circle} rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? 'border-[#C2410C] bg-[#C2410C]/10' : 'border-stone-300 bg-stone-50'}`}>
-                      {isSelected && <Check className="w-4 h-4 text-[#C2410C] stroke-[3]" />}
+                    {/* Pizza visual: same photo, bigger per size, with slice lines (4 / 6 / 8) */}
+                    <span className="h-[56px] flex items-center justify-center">
+                     <span className="relative">
+                      <span
+                        className={`${circle} relative block rounded-full overflow-hidden border-2 transition-all ${
+                          isSelected ? 'border-[#C2410C] shadow-md' : 'border-stone-200 opacity-80'
+                        }`}
+                      >
+                        <img src={item.image} alt="" className="w-full h-full object-cover scale-125" />
+                        <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full" aria-hidden="true">
+                          {Array.from({ length: sliceCount / 2 }, (_, i) => (
+                            <line
+                              key={i}
+                              x1="50"
+                              y1="0"
+                              x2="50"
+                              y2="100"
+                              stroke="white"
+                              strokeOpacity="0.85"
+                              strokeWidth="2.5"
+                              transform={`rotate(${(180 / (sliceCount / 2)) * i} 50 50)`}
+                            />
+                          ))}
+                        </svg>
+                      </span>
+                      {isSelected && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#C2410C] border border-white flex items-center justify-center">
+                          <Check className="w-2.5 h-2.5 text-white stroke-[4]" />
+                        </span>
+                      )}
+                     </span>
                     </span>
                     <span className={`text-xs sm:text-sm font-black ${isSelected ? 'text-[#9A3412]' : 'text-stone-800'}`}>
                       {size}

@@ -88,13 +88,13 @@ export const PwaInstallBanner: React.FC<{ hasCart?: boolean }> = ({ hasCart = fa
   if (dismissed || (!canInstall && !apkAvailable)) return null;
   return (
     <div className={`fixed left-3 right-3 sm:left-auto sm:right-6 sm:max-w-sm z-[55] animate-in slide-in-from-bottom-2 duration-200 ${hasCart ? 'bottom-[228px] sm:bottom-[210px]' : 'bottom-[152px] sm:bottom-[150px]'}`}>
-      <div className="bg-slate-950 text-white rounded-2xl shadow-2xl border border-white/10 p-4 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 bg-[#111111]">
+      <div className="bg-slate-950 text-white rounded-2xl shadow-2xl border border-white/10 p-2.5 sm:p-4 flex items-center gap-2.5 sm:gap-3">
+        <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl overflow-hidden shrink-0 bg-[#111111]">
           <img src="/pwa-192x192.png" alt="7 Cheese Pizza" className="w-full h-full object-cover" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-black leading-tight">Install 7 Cheese Pizza</p>
-          <p className="text-[11px] text-zinc-400 leading-tight mt-0.5">
+          <p className="hidden sm:block text-[11px] text-zinc-400 leading-tight mt-0.5">
             Faster ordering, works offline, home-screen access.
           </p>
         </div>

@@ -1615,7 +1615,7 @@ export default function App() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <span className="text-2xl">🍕</span>
-                <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
                   {selectedCategory === 'signature-7-cheese'
                     ? '7 Cheese House Signatures'
                     : selectedCategory === 'veg-pizza'

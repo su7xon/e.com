@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   X, 
   Trash2, 
@@ -46,6 +46,76 @@ interface CartDrawerProps {
   availableMenuItems?: MenuItem[];
 }
 
+const CONFETTI_COLORS = ['#ED1C24', '#F59E0B', '#16A34A', '#2563EB', '#EC4899', '#8B5CF6'];
+
+/**
+ * "You saved ₹X" pop-up with a confetti burst. Mounts with the cart, so it shows
+ * on every open, and again whenever the saving goes up (coupon applied, item added).
+ */
+const SavingsCelebration: React.FC<{ amount: number; breakdown: string }> = ({ amount, breakdown }) => {
+  const [show, setShow] = useState(false);
+  const [burst, setBurst] = useState(0);
+  const prev = useRef(0);
+
+  useEffect(() => {
+    if (amount > prev.current) {
+      setShow(true);
+      setBurst((n) => n + 1);
+    }
+    prev.current = amount;
+  }, [amount]);
+
+  // Auto-hide; restarts on each new burst.
+  useEffect(() => {
+    if (!show) return;
+    const id = window.setTimeout(() => setShow(false), 3200);
+    return () => window.clearTimeout(id);
+  }, [show, burst]);
+
+  if (!show || amount <= 0) return null;
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-14 z-20 flex justify-center px-4">
+      <style>{`
+        @keyframes sc-fall { 0% { transform: translate(0,0) rotate(0); opacity: 1 }
+          100% { transform: translate(var(--dx), 170px) rotate(var(--rot)); opacity: 0 } }
+        @keyframes sc-pop { 0% { transform: scale(.6); opacity: 0 } 60% { transform: scale(1.06); opacity: 1 } 100% { transform: scale(1) } }
+      `}</style>
+      <div key={burst} className="relative">
+        {Array.from({ length: 26 }, (_, i) => {
+          const left = 4 + ((i * 37) % 92);
+          const dx = ((i * 53) % 120) - 60;
+          const strip = i % 3 === 0;
+          return (
+            <span
+              key={i}
+              className="absolute top-0"
+              style={{
+                left: `${left}%`,
+                width: strip ? 4 : 7,
+                height: strip ? 12 : 7,
+                borderRadius: strip ? 2 : i % 2 ? 9999 : 1,
+                background: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+                animation: `sc-fall 1.6s ease-out ${(i % 6) * 0.05}s forwards`,
+                ['--dx' as string]: `${dx}px`,
+                ['--rot' as string]: `${(i % 2 ? 1 : -1) * (180 + i * 20)}deg`,
+              } as React.CSSProperties}
+            />
+          );
+        })}
+        <button
+          type="button"
+          onClick={() => setShow(false)}
+          className="pointer-events-auto relative bg-white border-2 border-emerald-500 rounded-2xl shadow-2xl px-5 py-3 text-center cursor-pointer"
+          style={{ animation: 'sc-pop .45s ease-out' }}
+        >
+          <span className="block text-base sm:text-lg font-black text-emerald-700">🎉 You saved ₹{amount}!</span>
+          {breakdown && <span className="block text-[11px] font-semibold text-slate-500 mt-0.5">{breakdown}</span>}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export const CartDrawer: React.FC<CartDrawerProps> = ({
   isOpen,
   onClose,
@@ -79,7 +149,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   // Landmark hamesha blank — user khud likhega (saved address se auto-fill nahi)
   const [receiverLandmark, setReceiverLandmark] = useState('');
   const [formError, setFormError] = useState('');
-  const [mealFilter, setMealFilter] = useState('All');
+  const [mealFilter, setMealFilter] = useState('For you');
   const [upsellDismissed, setUpsellDismissed] = useState<Record<string, boolean>>({});
 
   if (!isOpen) return null;
@@ -152,52 +222,87 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     }, 600);
   };
 
-  // Domino's-style "Complete Your Meal" chips -> menu matchers
-  const MEAL_CHIPS = ['All', 'Desserts', 'Breads & More', 'Taco & Parcel', 'Beverages', 'Chicken Feast', 'Dips'];
-  const matchesMealChip = (item: MenuItem, chip: string): boolean => {
-    const id = item.id.toLowerCase();
-    const name = item.name.toLowerCase();
-    const cat = item.category;
-    switch (chip) {
-      case 'All': return true;
-      case 'Desserts': return cat === 'desserts' || id.includes('dessert') || id.includes('choco') || id.includes('lava');
-      case 'Breads & More': return name.includes('garlic') || name.includes('bread') || cat === 'pan-pizza';
-      case 'Taco & Parcel': return name.includes('taco') || name.includes('parcel') || name.includes('pocket') || name.includes('bites');
-      case 'Beverages': return cat === 'drinks';
-      case 'Chicken Feast': return cat === 'chicken-corner' || (!item.isVeg && (cat === 'non-veg-pizza' || name.includes('chicken')));
-      case 'Dips': return name.includes('dip');
-      default: return true;
-    }
+  // "Complete Your Meal": upsell from what's in the cart, not the whole menu.
+  // A cart with a main (pizza/burger/wrap/pasta) gets the add-ons it is missing first
+  // (sides, dips, drinks, desserts); a cart with only add-ons gets bestseller mains.
+  type MealGroup = 'main' | 'side' | 'dip' | 'drink' | 'dessert';
+  const MEAL_GROUP_LABEL: Record<MealGroup, string> = {
+    main: 'Pizzas & Mains', side: 'Sides', dip: 'Dips', drink: 'Drinks', dessert: 'Desserts',
   };
-  const mealProducts = menuList.filter((item) => matchesMealChip(item, mealFilter));
+  const groupOf = (item: MenuItem): MealGroup | null => {
+    const cat = item.category as string;
+    if (cat === 'dips' || item.id.startsWith('p-dip-') || item.subCategoryTitle === 'Signature Dips') return 'dip';
+    if (cat === 'drinks') return 'drink';
+    if (cat === 'desserts') return 'dessert';
+    if (cat === 'starters-sides' || cat === 'sides' || cat === 'chicken-corner') return 'side';
+    if (cat === 'combos') return null; // offer combos are not add-ons
+    return 'main';
+  };
+  const cartProductIds = new Set(cartItems.map((c) => c.productId));
+  const cartGroups = new Set<MealGroup>();
+  cartItems.forEach((c) => {
+    const m = menuList.find((x) => x.id === c.productId);
+    const g = m ? groupOf(m) : /pizza|burger|wrap|pasta/i.test(c.name) ? 'main' : null;
+    if (g) cartGroups.add(g);
+  });
+  const addOnGroups: MealGroup[] = ['side', 'dip', 'drink', 'dessert'];
+  // Missing groups first, then groups already in the cart (different items).
+  const wantedGroups: MealGroup[] = cartGroups.has('main')
+    ? [...addOnGroups.filter((g) => !cartGroups.has(g)), ...addOnGroups.filter((g) => cartGroups.has(g))]
+    : ['main', ...addOnGroups.filter((g) => !cartGroups.has(g))];
+  const candidatesByGroup = new Map<MealGroup, MenuItem[]>();
+  wantedGroups.forEach((g) => {
+    const list = menuList
+      .filter((m) => !cartProductIds.has(m.id) && groupOf(m) === g)
+      .sort((a, b) =>
+        g === 'main'
+          ? (b.rating || 0) - (a.rating || 0) // bestsellers first
+          : a.price - b.price || (b.rating || 0) - (a.rating || 0), // cheap add-ons first
+      );
+    if (list.length) candidatesByGroup.set(g, list);
+  });
+  const MEAL_CHIPS = ['For you', ...wantedGroups.filter((g) => candidatesByGroup.has(g)).map((g) => MEAL_GROUP_LABEL[g])];
+  // "For you": up to 3 from each wanted group, in priority order.
+  const forYou = wantedGroups.flatMap((g) => (candidatesByGroup.get(g) || []).slice(0, 3));
+  const chipGroup = (Object.keys(MEAL_GROUP_LABEL) as MealGroup[]).find((g) => MEAL_GROUP_LABEL[g] === mealFilter);
+  const mealProducts = chipGroup ? candidatesByGroup.get(chipGroup) || [] : forYou;
   const isPizzaLine = (name: string, category: string) =>
     category === 'veg-pizza' || category === 'non-veg-pizza' || name.toLowerCase().includes('pizza');
   const offBadge = (item: MenuItem): string | null => {
     if (!item.originalPrice || item.originalPrice <= item.price) return null;
     return `₹${item.originalPrice - item.price} OFF`;
   };
-  const savedAmount = discount + (orderType === 'DELIVERY' && deliveryFee === 0 && subtotal > 0 ? 40 : 0);
+  // What the customer actually saves: menu MRP cuts + coupon + waived delivery fee.
+  const mrpSavings = cartItems.reduce((acc, line) => {
+    const m = menuList.find((x) => x.id === line.productId);
+    return m?.originalPrice && m.originalPrice > m.price ? acc + (m.originalPrice - m.price) * line.quantity : acc;
+  }, 0);
+  const deliverySaving = orderType === 'DELIVERY' && deliveryFee === 0 && subtotal > 0 ? 40 : 0;
+  const savedAmount = mrpSavings + discount + deliverySaving;
+  const savingsBreakdown = [
+    mrpSavings > 0 ? `₹${mrpSavings} off MRP` : '',
+    deliverySaving > 0 ? `₹${deliverySaving} free delivery` : '',
+    discount > 0 ? `₹${discount} coupon` : '',
+  ].filter(Boolean).join(' · ');
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-xs flex justify-end animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[56] overflow-hidden bg-slate-50 flex animate-in fade-in duration-200">
       <div
         id="cart-drawer-panel"
-        className="w-full max-w-md sm:max-w-lg bg-slate-50 h-full flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-right duration-300"
+        className="relative w-full h-full bg-slate-50 flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300"
       >
+        <SavingsCelebration amount={cartItems.length > 0 ? savedAmount : 0} breakdown={savingsBreakdown} />
+
         {/* Drawer Header */}
-        <div className="bg-[#ED1C24] text-white p-3.5 sm:p-4 flex items-center justify-between shadow-md">
+        <div className="bg-[#ED1C24] text-white py-2 sm:py-2.5 px-[max(0.875rem,calc((100%_-_48rem)/2))] flex items-center justify-between shadow-md">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
-              <ShoppingBag className="w-5 h-5 text-amber-300" />
-            </div>
-            <div>
-              <h2 className="text-sm sm:text-base font-black tracking-tight leading-tight">
-                Your Cart & Checkout
-              </h2>
-              <span className="text-[11px] text-red-100 font-medium">
-                {cartItems.reduce((a, b) => a + b.quantity, 0)} {cartItems.reduce((a, b) => a + b.quantity, 0) === 1 ? 'item' : 'items'} saved
+            <ShoppingBag className="w-5 h-5 text-amber-300 shrink-0" />
+            <h2 className="text-sm sm:text-base font-black tracking-tight leading-tight">
+              Your Cart
+              <span className="ml-1.5 text-[11px] sm:text-xs font-medium text-red-100">
+                · {cartItems.reduce((a, b) => a + b.quantity, 0)} {cartItems.reduce((a, b) => a + b.quantity, 0) === 1 ? 'item' : 'items'}
               </span>
-            </div>
+            </h2>
           </div>
           <button
             id="btn-close-cart"
@@ -213,33 +318,24 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         <button
           type="button"
           onClick={onOpenAddressModal}
-          className="bg-white px-4 py-2.5 flex items-center gap-3 border-b border-slate-200 text-left w-full cursor-pointer hover:bg-slate-50 transition-colors"
+          className="bg-white px-[max(0.875rem,calc((100%_-_48rem)/2))] py-1.5 flex items-center gap-3 border-b border-slate-200 text-left w-full cursor-pointer hover:bg-slate-50 transition-colors"
         >
           <div className="shrink-0">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Deliver</div>
-            <div className="text-sm font-black text-slate-900">30 Mins</div>
+            <div className="text-[11px] font-black text-slate-900 leading-tight">Deliver · 30 min</div>
           </div>
-          <div className="w-px h-8 bg-slate-200" />
+          <div className="w-px h-5 bg-slate-200" />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-slate-800 truncate">
               {currentAddress.address}, {currentAddress.city} - {currentAddress.pincode}
-            </p>
-            <p className="text-[11px] text-slate-500 truncate">
-              {currentAddress.landmark ? `Landmark: ${currentAddress.landmark}` : 'Tap to set exact address + landmark'}
             </p>
           </div>
           <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
         </button>
 
         {/* Free Delivery Bar */}
-        {orderType === 'DELIVERY' && cartItems.length > 0 && (
-          <div className="px-4 py-2 text-white text-xs bg-gradient-to-r from-[#ED1C24] via-[#9a1220] to-[#ED1C24]">
-            {isFreeDeliveryEligible ? (
-              <div className="flex items-center gap-1.5 font-bold">
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-amber-300" />
-                <span>Lowest Prices & FREE Delivery unlocked — Congratulations!</span>
-              </div>
-            ) : (
+        {orderType === 'DELIVERY' && cartItems.length > 0 && !isFreeDeliveryEligible && (
+          <div className="px-[max(0.875rem,calc((100%_-_48rem)/2))] py-1.5 text-white text-xs bg-gradient-to-r from-[#ED1C24] via-[#9a1220] to-[#ED1C24]">
+            {(
               <div>
                 <div className="flex items-center justify-between text-[11px] font-semibold mb-1">
                   <span>Add ₹{freeDeliveryThreshold - subtotal} more for FREE Delivery</span>
@@ -257,7 +353,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         )}
 
         {/* Scrollable Items Container */}
-        <div className="flex-1 overflow-y-auto p-3.5 sm:p-4 space-y-3.5">
+        <div className="flex-1 overflow-y-auto py-3.5 sm:py-4 px-[max(0.875rem,calc((100%_-_48rem)/2))] space-y-3.5">
           {cartItems.length === 0 ? (
             <div className="py-16 text-center">
               <div className="w-20 h-20 mx-auto rounded-full bg-slate-200 flex items-center justify-center text-3xl mb-3 shadow-inner">
@@ -919,7 +1015,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
         {/* 7. Sticky Bottom Pay & Place Order Footer */}
         {cartItems.length > 0 && (
-          <div className="border-t border-slate-200 p-3 sm:p-4 bg-white shadow-lg flex items-center justify-between gap-3 shrink-0">
+          <div className="border-t border-slate-200 py-3 sm:py-4 px-[max(0.875rem,calc((100%_-_48rem)/2))] bg-white shadow-lg flex items-center justify-between gap-3 shrink-0">
             <div>
               <span className="text-[10px] text-slate-500 uppercase tracking-wider font-bold block">
                 Total Payable

@@ -222,7 +222,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
           id="btn-chat-open"
           onClick={() => setOpen(true)}
           aria-label="Open pizza assistant"
-          className={`fixed right-4 z-50 w-14 h-14 rounded-full shadow-2xl overflow-hidden transition-all hover:scale-105 cursor-pointer border-2 border-white bg-white p-0 ${hasCart ? 'bottom-[158px] sm:bottom-[148px]' : 'bottom-[88px] sm:bottom-[88px]'}`}
+          className={`fixed right-3 sm:right-4 z-50 w-11 h-11 sm:w-14 sm:h-14 rounded-full shadow-2xl overflow-hidden transition-all hover:scale-105 cursor-pointer border-2 border-white bg-white p-0 ${hasCart ? 'bottom-[158px] sm:bottom-[148px]' : 'bottom-[88px] sm:bottom-[88px]'}`}
         >
           <img src={AVATAR} alt="Pizza assistant" className="w-full h-full object-cover" />
           {unread > 0 && (
