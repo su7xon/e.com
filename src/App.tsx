@@ -23,7 +23,6 @@ import {
 import { isOfferActive, isScheduleActive, SLIDE_SCHEDULES } from './utils/offerSchedule';
 import { Navbar } from './components/Navbar';
 import { OffersStrip } from './components/OffersStrip';
-import { OutletPicker } from './components/OutletPicker';
 import { ProfileDrawer, CustomerProfile } from './components/ProfileDrawer';
 import { FilterSheet } from './components/FilterSheet';
 import { OfferDetailSheet } from './components/OfferDetailSheet';
@@ -46,7 +45,7 @@ import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminLogin } from './components/admin/AdminLogin';
 import { AdminDelivery } from './components/admin/AdminDelivery';
 import { AdminOrder, SEED_ADMIN_ORDERS } from './components/admin/adminData';
-import { Outlet, listOutletsByDistance, getOutletById, findNearestOutlet, resolveOutletForOrder, parseOutletQrParam, parseTableQrParam, getTableById } from './components/admin/outlets';
+import { Outlet, getOutletById, findNearestOutlet, resolveOutletForOrder, parseOutletQrParam, parseTableQrParam, getTableById } from './components/admin/outlets';
 import {
   saveMenuItemToFirestore,
   deleteMenuItemFromFirestore,
@@ -756,27 +755,6 @@ export default function App() {
     return resolveOutletForOrder(currentAddress.lat, currentAddress.lng);
   }, [userGps, currentAddress.lat, currentAddress.lng]);
 
-  // Takeaway / Dine-in: customer picks a store (nearest first); the choice is remembered.
-  const [isOutletPickerOpen, setIsOutletPickerOpen] = useState(false);
-  const [pickupOutletId, setPickupOutletId] = useState<string | null>(() => {
-    try {
-      const id = localStorage.getItem('seven_cheese_pickup_outlet');
-      return id && getOutletById(id) ? id : null;
-    } catch {
-      return null;
-    }
-  });
-  const pickupLoc =
-    userGps ??
-    (typeof currentAddress.lat === 'number' && typeof currentAddress.lng === 'number'
-      ? { lat: currentAddress.lat, lng: currentAddress.lng }
-      : null);
-  const outletChoices = useMemo(
-    () => listOutletsByDistance(pickupLoc?.lat, pickupLoc?.lng),
-    [pickupLoc?.lat, pickupLoc?.lng],
-  );
-  const pickupOutlet = (pickupOutletId ? getOutletById(pickupOutletId) : null) ?? outletChoices[0]?.outlet ?? null;
-
   // Cart & Customization State
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
     const saved = localStorage.getItem('seven_cheese_cart') || localStorage.getItem('dominos_cart');
@@ -1086,7 +1064,6 @@ export default function App() {
     // Assign outlet: QR scan lock wins, else nearest from GPS, else Outlet 1.
     const orderOutlet =
       qrOutlet ??
-      (orderType !== 'DELIVERY' ? pickupOutlet : null) ??
       resolveOutletForOrder(currentAddress.lat, currentAddress.lng).outlet;
 
     // Real receiver details from checkout (Domino's-style form) — no more dummy data.
@@ -1492,7 +1469,6 @@ export default function App() {
       {/* Top Navbar */}
       <Navbar
         orderType={orderType}
-        setOrderType={setOrderType}
         currentAddress={currentAddress}
         onOpenAddressModal={() => setIsAddressModalOpen(true)}
         onOpenCart={() => setIsCartOpen(true)}
@@ -1510,8 +1486,6 @@ export default function App() {
         suggestions={searchSuggestions}
         onSelectSuggestion={handleSelectSuggestion}
         isTableLocked={!!qrTable}
-        pickupStoreName={pickupOutlet?.shortName}
-        onPickStore={() => !qrOutlet && setIsOutletPickerOpen(true)}
         onOpenProfile={() => setIsProfileOpen(true)}
       />
       <ProfileDrawer
@@ -1528,21 +1502,6 @@ export default function App() {
         }}
         onManageAddresses={() => setIsAddressModalOpen(true)}
         onOpenChat={() => window.dispatchEvent(new Event('seven-cheese:open-chat'))}
-      />
-      <OutletPicker
-        isOpen={isOutletPickerOpen}
-        mode={orderType === 'DINE_IN' ? 'DINE_IN' : 'TAKEAWAY'}
-        outlets={outletChoices}
-        selectedId={pickupOutlet?.id ?? null}
-        hasLocation={!!pickupLoc}
-        locating={gpsState === 'locating'}
-        onDetectLocation={requestGps}
-        onSelect={(id) => {
-          setPickupOutletId(id);
-          try { localStorage.setItem('seven_cheese_pickup_outlet', id); } catch { /* ignore */ }
-          setIsOutletPickerOpen(false);
-        }}
-        onClose={() => setIsOutletPickerOpen(false)}
       />
 
       {/* Main Content Areas based on active tab */}

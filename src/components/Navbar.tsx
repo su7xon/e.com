@@ -2,7 +2,6 @@ import React from 'react';
 import { 
   MapPin, 
   ChevronDown,
-  ChevronUp,
   Search, 
   Clock,
   Sparkles,
@@ -14,7 +13,6 @@ import { SevenCheeseLogo } from './SevenCheeseLogo';
 
 interface NavbarProps {
   orderType: OrderType;
-  setOrderType: (type: OrderType) => void;
   currentAddress: UserAddress;
   onOpenAddressModal: () => void;
   onOpenCart: () => void;
@@ -35,17 +33,12 @@ interface NavbarProps {
   onSelectSuggestion?: (item: MenuItem) => void;
   /** Customer arrived via table QR — no point showing the address pill */
   isTableLocked?: boolean;
-  /** Store chosen for Takeaway / Dine-in (shown in the mode switch). */
-  pickupStoreName?: string;
-  /** Called when Takeaway or Dine-in is tapped so the store picker can open. */
-  onPickStore?: () => void;
   /** Opens the Profile tab (round icon at the right end of the header). */
   onOpenProfile?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   orderType,
-  setOrderType,
   currentAddress,
   onOpenAddressModal,
   onOpenCart,
@@ -63,8 +56,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   suggestions = [],
   onSelectSuggestion,
   isTableLocked = false,
-  pickupStoreName,
-  onPickStore,
   onOpenProfile,
 }) => {
   const [searchFocus, setSearchFocus] = React.useState(false);
@@ -74,21 +65,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   const openMobileSearch = () => {
     setMobileSearchOpen(true);
     setTimeout(() => searchInputRef.current?.focus(), 0);
-  };
-  const [stripHidden, setStripHidden] = React.useState(() => {
-    try {
-      return localStorage.getItem('seven_cheese_mode_strip_hidden') === '1';
-    } catch {
-      return false;
-    }
-  });
-  const toggleStrip = (hide: boolean) => {
-    setStripHidden(hide);
-    try {
-      localStorage.setItem('seven_cheese_mode_strip_hidden', hide ? '1' : '0');
-    } catch {
-      // ignore
-    }
   };
   const liveKm =
     typeof outletDistanceKm === 'number' && Number.isFinite(outletDistanceKm)
@@ -294,18 +270,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {/* Collapsed mode strip: compact chip that shows the current mode and re-opens the strip */}
-          {stripHidden && (
-            <button
-              id="btn-show-mode-strip"
-              onClick={() => toggleStrip(false)}
-              aria-label="Show order type"
-              className={`${mobileSearchOpen ? 'hidden' : 'flex'} sm:flex order-3 shrink-0 items-center gap-1 h-9 px-2.5 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 cursor-pointer`}
-            >
-              {orderType === 'DELIVERY' ? 'Delivery' : orderType === 'TAKEAWAY' ? 'Takeaway' : 'Dine-in'}
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-            </button>
-          )}
 
           {/* Profile */}
           <button
@@ -318,39 +282,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </div>
 
-        {/* Mode switcher: full-width segmented control under the header row (Domino's style).
-            Customer can collapse it; the choice is remembered on this device. */}
-        {stripHidden ? null : (
-        <div className="mt-1.5 sm:mt-2 flex items-stretch gap-1.5">
-        <div className="flex-1 grid grid-cols-3 rounded-xl overflow-hidden border border-slate-200 text-center text-xs font-bold">
-          {([['DELIVERY', 'Delivery', 'Now'], ['TAKEAWAY', 'Takeaway', 'Select Store'], ['DINE_IN', 'Dine-in', 'Select Store']] as const).map(([key, label, sub]) => (
-            <button
-              key={key}
-              id={`tab-mode-${key.toLowerCase().replace('_', '')}`}
-              onClick={() => {
-                setOrderType(key);
-                if (key !== 'DELIVERY') onPickStore?.();
-              }}
-              className={`py-1.5 sm:py-1.5 transition-colors cursor-pointer ${
-                orderType === key ? 'bg-slate-800 text-white' : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <span className="block leading-tight">{label}</span>
-              <span className={`hidden sm:block text-[10px] font-medium leading-tight ${orderType === key ? 'text-slate-300' : 'text-slate-400'}`}>{key === 'DELIVERY' ? sub : pickupStoreName || sub}</span>
-            </button>
-          ))}
-        </div>
-          <button
-            id="btn-hide-mode-strip"
-            onClick={() => toggleStrip(true)}
-            aria-label="Hide order type"
-            title="Hide"
-            className="shrink-0 w-8 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-500 cursor-pointer"
-          >
-            <ChevronUp className="w-4 h-4" />
-          </button>
-        </div>
-        )}
 
       </div>
     </header>
