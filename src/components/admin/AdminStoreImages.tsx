@@ -110,6 +110,7 @@ export const AdminStoreImages: React.FC<AdminStoreImagesProps> = ({
                       <option value="tuesday">Tuesday only</option>
                       <option value="friday">Friday only</option>
                       <option value="lunch">Lunch 11am–2pm</option>
+                      <option value="generic">When no deal is running</option>
                     </select>
                   </label>
                   <div className="flex gap-2 mt-2">

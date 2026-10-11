@@ -28,7 +28,8 @@ export interface BannerSlide {
   schedule?: SlideSchedule;
 }
 
-export type SlideSchedule = 'always' | 'tuesday' | 'friday' | 'lunch';
+/** 'generic' = upsell banner shown only while no Tuesday / Friday / lunch deal is running. */
+export type SlideSchedule = 'always' | 'tuesday' | 'friday' | 'lunch' | 'generic';
 
 export const DEFAULT_SLIDES: BannerSlide[] = [
   {
@@ -46,6 +47,7 @@ export const DEFAULT_SLIDES: BannerSlide[] = [
     image: '/images/hero-banner-1.png',
     productId: 'p-7cheese-signature',
     fullImage: true,
+    schedule: 'tuesday',
   },
   {
     id: 'slide-hero-banner-2',
@@ -62,6 +64,7 @@ export const DEFAULT_SLIDES: BannerSlide[] = [
     image: '/images/hero-banner-2.png',
     productId: 'pan-onion',
     fullImage: true,
+    schedule: 'friday',
   },
   {
     id: 'slide-hero-banner-3',
@@ -78,6 +81,7 @@ export const DEFAULT_SLIDES: BannerSlide[] = [
     image: '/images/hero-banner-3.png',
     productId: 'p-tandoori-chicken',
     fullImage: true,
+    schedule: 'lunch',
   },
   {
     id: 'slide-hero-banner-4',
@@ -94,6 +98,7 @@ export const DEFAULT_SLIDES: BannerSlide[] = [
     image: '/images/hero-banner-4.png',
     productId: 'b-veg-normal',
     fullImage: true,
+    schedule: 'lunch',
   },
   {
     id: 'slide-hero-banner-5',
@@ -110,6 +115,56 @@ export const DEFAULT_SLIDES: BannerSlide[] = [
     image: '/images/hero-banner-5.png',
     productId: 'p-7cheese-signature',
     fullImage: true,
+    schedule: 'lunch',
+  },
+  // Generic upsell banners — fill the slot when no deal is running.
+  {
+    id: 'slide-generic-bestseller',
+    badge: 'BESTSELLER',
+    titlePart1: 'Deluxe',
+    titleHighlight: 'Veggie',
+    titlePart2: 'Pizza',
+    subtitle: 'Loaded with onion, capsicum, mushroom, corn & paneer on our cheese blend.',
+    priceOld: 329,
+    priceNew: 269,
+    feature1: 'Loaded veggies',
+    feature2: 'Hand tossed',
+    bgGradient: 'from-red-950 via-[#26050a] to-[#120204]',
+    image: '/images/menu/p-veg-deluxe.jpg',
+    productId: 'p-veg-deluxe',
+    schedule: 'generic',
+  },
+  {
+    id: 'slide-generic-garlic-bread',
+    badge: 'MAKE IT A MEAL',
+    titlePart1: 'Classic',
+    titleHighlight: 'Stuffed',
+    titlePart2: 'Garlic Bread',
+    subtitle: 'Cheesy stuffed garlic bread — the perfect side with any pizza.',
+    priceOld: 159,
+    priceNew: 129,
+    feature1: 'Freshly baked',
+    feature2: 'Goes with every pizza',
+    bgGradient: 'from-amber-950 via-[#1c0f05] to-[#0d0702]',
+    image: '/images/menu/p-start-classic-stuffed-gb.jpg',
+    productId: 'p-start-classic-stuffed-gb',
+    schedule: 'generic',
+  },
+  {
+    id: 'slide-generic-choco-lava',
+    badge: 'SWEET ENDING',
+    titlePart1: 'Choco',
+    titleHighlight: 'Lava',
+    titlePart2: 'Cake',
+    subtitle: 'Warm chocolate cake with a molten centre. Add one to your order.',
+    priceOld: 149,
+    priceNew: 119,
+    feature1: 'Molten centre',
+    feature2: 'Served warm',
+    bgGradient: 'from-zinc-950 via-[#1f1610] to-[#0a0705]',
+    image: '/images/menu/p-dessert-choco-lava.jpg',
+    productId: 'p-dessert-choco-lava',
+    schedule: 'generic',
   },
 ];
 

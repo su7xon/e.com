@@ -27,6 +27,7 @@ export const SLIDE_SCHEDULES: Record<string, OfferSchedule | undefined> = {
   tuesday: TUESDAY,
   friday: FRIDAY,
   lunch: LUNCH,
+  generic: undefined,
 };
 
 const toMinutes = (hhmm: string) => {

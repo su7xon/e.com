@@ -20,9 +20,9 @@ import {
   SIZE_PRICE_MODIFIERS,
   CRUST_PRICE_MODIFIERS
 } from './data/mockData';
-import { isOfferActive, isScheduleActive, SLIDE_SCHEDULES } from './utils/offerSchedule';
+import { isOfferActive, isScheduleActive, SLIDE_SCHEDULES, LUNCH } from './utils/offerSchedule';
 import { Navbar } from './components/Navbar';
-import { OffersStrip } from './components/OffersStrip';
+import { DealPopup, TimedDeal } from './components/DealPopup';
 import { ProfileDrawer, CustomerProfile } from './components/ProfileDrawer';
 import { FilterSheet } from './components/FilterSheet';
 import { OfferDetailSheet } from './components/OfferDetailSheet';
@@ -775,9 +775,14 @@ export default function App() {
   }, []);
   const activeCoupons = useMemo(() => coupons.filter((c) => isOfferActive(c, now)), [coupons, now]);
   const activeMenuItems = useMemo(() => menuItems.filter((m) => isOfferActive(m, now)), [menuItems, now]);
+  // While a deal runs (Tuesday / Friday / lunch) show just its banners;
+  // otherwise show the generic upsell banners (and any "Always" banners).
   const activeSlides = useMemo(() => {
-    const list = heroSlides.filter((s) => isScheduleActive(SLIDE_SCHEDULES[s.schedule ?? 'always'], now));
-    return list.length > 0 ? list : heroSlides.filter((s) => !s.schedule || s.schedule === 'always');
+    const isDeal = (s: BannerSlide) => s.schedule === 'tuesday' || s.schedule === 'friday' || s.schedule === 'lunch';
+    const liveDeals = heroSlides.filter((s) => isDeal(s) && isScheduleActive(SLIDE_SCHEDULES[s.schedule as string], now));
+    if (liveDeals.length > 0) return liveDeals;
+    const generic = heroSlides.filter((s) => !isDeal(s));
+    return generic.length > 0 ? generic : heroSlides;
   }, [heroSlides, now]);
   // An applied coupon that goes out of its window is dropped automatically.
   useEffect(() => {
@@ -855,6 +860,75 @@ export default function App() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   // Offer tapped in "Offers for you" → its own detail sheet.
   const [viewOffer, setViewOffer] = useState<Coupon | null>(null);
+
+  // Timed deals (Tuesday, Friday, lunch 11am-2pm) pop up while running, once per deal per day.
+  // Everyday coupons live in Profile → Deals & Offers and at checkout.
+  const timedDeals = useMemo<TimedDeal[]>(() => {
+    const slideImage = (s: string) => heroSlides.find((x) => x.schedule === s)?.image;
+    const deals: TimedDeal[] = [];
+    const couponDeal = (code: string, schedule: string, when: string) => {
+      const c = activeCoupons.find((x) => x.code === code);
+      if (!c) return;
+      deals.push({
+        id: code,
+        title: c.title,
+        subtitle: c.description,
+        when,
+        image: slideImage(schedule),
+        ctaLabel: 'View offer',
+        onCta: () => {
+          setDealPopupId(null);
+          setViewOffer(c);
+        },
+      });
+    };
+    couponDeal('TUESDAYTREAT', 'tuesday', 'Today only · Tuesday');
+    couponDeal('FUNDAYFRIDAY', 'friday', 'Today only · Friday');
+    const lunch = activeMenuItems.filter((m) => m.id.startsWith('p-offer-lunch-'));
+    if (lunch.length && isScheduleActive(LUNCH, now)) {
+      deals.push({
+        id: 'LUNCH',
+        title: 'Lunch Combo Deal',
+        subtitle: `Pizza + cold drink + fries combos from ₹${Math.min(...lunch.map((m) => m.price))}.`,
+        when: 'Today · 11 AM – 2 PM',
+        image: slideImage('lunch'),
+        ctaLabel: 'See lunch combos',
+        onCta: () => {
+          setDealPopupId(null);
+          setSelectedCategory('combos');
+          setTimeout(() => document.getElementById('menu-items-section')?.scrollIntoView({ behavior: 'smooth' }), 50);
+        },
+      });
+    }
+    return deals;
+  }, [activeCoupons, activeMenuItems, heroSlides, now]);
+
+  const [dealPopupId, setDealPopupId] = useState<string | null>(null);
+  const dealSeenKey = (id: string) => {
+    const d = new Date();
+    return `seven_cheese_deal_seen_${id}_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  };
+  const locationGateOpen = !locPromptDismissed && !qrOutletId && !userGps && gpsState !== 'locked';
+  useEffect(() => {
+    if (dealPopupId || locationGateOpen) return;
+    const next = timedDeals.find((d) => {
+      try {
+        return localStorage.getItem(dealSeenKey(d.id)) !== '1';
+      } catch {
+        return true;
+      }
+    });
+    if (!next) return;
+    const id = window.setTimeout(() => {
+      setDealPopupId(next.id);
+      try {
+        localStorage.setItem(dealSeenKey(next.id), '1');
+      } catch {
+        // ignore
+      }
+    }, 1500);
+    return () => window.clearTimeout(id);
+  }, [timedDeals, locationGateOpen, dealPopupId]);
 
   // Modals Visibility
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
@@ -1513,7 +1587,6 @@ export default function App() {
             onSelectFeatured={handleSelectFeatured}
             onOpenDeals={() => setIsDealsModalOpen(true)}
           />
-          <OffersStrip coupons={activeCoupons} onView={setViewOffer} />
 
           {/* Browse Our Category - Moving Marquee */}
           <CategoryMarquee
@@ -2091,6 +2164,10 @@ export default function App() {
           setIsFilterOpen(false);
           document.getElementById('menu-items-section')?.scrollIntoView({ behavior: 'smooth' });
         }}
+      />
+      <DealPopup
+        deal={timedDeals.find((d) => d.id === dealPopupId) ?? null}
+        onClose={() => setDealPopupId(null)}
       />
       <OfferDetailSheet
         coupon={viewOffer}
