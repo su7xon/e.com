@@ -20,7 +20,8 @@ import {
   Settings,
   Image as ImageIcon,
   QrCode,
-  Bike
+  Bike,
+  Printer
 } from 'lucide-react';
 import { MenuItem, Coupon, CategoryItem } from '../../types';
 import { AdminOrder } from './adminData';
@@ -37,6 +38,13 @@ import { AdminCouponManager } from './AdminCouponManager';
 import { AdminReports } from './AdminReports';
 import { AdminStoreImages } from './AdminStoreImages';
 import { playPosChime, playNewOrderAlert, unlockAudio } from './audioAlert';
+import {
+  buildCustomerBillHtml,
+  buildKotBillHtml,
+  buildCombinedBillHtml,
+  printThermal,
+  orderToThermal,
+} from './ThermalBills';
 
 interface AdminLayoutProps {
   outlet: Outlet;
@@ -93,6 +101,12 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isAlertSoundOn, setIsAlertSoundOn] = useState(true);
+  const [isAutoPrintOn, setIsAutoPrintOn] = useState<boolean>(
+    () => localStorage.getItem('seven_cheese_autoprint_enabled') !== 'false'
+  );
+  const [autoPrintType, setAutoPrintType] = useState<'COMBINED' | 'KOT' | 'INVOICE'>(
+    () => (localStorage.getItem('seven_cheese_autoprint_type') as 'COMBINED' | 'KOT' | 'INVOICE') || 'COMBINED'
+  );
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [notifPerm, setNotifPerm] = useState<string>(
     () => (typeof Notification !== 'undefined' ? Notification.permission : 'unsupported')
@@ -105,6 +119,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const baseTitle = useRef(document.title);
   const soundOnRef = useRef(isAlertSoundOn);
   soundOnRef.current = isAlertSoundOn;
+  const autoPrintOnRef = useRef(isAutoPrintOn);
+  autoPrintOnRef.current = isAutoPrintOn;
+  const autoPrintTypeRef = useRef(autoPrintType);
+  autoPrintTypeRef.current = autoPrintType;
 
   // Strict per-outlet: har outlet ko SIRF apne order dikhenge.
   // Legacy orders (bina outletId) dono me dikhenge taaki purana data kho na jaye.
@@ -256,6 +274,25 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       window.setTimeout(() => { if (soundOnRef.current) playNewOrderAlert(4000); }, 9000);
     }
     flashTitle(`🔔 NEW ORDER ${latest.orderNumber} — ₹${latest.total}`);
+
+    // Auto-Print incoming orders immediately to Thermal Printer
+    if (autoPrintOnRef.current) {
+      external.forEach((ord) => {
+        try {
+          const tData = orderToThermal(ord);
+          const billHtml =
+            autoPrintTypeRef.current === 'KOT'
+              ? buildKotBillHtml(tData)
+              : autoPrintTypeRef.current === 'INVOICE'
+                ? buildCustomerBillHtml(tData)
+                : buildCombinedBillHtml(tData);
+          printThermal(billHtml);
+        } catch (err) {
+          console.error('Auto-print error for order:', ord.orderNumber, err);
+        }
+      });
+    }
+
     try {
       if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
         const n = new Notification('🔔 New Order Received', {
@@ -278,6 +315,38 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     if (isAlertSoundOn) {
       playPosChime(3000);
     }
+  };
+
+  const handleTestPrint = () => {
+    const sampleOrder: AdminOrder = visibleOrders[0] || {
+      id: `ord-test-${Date.now()}`,
+      orderNumber: '#7C-TEST',
+      customerName: 'WALK-IN GUEST',
+      customerPhone: '7900477999',
+      orderType: 'DELIVERY',
+      address: 'UNCHAPUL, HALDWANI',
+      items: [
+        { name: '7 CHEESE SPECIAL PIZZA', quantity: 1, price: 349, isVeg: true, size: 'Medium' }
+      ],
+      subtotal: 349,
+      deliveryFee: 0,
+      tax: 17.45,
+      discount: 0,
+      total: 366,
+      paymentMethod: 'UPI',
+      paymentStatus: 'PAID',
+      status: 'NEW',
+      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timeAgo: 'Just now',
+    };
+    const tData = orderToThermal(sampleOrder);
+    const html =
+      autoPrintType === 'KOT'
+        ? buildKotBillHtml(tData)
+        : autoPrintType === 'INVOICE'
+          ? buildCustomerBillHtml(tData)
+          : buildCombinedBillHtml(tData);
+    printThermal(html);
   };
 
   const handleRefresh = () => {
@@ -458,6 +527,22 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             <span>Alert {isAlertSoundOn ? 'ON' : 'OFF'}</span>
           </button>
           <button
+            onClick={() => {
+              const next = !isAutoPrintOn;
+              setIsAutoPrintOn(next);
+              localStorage.setItem('seven_cheese_autoprint_enabled', String(next));
+            }}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
+              isAutoPrintOn
+                ? 'bg-purple-50 text-purple-800 border-purple-200'
+                : 'bg-white text-slate-500 border-slate-200'
+            }`}
+            title="Auto-Print orders"
+          >
+            <Printer className="w-3.5 h-3.5 text-purple-600" />
+            <span>Print {isAutoPrintOn ? 'ON' : 'OFF'}</span>
+          </button>
+          <button
             onClick={handleTestAlert}
             className="flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-300 px-3 py-1.5 rounded-xl text-[11px] font-bold cursor-pointer"
           >
@@ -518,6 +603,51 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               {isAlertSoundOn ? <Volume2 className="w-3.5 h-3.5 text-emerald-600" /> : <VolumeX className="w-3.5 h-3.5 text-slate-400" />}
               <span>Alert: {isAlertSoundOn ? 'ON' : 'OFF'}</span>
             </button>
+
+            {/* Auto-Print Controls */}
+            <div className="flex items-center gap-1 bg-slate-100/80 border border-slate-200 p-1 rounded-xl">
+              <button
+                id="btn-toggle-autoprint"
+                onClick={() => {
+                  const next = !isAutoPrintOn;
+                  setIsAutoPrintOn(next);
+                  localStorage.setItem('seven_cheese_autoprint_enabled', String(next));
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  isAutoPrintOn
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'bg-white text-slate-600 hover:text-slate-800 border border-slate-200/60'
+                }`}
+                title="Auto-prints incoming orders to thermal printer. Use Chrome --kiosk-printing for 100% silent direct print."
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Auto-Print: {isAutoPrintOn ? 'ON' : 'OFF'}</span>
+              </button>
+
+              <select
+                id="select-autoprint-type"
+                value={autoPrintType}
+                onChange={(e) => {
+                  const val = e.target.value as 'COMBINED' | 'KOT' | 'INVOICE';
+                  setAutoPrintType(val);
+                  localStorage.setItem('seven_cheese_autoprint_type', val);
+                }}
+                className="text-[11px] font-bold bg-white text-slate-700 border border-slate-200 rounded-lg px-2 py-1 cursor-pointer outline-none hover:border-slate-300"
+                title="Format to print automatically"
+              >
+                <option value="COMBINED">Invoice + KOT</option>
+                <option value="KOT">KOT Only</option>
+                <option value="INVOICE">Invoice Only</option>
+              </select>
+
+              <button
+                onClick={handleTestPrint}
+                className="text-[11px] font-bold text-purple-700 hover:bg-purple-100/60 px-2 py-1 rounded-lg transition-colors cursor-pointer"
+                title="Test print a sample receipt to verify printer"
+              >
+                Test Print
+              </button>
+            </div>
 
             {/* Test 3s Alert Button */}
             <button

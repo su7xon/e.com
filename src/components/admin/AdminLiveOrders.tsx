@@ -27,6 +27,7 @@ import {
   buildKotBillHtml,
   buildCombinedBillHtml,
   printThermal,
+  orderToThermal,
   type ThermalBillData,
 } from './ThermalBills';
 
@@ -65,43 +66,6 @@ export const AdminLiveOrders: React.FC<AdminLiveOrdersProps> = ({
   const countDispatched = orders.filter(o => o.status === 'DISPATCHED').length;
   const countCompleted = orders.filter(o => o.status === 'COMPLETED').length;
 
-  // Online/counter order -> thermal print data (sales TAX INVOICE + KOT, single job)
-  const orderToThermal = (o: AdminOrder): ThermalBillData => {
-    const serial = o.orderNumber.replace('#7C-', '').replace('#', '');
-    const now = new Date();
-    const dateStr = o.billDateIso
-      ? o.billDateIso.split('-').reverse().join('-')
-      : now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-');
-    const lines = (o.items || []).map((it) => ({
-      name: (it.name || '').toUpperCase(),
-      size: it.size || '',
-      qty: it.quantity,
-      rate: it.price,
-      disPct: 0,
-      amt: it.quantity * it.price,
-    }));
-    const taxable = Math.max(0, o.subtotal - (o.discount || 0));
-    const base = Math.round(taxable);
-    return {
-      serialNo: serial,
-      dateStr,
-      timeStr: o.createdAt || now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
-      billTypeLabel: o.orderType === 'DELIVERY' ? 'HOME DELIVERY' : o.orderType === 'DINE_IN' ? 'DINE IN' : 'CARRY OUT',
-      customerName: (o.customerName || 'WALK-IN').toUpperCase(),
-      address: o.tableNumber || o.address || '',
-      phone: o.customerPhone || o.partyPhone || '',
-      soldBy: STORE_HEADER.soldBy,
-      lines,
-      totalQty: lines.reduce((s, l) => s + l.qty, 0),
-      totalAmt: o.subtotal + (o.tax || 0),
-      gstTotal: o.tax || 0,
-      grandTotal: o.total,
-      cgstBase: base,
-      cgstAmt: base * 0.025,
-      sgstBase: base,
-      sgstAmt: base * 0.025,
-    };
-  };
 
   return (
     <div className="space-y-5">
