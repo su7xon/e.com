@@ -53,7 +53,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
   };
 
   const startEdit = (addr: UserAddress) => {
-    setLabel(addr.label);
+    setLabel(addr.label === 'Current location' ? 'Home' : addr.label);
     setAddressLine(addr.address);
     setCity(addr.city);
     setPincode(addr.pincode);
@@ -145,10 +145,10 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                 </div>
                 <div className="min-w-0">
                   <h4 className="text-xs font-black text-slate-900 leading-tight">
-                    Exact Location on Live Map
+                    Pin location on map
                   </h4>
                   <p className="text-[10px] text-slate-500 truncate">
-                    GPS auto-detects your doorstep & pincode
+                    Use your current location or move the pin
                   </p>
                 </div>
               </div>

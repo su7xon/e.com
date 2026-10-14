@@ -15,6 +15,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { UserAddress } from '../types';
+import { reverseGeocode as reverseGeocodeAddress } from '../lib/reverseGeocode';
 import { findNearestOutlet } from './admin/outlets';
 
 interface InteractiveMapPickerProps {
@@ -61,56 +62,14 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
   const watchIdRef = useRef<number | null>(null);
   const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ---- Reverse geocode: BigDataCloud (free, no key, CORS ok) -> Nominatim fallback ----
+  // ---- Reverse geocode (shared helper) ----
   const reverseGeocode = useCallback(async (lat: number, lng: number) => {
     setIsGeocoding(true);
-    try {
-      const bdc = await fetch(
-        `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`
-      );
-      if (bdc.ok) {
-        const d = await bdc.json();
-        const street =
-          [d.plusCode?.slice(0, 8), d.locality || d.city, d.principalSubdivision]
-            .filter(Boolean)
-            .join(', ') || '';
-        if (d.city || d.locality || d.principalSubdivision) {
-          setRoadArea(street || d.locality || 'Pinpointed Location');
-          setCity(d.city || d.locality || 'Haldwani');
-          setPincode(d.postcode || '263139');
-          setIsGeocoding(false);
-          return;
-        }
-      }
-      throw new Error('bdc-empty');
-    } catch {
-      // fallback: Nominatim
-      try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
-          { headers: { 'Accept-Language': 'en' } }
-        );
-        if (!res.ok) throw new Error('nominatim-fail');
-        const data = await res.json();
-        if (data?.address) {
-          const a = data.address;
-          const street = [a.house_number, a.road, a.neighbourhood || a.suburb]
-            .filter(Boolean)
-            .join(', ');
-          setRoadArea(street || data.display_name.split(',').slice(0, 2).join(', ') || 'Pinpointed Location');
-          setCity(a.city || a.town || a.village || a.county || 'Haldwani');
-          setPincode(a.postcode || '263139');
-        } else if (data?.display_name) {
-          const parts = data.display_name.split(', ');
-          setRoadArea(parts.slice(0, 2).join(', '));
-          if (parts.length > 2) setCity(parts[2]);
-        }
-      } catch {
-        setRoadArea(`Near ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
-      } finally {
-        setIsGeocoding(false);
-      }
-    }
+    const r = await reverseGeocodeAddress(lat, lng);
+    setRoadArea(r.address);
+    setCity(r.city);
+    setPincode(r.pincode);
+    setIsGeocoding(false);
   }, []);
 
   const scheduleReverseGeocode = useCallback(
@@ -166,7 +125,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
       setLocationError(
         err.code === 1
           ? 'Location permission denied. Allow location in browser settings, then retry.'
-          : 'Exact location not found. Use HTTPS with location ON and retry, or pick an area via search.'
+          : 'Could not find your location. Turn location on and retry, or search for your area.'
       );
       stopWatch(false);
     };
@@ -291,7 +250,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
   const outletKm = findNearestOutlet(coords.lat, coords.lng).distanceKm.toFixed(1);
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[70] overflow-hidden bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
       <div
         id="modal-interactive-map"
         className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] h-[680px] border border-slate-200 animate-in zoom-in-95 duration-200 relative"
@@ -304,10 +263,10 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-black tracking-tight leading-tight">
-                Select Exact Delivery Location
+                Set Delivery Location
               </h2>
               <span className="text-[11px] text-red-100 font-medium">
-                GPS drops the exact pin • this address will be used at checkout
+                This address will be used at checkout
               </span>
             </div>
           </div>
@@ -403,12 +362,12 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
               {gpsStatus === 'locating' ? (
                 <>
                   <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>Finding exact GPS...</span>
+                  <span>Finding your location…</span>
                 </>
               ) : gpsStatus === 'locked' ? (
                 <>
                   <Crosshair className="w-3 h-3" />
-                  <span>Exact location locked{accuracy !== null ? ` • ±${accuracy}m` : ''}</span>
+                  <span>Location found</span>
                 </>
               ) : (
                 <>
@@ -422,7 +381,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
             {isGeocoding && (
               <div className="mt-1.5 bg-slate-900/90 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-lg flex items-center gap-1.5 w-fit">
                 <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
-                <span>Detecting address...</span>
+                <span>Getting address…</span>
               </div>
             )}
           </div>
@@ -437,7 +396,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
               className="bg-white hover:bg-slate-50 active:scale-95 text-[#ED1C24] p-2.5 rounded-2xl shadow-xl border border-slate-200/80 flex items-center gap-2 text-xs font-black transition-all cursor-pointer"
             >
               <Navigation className={`w-4 h-4 text-[#ED1C24] ${isLocating ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">{isLocating ? 'GPS lock...' : 'Use My Exact Location'}</span>
+              <span className="hidden sm:inline">{isLocating ? 'Locating…' : 'Use current location'}</span>
             </button>
             <a
               href={gmapsLink}
@@ -478,7 +437,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
               </span>
               <p className="text-xs font-extrabold text-slate-900 truncate">{roadArea || 'Locating...'}</p>
               <p className="text-[11px] text-slate-600 font-medium">
-                {city} - {pincode} • <span className="font-black text-amber-700">Outlet se {outletKm} km</span>
+                {city} - {pincode} • <span className="font-black text-amber-700">{outletKm} km from outlet</span>
               </p>
             </div>
           </div>

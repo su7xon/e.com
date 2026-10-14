@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { CRAVING_CATEGORIES } from '../data/mockData';
 import { CategoryItem } from '../types';
 
@@ -10,6 +10,44 @@ interface CategoryMarqueeProps {
 export const CategoryMarquee: React.FC<CategoryMarqueeProps> = ({ onSelectCategory, categories = CRAVING_CATEGORIES }) => {
   // Double the items for seamless infinite scroll
   const items = [...categories.filter(c => c.filterKey !== 'all'), ...categories.filter(c => c.filterKey !== 'all')];
+
+  // Swipeable row that also drifts on its own. Touch / hover pauses the drift;
+  // it resumes a moment after the user lets go. Loops by wrapping at the halfway point.
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const pausedUntil = useRef(0);
+  const hovering = useRef(false);
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    let pos = el.scrollLeft;
+    let raf = 0;
+    const tick = () => {
+      const half = el.scrollWidth / 2;
+      if (!reduceMotion && !hovering.current && Date.now() > pausedUntil.current && half > el.clientWidth) {
+        pos += 0.6;
+        if (pos >= half) pos -= half;
+        el.scrollLeft = pos;
+      } else {
+        pos = el.scrollLeft; // follow manual scrolling
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [items.length]);
+
+  const pause = (ms = 2500) => {
+    pausedUntil.current = Date.now() + ms;
+  };
+  // Keep manual scrolling seamless in both directions.
+  const handleScroll = () => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const half = el.scrollWidth / 2;
+    if (el.scrollLeft <= 0 && Date.now() <= pausedUntil.current) el.scrollLeft += half;
+    else if (el.scrollLeft >= half * 1.5) el.scrollLeft -= half;
+  };
 
   return (
     <section className="bg-white py-6 sm:py-8 border-b border-slate-200 overflow-hidden">
@@ -24,10 +62,22 @@ export const CategoryMarquee: React.FC<CategoryMarqueeProps> = ({ onSelectCatego
 
       {/* Marquee Container */}
       <div
-        className="relative group"
+        ref={scrollerRef}
+        onScroll={handleScroll}
+        onTouchStart={() => pause(60_000)}
+        onTouchEnd={() => pause()}
+        onPointerDown={() => pause(60_000)}
+        onPointerUp={() => pause()}
+        onWheel={() => pause()}
+        onMouseEnter={() => (hovering.current = true)}
+        onMouseLeave={() => {
+          hovering.current = false;
+          pause(1200);
+        }}
+        className="relative overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden px-3 sm:px-6"
         style={{ maskImage: 'linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%)' }}
       >
-        <div className="flex gap-4 sm:gap-5 animate-marquee group-hover:[animation-play-state:paused]">
+        <div className="flex gap-4 sm:gap-5 w-max py-1">
           {items.map((cat, idx) => (
             <button
               key={`${cat.id}-${idx}`}
@@ -67,21 +117,6 @@ export const CategoryMarquee: React.FC<CategoryMarqueeProps> = ({ onSelectCatego
         </div>
       </div>
 
-      {/* Marquee CSS Animation */}
-      <style>{`
-        @keyframes marquee {
-          0% {
-            transform: translateX(0);
-          }
-          100% {
-            transform: translateX(-50%);
-          }
-        }
-        .animate-marquee {
-          animation: marquee 35s linear infinite;
-          width: max-content;
-        }
-      `}</style>
     </section>
   );
 };

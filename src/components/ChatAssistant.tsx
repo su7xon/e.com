@@ -10,6 +10,8 @@ interface ChatAssistantProps {
   hasCart?: boolean;
   onAddToCart: (item: MenuItem) => void;
   onOpenCart: () => void;
+  /** True while a full-screen sheet (cart, pizza options, item view) is open — the chat closes itself. */
+  suppressed?: boolean;
   onOpenCustomize?: (item: MenuItem) => void;
   onSelectCategory?: (key: string) => void;
 }
@@ -113,11 +115,15 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
   menuItems,
   coupons,
   hasCart = false,
+  suppressed = false,
   onAddToCart,
   onOpenCustomize,
   onSelectCategory,
 }) => {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (suppressed) setOpen(false);
+  }, [suppressed]);
   // Other UI (e.g. the profile drawer's "Need Help?") opens the chat via this event.
   useEffect(() => {
     const openChat = () => setOpen(true);
@@ -235,7 +241,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
       )}
 
       {open && (
-        <div className={`fixed z-50 right-3 left-3 sm:left-auto sm:right-5 sm:w-[380px] h-[530px] max-h-[68vh] bg-white rounded-3xl border border-slate-200 shadow-2xl flex flex-col overflow-hidden ${hasCart ? 'bottom-[158px] sm:bottom-[148px]' : 'bottom-[88px] sm:bottom-[88px]'}`}>
+        <div className={`fixed z-[57] right-3 left-3 sm:left-auto sm:right-5 sm:w-[380px] h-[530px] max-h-[68vh] bg-white rounded-3xl border border-slate-200 shadow-2xl flex flex-col overflow-hidden ${hasCart ? 'bottom-[158px] sm:bottom-[148px]' : 'bottom-[88px] sm:bottom-[88px]'}`}>
           {/* Header */}
           <div className="bg-gradient-to-r from-[#ED1C24] to-[#a3121f] text-white px-4 py-3 flex items-center gap-3">
             <img src={AVATAR} alt="Cheesy assistant" className="w-9 h-9 rounded-full object-cover border-2 border-white/60 bg-white" />

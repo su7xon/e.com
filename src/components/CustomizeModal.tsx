@@ -10,6 +10,8 @@ interface CustomizeModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirmAddToCart: (cartItem: CartItem) => void;
+  /** When set, the sheet edits this cart line (prefilled) and "Update Item" replaces it. */
+  editingLine?: CartItem | null;
 }
 
 
@@ -19,6 +21,7 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
   isOpen,
   onClose,
   onConfirmAddToCart,
+  editingLine = null,
 }) => {
   if (!isOpen || !item) return null;
 
@@ -29,25 +32,31 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
 
   const [selectedSize, setSelectedSize] = useState<PizzaSize>(item.defaultSize || 'Regular');
   const [selectedCrust, setSelectedCrust] = useState<PizzaCrust>(item.defaultCrust || 'New Hand Tossed');
-  const [extraCheese, setExtraCheese] = useState<boolean>(item.category === 'signature-7-cheese');
+  const [extraCheese, setExtraCheese] = useState<boolean>(false);
   const [selectedToppings, setSelectedToppings] = useState<ExtraTopping[]>([]);
 
-  // Reset state when item changes
+  // Reset state when item changes — or load the cart line being edited.
   useEffect(() => {
-    if (item) {
-      setSelectedSize(item.defaultSize || 'Regular');
-      setSelectedCrust(item.defaultCrust || 'New Hand Tossed');
-      setExtraCheese(item.category === 'signature-7-cheese');
-      setSelectedToppings([]);
+    if (!item) return;
+    if (editingLine && editingLine.productId === item.id) {
+      setSelectedSize(editingLine.size || item.defaultSize || 'Regular');
+      setSelectedCrust(editingLine.crust || item.defaultCrust || 'New Hand Tossed');
+      setExtraCheese(editingLine.extraCheese);
+      setSelectedToppings(editingLine.extraToppings || []);
+      return;
     }
-  }, [item]);
+    setSelectedSize(item.defaultSize || 'Regular');
+    setSelectedCrust(item.defaultCrust || 'New Hand Tossed');
+    setExtraCheese(false);
+    setSelectedToppings([]);
+  }, [item, editingLine]);
 
   // Compute crust modifier based on size from 7 Cheese Pizza menu
   const getCrustModifier = (crust: PizzaCrust, size: PizzaSize): number => {
     if (crust === 'Cheese Burst') {
       return size === 'Regular' ? 50 : size === 'Medium' ? 80 : 110;
     }
-    if (crust === 'Wheat Thin Crust') {
+    if (crust === 'Thin Crust') {
       return size === 'Regular' ? 30 : size === 'Medium' ? 40 : 70;
     }
     if (crust === 'Fresh Pan Pizza') {
@@ -83,7 +92,7 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
 
   const handleAdd = () => {
     const newCartItem: CartItem = {
-      cartItemId: `${item.id}-${Date.now()}`,
+      cartItemId: editingLine?.cartItemId ?? `${item.id}-${Date.now()}`,
       productId: item.id,
       name: item.name,
       isVeg: item.isVeg,
@@ -94,7 +103,7 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
       crust: isPizzaItem ? selectedCrust : undefined,
       extraCheese: isPizzaItem ? extraCheese : false,
       extraToppings: isPizzaItem ? selectedToppings : [],
-      quantity: 1,
+      quantity: editingLine?.quantity ?? 1,
     };
     onConfirmAddToCart(newCartItem);
     onClose();
@@ -248,7 +257,7 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
           <div>
             {stepHead('02', 'Choose your crust', 'Required')}
             <div className="space-y-2">
-              {(['New Hand Tossed', 'Cheese Burst', 'Fresh Pan Pizza', 'Wheat Thin Crust'] as PizzaCrust[]).map(
+              {(['New Hand Tossed', 'Cheese Burst', 'Thin Crust'] as PizzaCrust[]).map(
                 (crust) => {
                   const isSelected = selectedCrust === crust;
                   const extra = getCrustModifier(crust, selectedSize);
@@ -288,9 +297,7 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
                               ? 'Crust filled with molten cheese blend'
                               : crust === 'New Hand Tossed'
                               ? 'Classic crispy on outside, soft on inside'
-                              : crust === 'Fresh Pan Pizza'
-                              ? 'Thick & soft golden pan crust'
-                              : 'Light & crispy whole wheat crust'}
+                              : 'Light & crispy thin crust'}
                           </span>
                         </div>
                       </div>
@@ -302,40 +309,6 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
                 }
               )}
             </div>
-          </div>
-          )}
-
-          {/* Step 3: Extra cheese — switch (pizzas only) */}
-          {isPizzaItem && (
-          <div className="bg-white border border-amber-200/80 rounded-2xl p-3.5 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
-                <Sparkles className="w-4 h-4 text-amber-700" />
-              </div>
-              <div className="min-w-0">
-                <span className="text-xs sm:text-sm font-bold text-stone-900 block">
-                  Extra 7-cheese layer
-                </span>
-                <span className="text-[11px] text-stone-500 block">
-                  Mozzarella, Cheddar & Gouda · +₹{getCheeseModifier(selectedSize)}
-                </span>
-              </div>
-            </div>
-            <button
-              id="btn-toggle-extra-cheese"
-              role="switch"
-              aria-checked={extraCheese}
-              onClick={() => setExtraCheese(!extraCheese)}
-              className={`w-12 h-7 rounded-full p-1 transition-colors shrink-0 cursor-pointer ${
-                extraCheese ? 'bg-[#C2410C]' : 'bg-stone-300'
-              }`}
-            >
-              <span
-                className={`block w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                  extraCheese ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
           </div>
           )}
 
@@ -420,7 +393,7 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
             onClick={handleAdd}
             className="flex-1 max-w-xs flex items-center justify-center gap-2 bg-[#e31837] hover:bg-[#c4122d] active:scale-95 text-white font-extrabold px-6 py-3.5 rounded-full shadow-lg shadow-red-900/20 text-sm tracking-wide transition-all cursor-pointer"
           >
-            <span>Add to Cart</span>
+            <span>{editingLine ? 'Update Item' : 'Add to Cart'}</span>
             <span>•</span>
             <span className="font-mono">₹{totalPrice}</span>
           </button>

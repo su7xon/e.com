@@ -20,6 +20,7 @@ import {
   SIZE_PRICE_MODIFIERS,
   CRUST_PRICE_MODIFIERS
 } from './data/mockData';
+import { reverseGeocode } from './lib/reverseGeocode';
 import { isOfferActive, isScheduleActive, SLIDE_SCHEDULES, LUNCH } from './utils/offerSchedule';
 import { Navbar } from './components/Navbar';
 import { DealPopup, TimedDeal } from './components/DealPopup';
@@ -45,7 +46,7 @@ import { AdminLayout } from './components/admin/AdminLayout';
 import { AdminLogin } from './components/admin/AdminLogin';
 import { AdminDelivery } from './components/admin/AdminDelivery';
 import { AdminOrder, SEED_ADMIN_ORDERS } from './components/admin/adminData';
-import { Outlet, getOutletById, findNearestOutlet, resolveOutletForOrder, parseOutletQrParam, parseTableQrParam, getTableById } from './components/admin/outlets';
+import { Outlet, getOutletById, findNearestOutlet, geoDistanceKm, resolveOutletForOrder, parseOutletQrParam, parseTableQrParam, getTableById } from './components/admin/outlets';
 import {
   saveMenuItemToFirestore,
   deleteMenuItemFromFirestore,
@@ -127,7 +128,9 @@ export default function App() {
   const fixImg = (url: string | undefined): string | undefined =>
     url ? url.replace('/src/assets/images/', '/images/') : url;
   const migrateItems = <T extends { image?: string }>(items: T[]): T[] =>
-    items.map((it) => (it.image?.includes('/src/assets/') ? { ...it, image: fixImg(it.image) as string } : it));
+    items
+      .map((it) => (it.image?.includes('/src/assets/') ? { ...it, image: fixImg(it.image) as string } : it))
+      .map((it) => ((it as { crust?: string }).crust === 'Wheat Thin Crust' ? { ...it, crust: 'Thin Crust' } : it));
   // URL routes: /admin = POS panel, /delivery (ya /rider) = rider queue. Baki sab = store.
   type AppView = 'home' | 'billing' | 'admin' | 'delivery';
   const VIEW_PATHS: Record<AppView, string> = { home: '/', billing: '/', admin: '/admin', delivery: '/delivery' };
@@ -288,7 +291,7 @@ export default function App() {
         .map((c: CategoryItem) => {
           const d = defaultsById.get(c.id);
           if (!d) return c;
-          return { ...d, ...c, name: c.name === 'Desserts & Dips' ? d.name : c.name, image: (c.image === '/images/menu/p-dip-cheese.jpg' || c.image === '/images/dips.svg' ? d.image : c.image) || d.image, bannerImage: (c as CategoryItem).bannerImage || d.bannerImage || d.image };
+          return { ...d, ...c, name: c.name === 'Desserts & Dips' ? d.name : c.name, image: (c.image === '/images/menu/p-dip-cheese.jpg' || c.image === '/images/dips.svg' || c.image === '/images/desert.png' ? d.image : c.image) || d.image, bannerImage: (c as CategoryItem).bannerImage || d.bannerImage || d.image };
         })
         .concat(CRAVING_CATEGORIES.filter((d) => !parsed.some((c: CategoryItem) => c.id === d.id)));
     } catch {
@@ -702,6 +705,13 @@ export default function App() {
     }
     return null;
   });
+  // Short confirmation after a location fix: "Delivering to … · nearest outlet …".
+  const [locationNote, setLocationNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!locationNote) return;
+    const id = window.setTimeout(() => setLocationNote(null), 5000);
+    return () => window.clearTimeout(id);
+  }, [locationNote]);
   const [gpsState, setGpsState] = useState<'idle' | 'locating' | 'locked' | 'denied'>(() =>
     userGps ? 'locked' : 'idle'
   );
@@ -722,6 +732,25 @@ export default function App() {
         } catch {
           // ignore
         }
+        // Use this location as the delivery address and confirm the outlet it routes to.
+        void reverseGeocode(fix.lat, fix.lng).then((place) => {
+          const nearest = findNearestOutlet(fix.lat, fix.lng);
+          const addr: UserAddress = {
+            id: 'addr-current-location',
+            label: 'Current location',
+            address: place.address,
+            city: place.city,
+            pincode: place.pincode,
+            lat: fix.lat,
+            lng: fix.lng,
+            distanceKm: nearest.distanceKm,
+          };
+          setAddresses((prev) => [addr, ...prev.filter((a) => a.id !== addr.id)]);
+          setCurrentAddress(addr);
+          setLocationNote(
+            `Delivering to ${place.address}${place.city ? ', ' + place.city : ''} · nearest outlet: ${nearest.outlet.name} (${nearest.distanceKm} km)`,
+          );
+        });
       },
       () => setGpsState('denied'),
       { enableHighAccuracy: true, timeout: 12000, maximumAge: 600000 }
@@ -748,10 +777,10 @@ export default function App() {
 
   // Badge distance priority: real GPS fix > selected address ka GPS pin > purana hardcoded distanceKm
   const outletInfo = useMemo(() => {
-    if (userGps) return findNearestOutlet(userGps.lat, userGps.lng);
     if (typeof currentAddress.lat === 'number' && typeof currentAddress.lng === 'number') {
       return findNearestOutlet(currentAddress.lat, currentAddress.lng);
     }
+    if (userGps) return findNearestOutlet(userGps.lat, userGps.lng);
     return resolveOutletForOrder(currentAddress.lat, currentAddress.lng);
   }, [userGps, currentAddress.lat, currentAddress.lng]);
 
@@ -933,7 +962,7 @@ export default function App() {
   // Modals Visibility
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
   const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
-  // Quick view (simple items: Eat Now + Add + Also Try)
+  // Quick view (simple items: Add to Cart + Also Try)
   const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
   const [quickViewItem, setQuickViewItem] = useState<MenuItem | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -979,22 +1008,37 @@ export default function App() {
 
   // Handlers
   const handleOpenCustomize = (item: MenuItem) => {
+    setEditingLine(null);
     setCustomizingItem(item);
     setIsCustomizeOpen(true);
+  };
+
+  // Cart "Edit >" on a pizza: reopen its sheet prefilled; "Update Item" replaces that line.
+  const [editingLine, setEditingLine] = useState<CartItem | null>(null);
+  const handleEditCartItem = (cartItemId: string) => {
+    const line = cartItems.find((c) => c.cartItemId === cartItemId);
+    if (!line) return;
+    const product =
+      menuItems.find((m) => m.id === line.productId) ||
+      MENU_ITEMS.find((m) => m.id === line.productId) ||
+      (MAKE_YOUR_OWN_BASE.id === line.productId ? MAKE_YOUR_OWN_BASE : undefined);
+    if (!product) return;
+    setEditingLine(line);
+    setCustomizingItem(product);
+    setIsCustomizeOpen(true);
+  };
+  const handleConfirmCustomize = (item: CartItem) => {
+    if (editingLine) {
+      setCartItems((prev) => prev.map((c) => (c.cartItemId === editingLine.cartItemId ? item : c)));
+      setEditingLine(null);
+    } else {
+      handleAddCustomizedToCart(item);
+    }
   };
 
   const handleOpenQuickView = (item: MenuItem) => {
     setQuickViewItem(item);
     setIsQuickViewOpen(true);
-  };
-
-  // Eat Now: cart me dalke sidha checkout (billing) page
-  const handleEatNow = (item: MenuItem) => {
-    handleSimpleAddToCart(item);
-    setIsQuickViewOpen(false);
-    setIsCartOpen(false);
-    goView('billing');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSimpleAddToCart = (item: MenuItem) => {
@@ -1118,6 +1162,15 @@ export default function App() {
       ? (paymentMethod === 'cash' ? 'Cash on Delivery' : paymentMethod === 'card' ? 'Credit/Debit Card' : 'UPI')
       : 'UPI';
 
+    // Delivery estimate for this address: ~15 min to prepare + ~3 min per km (≈20 km/h),
+    // kept between 20 and 60 min. The tracker counts down to it.
+    const etaOutlet = qrOutlet ?? resolveOutletForOrder(currentAddress.lat, currentAddress.lng).outlet;
+    const etaKm =
+      typeof currentAddress.lat === 'number' && typeof currentAddress.lng === 'number'
+        ? geoDistanceKm(currentAddress.lat, currentAddress.lng, etaOutlet.lat, etaOutlet.lng)
+        : outletInfo.distanceKm || 3;
+    const etaMinutes = Math.min(60, Math.max(20, Math.round(15 + etaKm * 3)));
+
     const newOrder: ActiveOrder = {
       orderId: `DOM-${Math.floor(10000 + Math.random() * 90000)}`,
       items: [...cartItems],
@@ -1130,7 +1183,8 @@ export default function App() {
       total: finalTotal,
       status: 'CONFIRMED',
       timestamp: 'Just now',
-      estimatedMinutes: 25,
+      estimatedMinutes: etaMinutes,
+      deliverBy: Date.now() + etaMinutes * 60_000,
       riderName: 'Vikram Singh',
       riderPhone: '+91 98912 34567',
     };
@@ -1352,8 +1406,12 @@ export default function App() {
         <CustomizeModal
           item={customizingItem}
           isOpen={isCustomizeOpen}
-          onClose={() => setIsCustomizeOpen(false)}
-          onConfirmAddToCart={handleAddCustomizedToCart}
+          onClose={() => {
+            setIsCustomizeOpen(false);
+            setEditingLine(null);
+          }}
+          onConfirmAddToCart={handleConfirmCustomize}
+          editingLine={editingLine}
         />
         <QuickViewModal
           item={quickViewItem}
@@ -1361,13 +1419,15 @@ export default function App() {
           onClose={() => setIsQuickViewOpen(false)}
           menuItems={menuItems}
           onAddToCart={handleSimpleAddToCart}
-          onEatNow={handleEatNow}
+          cartItems={cartItems}
+          onUpdateQuantity={handleUpdateCartQuantity}
           onOpenCustomize={handleOpenCustomize}
         />
         <ChatAssistant
           menuItems={menuItems}
           coupons={coupons}
           hasCart={cartItemCount > 0}
+        suppressed={isCartOpen || isCustomizeOpen || isQuickViewOpen}
           onAddToCart={handleSimpleAddToCart}
           onOpenCustomize={handleOpenCustomize}
           onOpenCart={() => setIsCartOpen(true)}
@@ -1876,12 +1936,11 @@ export default function App() {
               </div>
 
               {/* steps */}
-              <div className="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="mt-8 grid grid-cols-3 gap-3 sm:gap-4">
                 {[
                   { n: '01', icon: Ruler, t: 'Size', d: 'Regular to Large' },
                   { n: '02', icon: Layers, t: 'Crust', d: 'Hand-tossed to Cheese Burst' },
-                  { n: '03', icon: Pizza, t: 'Cheese', d: 'Extra 7-cheese layer' },
-                  { n: '04', icon: Sparkles, t: 'Toppings', d: 'Unlimited add-ons' },
+                  { n: '03', icon: Sparkles, t: 'Toppings', d: 'Unlimited add-ons' },
                 ].map((s) => {
                   const Icon = s.icon;
                   return (
@@ -2012,8 +2071,12 @@ export default function App() {
       <CustomizeModal
         item={customizingItem}
         isOpen={isCustomizeOpen}
-        onClose={() => setIsCustomizeOpen(false)}
-        onConfirmAddToCart={handleAddCustomizedToCart}
+        onClose={() => {
+          setIsCustomizeOpen(false);
+          setEditingLine(null);
+        }}
+        onConfirmAddToCart={handleConfirmCustomize}
+        editingLine={editingLine}
       />
 
       <QuickViewModal
@@ -2022,7 +2085,8 @@ export default function App() {
         onClose={() => setIsQuickViewOpen(false)}
         menuItems={activeMenuItems}
         onAddToCart={handleSimpleAddToCart}
-        onEatNow={handleEatNow}
+        cartItems={cartItems}
+        onUpdateQuantity={handleUpdateCartQuantity}
         onOpenCustomize={handleOpenCustomize}
       />
 
@@ -2044,6 +2108,7 @@ export default function App() {
           setAddresses((prev) => [addr, ...prev.filter((a) => a.id !== addr.id)]);
         }}
         onPlaceOrder={(notes, method, delivery) => handlePlaceOrder(notes, method, delivery)}
+        onEditItem={handleEditCartItem}
         onProceedToCheckout={() => {
           setIsCartOpen(false);
           goView('billing');
@@ -2099,6 +2164,7 @@ export default function App() {
         menuItems={activeMenuItems}
         coupons={activeCoupons}
         hasCart={cartItemCount > 0}
+        suppressed={isCartOpen || isCustomizeOpen || isQuickViewOpen}
         onAddToCart={handleSimpleAddToCart}
         onOpenCustomize={handleOpenCustomize}
         onOpenCart={() => setIsCartOpen(true)}
@@ -2165,6 +2231,18 @@ export default function App() {
           document.getElementById('menu-items-section')?.scrollIntoView({ behavior: 'smooth' });
         }}
       />
+      {locationNote && (
+        <div className="fixed top-16 sm:top-20 inset-x-0 z-[59] flex justify-center px-3 pointer-events-none">
+          <button
+            type="button"
+            onClick={() => setLocationNote(null)}
+            className="pointer-events-auto max-w-md w-full bg-slate-900 text-white text-xs font-semibold rounded-2xl shadow-2xl px-4 py-3 flex items-start gap-2 text-left animate-in slide-in-from-top duration-300 cursor-pointer"
+          >
+            <span className="text-base leading-none">📍</span>
+            <span>{locationNote}</span>
+          </button>
+        </div>
+      )}
       <DealPopup
         deal={timedDeals.find((d) => d.id === dealPopupId) ?? null}
         onClose={() => setDealPopupId(null)}

@@ -39,6 +39,8 @@ interface CartDrawerProps {
   onOpenAddressModal: () => void;
   onSelectAddress?: (addr: UserAddress) => void;
   onProceedToCheckout?: () => void;
+  /** Opens the size / crust / toppings sheet for a pizza line in the cart. */
+  onEditItem?: (cartItemId: string) => void;
   onPlaceOrder?: (notes: string, paymentMethod: string, delivery?: DeliveryDetails) => void;
   onQuickAdd: (productId: string) => void;
   onUpgradeItem?: (cartItemId: string) => void;
@@ -131,6 +133,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onOpenAddressModal,
   onSelectAddress,
   onProceedToCheckout,
+  onEditItem,
   onPlaceOrder,
   onQuickAdd,
   onUpgradeItem,
@@ -144,11 +147,26 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [cookingNotes, setCookingNotes] = useState('');
   const [isPlacing, setIsPlacing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'cash' | 'card'>('upi');
-  const [receiverName, setReceiverName] = useState('');
-  const [receiverPhone, setReceiverPhone] = useState('');
+  // Prefill receiver from the saved customer profile (set at last checkout / profile drawer).
+  const savedCustomer = (() => {
+    try {
+      const s = localStorage.getItem('seven_cheese_customer');
+      return s ? (JSON.parse(s) as { name?: string; phone?: string }) : null;
+    } catch {
+      return null;
+    }
+  })();
+  const [receiverName, setReceiverName] = useState(savedCustomer?.name ?? '');
+  const [receiverPhone, setReceiverPhone] = useState(savedCustomer?.phone ?? '');
   // Landmark hamesha blank — user khud likhega (saved address se auto-fill nahi)
   const [receiverLandmark, setReceiverLandmark] = useState('');
   const [formError, setFormError] = useState('');
+  const [fieldError, setFieldError] = useState<{ name?: boolean; phone?: boolean }>({});
+  const receiverBoxRef = useRef<HTMLDivElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const phoneInputRef = useRef<HTMLInputElement>(null);
+  // Suggestions added from "Complete Your Meal" stay visible (with a qty stepper) instead of vanishing.
+  const [upsellAdded, setUpsellAdded] = useState<Set<string>>(() => new Set());
   const [mealFilter, setMealFilter] = useState('For you');
   const [upsellDismissed, setUpsellDismissed] = useState<Record<string, boolean>>({});
 
@@ -196,14 +214,23 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   const handleCompleteOrder = () => {
     setFormError('');
+    setFieldError({});
     if (orderType === 'DELIVERY') {
       const digits = receiverPhone.replace(/\D/g, '').replace(/^91/, '');
-      if (!receiverName.trim()) {
-        setFormError('Please enter receiver name for delivery.');
-        return;
-      }
-      if (!/^[6-9]\d{9}$/.test(digits)) {
-        setFormError('Please enter a valid 10-digit mobile number.');
+      const nameBad = !receiverName.trim();
+      const phoneBad = !/^[6-9]\d{9}$/.test(digits);
+      if (nameBad || phoneBad) {
+        setFieldError({ name: nameBad, phone: phoneBad });
+        setFormError(
+          nameBad && phoneBad
+            ? 'Enter receiver name and 10-digit mobile number to place the order.'
+            : nameBad
+            ? 'Enter receiver name to place the order.'
+            : 'Enter a valid 10-digit mobile number to place the order.',
+        );
+        // The form sits far above the Pay button — bring it into view and focus the first gap.
+        receiverBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => (nameBad ? nameInputRef : phoneInputRef).current?.focus({ preventScroll: true }), 350);
         return;
       }
     }
@@ -241,6 +268,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const cartProductIds = new Set(cartItems.map((c) => c.productId));
   const cartGroups = new Set<MealGroup>();
   cartItems.forEach((c) => {
+    // Items added from these suggestions don't reshuffle the list while the customer is browsing it.
+    if (upsellAdded.has(c.productId)) return;
     const m = menuList.find((x) => x.id === c.productId);
     const g = m ? groupOf(m) : /pizza|burger|wrap|pasta/i.test(c.name) ? 'main' : null;
     if (g) cartGroups.add(g);
@@ -253,7 +282,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const candidatesByGroup = new Map<MealGroup, MenuItem[]>();
   wantedGroups.forEach((g) => {
     const list = menuList
-      .filter((m) => !cartProductIds.has(m.id) && groupOf(m) === g)
+      .filter((m) => (!cartProductIds.has(m.id) || upsellAdded.has(m.id)) && groupOf(m) === g)
       .sort((a, b) =>
         g === 'main'
           ? (b.rating || 0) - (a.rating || 0) // bestsellers first
@@ -469,12 +498,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                           </div>
                         )}
 
-                        <button
-                          onClick={onClose}
-                          className="text-[10px] font-bold text-slate-500 underline underline-offset-2 mt-1 cursor-pointer"
-                        >
-                          Edit &gt;
-                        </button>
+                        {onEditItem && (item.size || item.crust) && (
+                          <button
+                            onClick={() => onEditItem(item.cartItemId)}
+                            className="text-[10px] font-bold text-slate-500 underline underline-offset-2 mt-1 cursor-pointer"
+                          >
+                            Edit &gt;
+                          </button>
+                        )}
 
                         <div className="flex items-center justify-between mt-1.5">
                           <span className="text-xs font-mono font-black text-slate-900">
@@ -567,7 +598,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                               />
                               {!inCart ? (
                                 <button
-                                  onClick={() => onQuickAdd(sweet.id)}
+                                  onClick={() => {
+                                  setUpsellAdded((prev) => new Set(prev).add(sweet.id));
+                                  onQuickAdd(sweet.id);
+                                }}
                                   className="absolute top-1 right-1 w-6 h-6 rounded-md bg-white shadow flex items-center justify-center text-[#ED1C24] hover:bg-[#ED1C24] hover:text-white transition-colors cursor-pointer"
                                   aria-label={`Add ${sweet.name}`}
                                 >
@@ -620,7 +654,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                             ) : (
                               <button
                                 id={`btn-sweet-add-${sweet.id}`}
-                                onClick={() => onQuickAdd(sweet.id)}
+                                onClick={() => {
+                                  setUpsellAdded((prev) => new Set(prev).add(sweet.id));
+                                  onQuickAdd(sweet.id);
+                                }}
                                 className="w-full bg-[#ED1C24] hover:bg-[#c91430] active:scale-95 text-white text-[10px] font-black py-1.5 rounded-lg shadow-2xs transition-all cursor-pointer flex items-center justify-center gap-1"
                               >
                                 <Plus className="w-3 h-3 stroke-[3]" />
@@ -894,10 +931,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       id="btn-cart-open-live-map"
                       onClick={() => setIsMapPickerOpen(true)}
                       className="text-[11px] font-black text-white bg-[#ED1C24] hover:bg-[#c91430] active:scale-95 px-2.5 py-1.5 rounded-xl flex items-center gap-1 cursor-pointer transition-all shadow-xs"
-                      title="Set exact location on live map"
+                      title="Pin location on map"
                     >
                       <Navigation className="w-3 h-3 text-amber-300 animate-pulse" />
-                      <span>Live Map</span>
+                      <span>Map</span>
                     </button>
                     <button
                       type="button"
@@ -926,24 +963,28 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
                 {/* Receiver details — rider isi name/number/landmark par pahunchega */}
                 {orderType === 'DELIVERY' && (
-                  <div className="border-t border-slate-100 pt-2.5 space-y-2">
+                  <div ref={receiverBoxRef} className="border-t border-slate-100 pt-2.5 space-y-2 scroll-mt-24">
                     <span className="text-[11px] font-black uppercase tracking-wider text-slate-800 block">
                       Receiver Details (for Rider)
                     </span>
                     <div className="grid grid-cols-2 gap-2">
                       <input
+                        ref={nameInputRef}
                         value={receiverName}
-                        onChange={(e) => { setReceiverName(e.target.value); setFormError(''); }}
+                        onChange={(e) => { setReceiverName(e.target.value); setFormError(''); setFieldError((p) => ({ ...p, name: false })); }}
                         placeholder="Receiver name *"
-                        className="bg-slate-100 text-xs px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24]"
+                        aria-invalid={!!fieldError.name}
+                        className={`text-xs px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24] ${fieldError.name ? 'bg-red-50 ring-2 ring-red-500' : 'bg-slate-100'}`}
                       />
                       <input
+                        ref={phoneInputRef}
                         value={receiverPhone}
-                        onChange={(e) => { setReceiverPhone(e.target.value); setFormError(''); }}
+                        onChange={(e) => { setReceiverPhone(e.target.value); setFormError(''); setFieldError((p) => ({ ...p, phone: false })); }}
                         placeholder="10-digit mobile *"
                         inputMode="numeric"
                         maxLength={13}
-                        className="bg-slate-100 text-xs px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24] font-mono"
+                        aria-invalid={!!fieldError.phone}
+                        className={`text-xs px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24] font-mono ${fieldError.phone ? 'bg-red-50 ring-2 ring-red-500' : 'bg-slate-100'}`}
                       />
                     </div>
                     <input
@@ -956,7 +997,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       <p className="text-[11px] text-red-600 font-bold">{formError}</p>
                     )}
                     <p className="text-[10px] text-slate-500">
-                      Rider call + live location isi number par hogi. Order ke baad apni live location WhatsApp par share kar dena.
+                      The rider will call this number if they need directions.
                     </p>
                   </div>
                 )}
@@ -1014,6 +1055,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         </div>
 
         {/* 7. Sticky Bottom Pay & Place Order Footer */}
+        {cartItems.length > 0 && formError && (
+          <button
+            type="button"
+            onClick={() => receiverBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+            className="shrink-0 bg-red-50 border-t border-red-200 text-red-700 text-xs font-bold py-2 px-[max(0.875rem,calc((100%_-_48rem)/2))] text-left cursor-pointer"
+          >
+            ⚠ {formError} <span className="underline">Fill details ↑</span>
+          </button>
+        )}
         {cartItems.length > 0 && (
           <div className="border-t border-slate-200 py-3 sm:py-4 px-[max(0.875rem,calc((100%_-_48rem)/2))] bg-white shadow-lg flex items-center justify-between gap-3 shrink-0">
             <div>

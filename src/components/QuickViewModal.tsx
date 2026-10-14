@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, Plus, Check, Star, Zap, ShoppingBag } from 'lucide-react';
-import { MenuItem } from '../types';
+import { X, Plus, Minus, Star, Zap, ShoppingBag } from 'lucide-react';
+import { CartItem, MenuItem } from '../types';
 import { needsCustomize } from '../lib/customize';
 import { VegNonVegIcon } from './VegNonVegIcon';
 
@@ -10,10 +10,33 @@ interface QuickViewModalProps {
   onClose: () => void;
   menuItems: MenuItem[];
   onAddToCart: (item: MenuItem) => void;
-  /** Eat Now: cart me dalke sidha checkout (billing) page */
-  onEatNow: (item: MenuItem) => void;
   onOpenCustomize: (item: MenuItem) => void;
+  /** Cart lines, so added items show a − qty + stepper. */
+  cartItems: CartItem[];
+  onUpdateQuantity: (cartItemId: string, delta: number) => void;
 }
+
+/** − qty + control used once an item is in the cart. */
+const QtyStepper: React.FC<{ qty: number; onMinus: () => void; onPlus: () => void; small?: boolean }> = ({
+  qty,
+  onMinus,
+  onPlus,
+  small = false,
+}) => (
+  <div
+    className={`flex items-center justify-between bg-[#e31837] text-white rounded-full ${
+      small ? 'mt-2 w-full px-1 py-0.5' : 'flex-1 px-2 py-1.5'
+    }`}
+  >
+    <button onClick={onMinus} aria-label="Remove one" className={`rounded-full hover:bg-white/15 cursor-pointer ${small ? 'p-1' : 'p-2'}`}>
+      <Minus className={small ? 'w-3 h-3' : 'w-4 h-4'} />
+    </button>
+    <span className={`font-black font-mono ${small ? 'text-xs' : 'text-base'}`}>{qty}</span>
+    <button onClick={onPlus} aria-label="Add one" className={`rounded-full hover:bg-white/15 cursor-pointer ${small ? 'p-1' : 'p-2'}`}>
+      <Plus className={small ? 'w-3 h-3' : 'w-4 h-4'} />
+    </button>
+  </div>
+);
 
 export const QuickViewModal: React.FC<QuickViewModalProps> = ({
   item,
@@ -21,34 +44,48 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
   onClose,
   menuItems,
   onAddToCart,
-  onEatNow,
   onOpenCustomize,
+  cartItems,
+  onUpdateQuantity,
 }) => {
-  const [addedTick, setAddedTick] = useState(false);
+  // The plain (uncustomised) cart line for a product — what Add / + / − act on.
+  const lineFor = (productId: string) =>
+    cartItems.find(
+      (c) => c.productId === productId && !c.size && !c.crust && !c.extraCheese && c.extraToppings.length === 0,
+    );
 
-  useEffect(() => {
-    setAddedTick(false);
-  }, [isOpen, item?.id]);
-
-  // Also Try — 6 random foods (excluding the current item), reshuffled on every open
+  // Also Try — things that go with this item, not random picks:
+  // a pizza / combo gets sides, dips, drinks, desserts; an add-on gets top-rated pizzas first.
   const alsoTry = useMemo(() => {
     if (!item) return [];
+    type G = 'main' | 'side' | 'dip' | 'drink' | 'dessert' | 'combo';
+    const groupOf = (m: MenuItem): G => {
+      const cat = m.category as string;
+      if (cat === 'dips' || m.id.startsWith('p-dip-')) return 'dip';
+      if (cat === 'drinks') return 'drink';
+      if (cat === 'desserts') return 'dessert';
+      if (cat === 'starters-sides' || cat === 'sides' || cat === 'chicken-corner') return 'side';
+      if (cat === 'combos') return 'combo';
+      return 'main';
+    };
+    const g = groupOf(item);
+    const order: G[] =
+      g === 'main' || g === 'combo'
+        ? ['side', 'dip', 'drink', 'dessert']
+        : ['main', ...(['side', 'dip', 'drink', 'dessert'] as G[]).filter((x) => x !== g)];
     const pool = menuItems.filter((m) => m.id !== item.id);
-    const arr = [...pool];
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr.slice(0, 6);
-  }, [menuItems, item, isOpen]);
+    const picks = order.flatMap((grp) =>
+      pool
+        .filter((m) => groupOf(m) === grp)
+        .sort((a, b) => (grp === 'main' ? (b.rating || 0) - (a.rating || 0) : a.price - b.price))
+        .slice(0, grp === 'main' ? 3 : 2),
+    );
+    return picks.slice(0, 8);
+  }, [menuItems, item]);
 
   if (!isOpen || !item) return null;
 
-  const handleAdd = () => {
-    onAddToCart(item);
-    setAddedTick(true);
-    window.setTimeout(() => setAddedTick(false), 1200);
-  };
+
 
   const handleAlsoAdd = (sweet: MenuItem) => {
     // Also-try me pizza aaye to uska size/crust modal kholo (ye band karke)
@@ -161,14 +198,26 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
                       </h4>
                       <span className="text-xs font-black font-mono text-slate-900">₹{sweet.price}</span>
                     </div>
-                    <button
-                      id={`btn-quickview-also-${sweet.id}`}
-                      onClick={() => handleAlsoAdd(sweet)}
-                      className="mt-2 w-full bg-slate-900 hover:bg-black active:scale-95 text-white text-[10px] font-black py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1"
-                    >
-                      <Plus className="w-3 h-3 stroke-[3]" />
-                      <span>ADD</span>
-                    </button>
+                    {(() => {
+                      const line = needsCustomize(sweet) ? undefined : lineFor(sweet.id);
+                      return line ? (
+                        <QtyStepper
+                          small
+                          qty={line.quantity}
+                          onMinus={() => onUpdateQuantity(line.cartItemId, -1)}
+                          onPlus={() => onUpdateQuantity(line.cartItemId, 1)}
+                        />
+                      ) : (
+                        <button
+                          id={`btn-quickview-also-${sweet.id}`}
+                          onClick={() => handleAlsoAdd(sweet)}
+                          className="mt-2 w-full bg-slate-900 hover:bg-black active:scale-95 text-white text-[10px] font-black py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          <Plus className="w-3 h-3 stroke-[3]" />
+                          <span>ADD</span>
+                        </button>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
@@ -176,38 +225,32 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
           )}
         </div>
 
-        {/* Bottom CTA: Eat Now + Add to Cart */}
-        <div className="shrink-0 border-t border-stone-200 bg-white px-4 sm:px-5 py-3.5 flex items-center gap-2.5">
-          <button
-            id="btn-quickview-add"
-            onClick={handleAdd}
-            className={`flex-1 flex items-center justify-center gap-1.5 font-extrabold px-4 py-3 rounded-full text-sm tracking-wide transition-all cursor-pointer border-2 active:scale-95 ${
-              addedTick
-                ? 'bg-emerald-600 border-emerald-600 text-white'
-                : 'bg-white border-slate-900 text-slate-900 hover:bg-slate-900 hover:text-white'
-            }`}
-          >
-            {addedTick ? (
-              <>
-                <Check className="w-4 h-4 stroke-[3]" />
-                <span>Added!</span>
-              </>
+        {/* Bottom CTA: Add to Cart, then a − qty + stepper */}
+        <div className="shrink-0 border-t border-stone-200 bg-white px-4 sm:px-5 py-3.5">
+          {(() => {
+            const line = lineFor(item.id);
+            return line ? (
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-bold text-slate-600 shrink-0">In cart</span>
+                <QtyStepper
+                  qty={line.quantity}
+                  onMinus={() => onUpdateQuantity(line.cartItemId, -1)}
+                  onPlus={() => onUpdateQuantity(line.cartItemId, 1)}
+                />
+              </div>
             ) : (
-              <>
+              <button
+                id="btn-quickview-add"
+                onClick={() => onAddToCart(item)}
+                className="w-full flex items-center justify-center gap-1.5 bg-[#e31837] hover:bg-[#c4122d] active:scale-95 text-white font-extrabold px-4 py-3 rounded-full shadow-lg shadow-red-900/20 text-sm tracking-wide transition-all cursor-pointer"
+              >
                 <ShoppingBag className="w-4 h-4" />
                 <span>Add to Cart</span>
-              </>
-            )}
-          </button>
-          <button
-            id="btn-quickview-eat"
-            onClick={() => onEatNow(item)}
-            className="flex-1 flex items-center justify-center gap-1.5 bg-[#e31837] hover:bg-[#c4122d] active:scale-95 text-white font-extrabold px-4 py-3 rounded-full shadow-lg shadow-red-900/20 text-sm tracking-wide transition-all cursor-pointer"
-          >
-            <span>Eat Now</span>
-            <span>•</span>
-            <span className="font-mono">₹{item.price}</span>
-          </button>
+                <span>•</span>
+                <span className="font-mono">₹{item.price}</span>
+              </button>
+            );
+          })()}
         </div>
       </div>
     </div>

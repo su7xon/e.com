@@ -89,7 +89,7 @@ export const CRAVING_CATEGORIES: CategoryItem[] = [
     name: 'Desserts',
     tag: 'MOLTEN',
     startingPrice: 30,
-    image: '/images/desert.png',
+    image: '/images/choco-lava.png',
     bannerImage: '/images/menu/p-dessert-choco-lava.jpg',
     filterKey: 'desserts',
   },
@@ -113,7 +113,6 @@ export const CRAVING_CATEGORIES: CategoryItem[] = [
 ];
 
 export const AVAILABLE_TOPPINGS: ExtraTopping[] = [
-  { id: 'top-extra-cheese', name: '7-Cheese Blend Layer', price: 49, isVeg: true },
   { id: 'top-paneer', name: 'Fresh Spiced Paneer', price: 25, isVeg: true },
   { id: 'top-olives', name: 'Black Spanish Olives', price: 25, isVeg: true },
   { id: 'top-corn', name: 'Golden Sweet Corn', price: 25, isVeg: true },
@@ -140,9 +139,9 @@ export const MAKE_YOUR_OWN_BASE: MenuItem = {
   isVeg: true,
   price: 149,
   originalPrice: 199,
-  description: 'Start with a fresh hand-tossed base, pick your size, crust, extra 7-cheese layer and unlimited toppings.',
+  description: 'Start with a fresh hand-tossed base, pick your size, crust and unlimited toppings.',
   toppings: [],
-  image: 'https://images.unsplash.com/photo-1571407970349-bc81e7e96d47?w=800&auto=format&fit=crop&q=80',
+  image: '/images/menu/p-veg-double-cheese.jpg',
   badge: 'CHEF SPECIAL',
   rating: 4.9,
   reviewsCount: 2100,
@@ -2159,5 +2158,5 @@ export const CRUST_PRICE_MODIFIERS: Record<string, number> = {
   'New Hand Tossed': 0,
   'Cheese Burst': 50,
   'Fresh Pan Pizza': 35,
-  'Wheat Thin Crust': 30,
+  'Thin Crust': 30,
 };

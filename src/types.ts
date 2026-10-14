@@ -1,5 +1,5 @@
 export type PizzaSize = 'Regular' | 'Medium' | 'Large';
-export type PizzaCrust = 'New Hand Tossed' | 'Cheese Burst' | 'Fresh Pan Pizza' | 'Wheat Thin Crust';
+export type PizzaCrust = 'New Hand Tossed' | 'Cheese Burst' | 'Fresh Pan Pizza' | 'Thin Crust';
 
 export interface ExtraTopping {
   id: string;
@@ -104,7 +104,7 @@ export type OrderType = 'DELIVERY' | 'TAKEAWAY' | 'DINE_IN';
 
 export interface UserAddress {
   id: string;
-  label: 'Home' | 'Work' | 'Other';
+  label: 'Home' | 'Work' | 'Other' | 'Current location';
   address: string;
   city: string;
   pincode: string;
@@ -134,6 +134,8 @@ export interface ActiveOrder {
   status: 'CONFIRMED' | 'PREPARING' | 'BAKING' | 'OUT_FOR_DELIVERY' | 'DELIVERED';
   timestamp: string;
   estimatedMinutes: number;
+  /** Expected delivery time (epoch ms) — the tracker counts down to it. */
+  deliverBy?: number;
   riderName: string;
   riderPhone: string;
 }

@@ -209,7 +209,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
               {currentAddress.address}, {currentAddress.city} - {currentAddress.pincode}
             </p>
             <p className="text-[11px] text-slate-500 truncate">
-              {currentAddress.landmark ? `Landmark: ${currentAddress.landmark}` : 'Tap to set exact address + landmark'}
+              {currentAddress.landmark ? `Landmark: ${currentAddress.landmark}` : 'Tap to set address + landmark'}
             </p>
           </div>
           <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
@@ -594,7 +594,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                     className="bg-[#ED1C24] hover:bg-[#c91430] text-white text-xs font-black px-3 py-1.5 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs transition-all"
                   >
                     <Navigation className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-                    <span>Live Map</span>
+                    <span>Map</span>
                   </button>
                   <button
                     onClick={onOpenAddressModal}
@@ -638,7 +638,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                   <p className="text-xs text-red-600 font-bold mt-2">{formError}</p>
                 )}
                 <p className="text-[11px] text-slate-500 mt-2">
-                  Rider call + live location isi number par hogi. Order ke baad apni live location WhatsApp par share kar dena.
+                  The rider will call this number if they need directions.
                 </p>
               </div>
             )}

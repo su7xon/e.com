@@ -4,9 +4,9 @@ import {
   CheckCircle,
   Clock,
   Bike,
-  Flame,
-  Package,
   ChefHat,
+  Store,
+  Home,
   MapPin,
   Sparkles,
   ChevronRight,
@@ -21,41 +21,25 @@ interface OrderTrackerModalProps {
   onAdvanceStatus?: (nextStatus: ActiveOrder['status']) => void;
 }
 
+// Three customer-facing steps; kitchen sub-states (preparing / baking) collapse into one.
 const STAGES = [
   {
     key: 'CONFIRMED',
-    label: 'Order Confirmed',
-    desc: 'Store accepted your order & assigned chef',
+    label: 'Order placed',
+    desc: 'We have received your order',
     icon: CheckCircle,
-    color: 'text-emerald-500',
   },
   {
     key: 'PREPARING',
-    label: 'Preparing & Hand-Tossing',
-    desc: 'Chef tossing fresh dough & layering sauces',
+    label: 'Restaurant accepted & preparing',
+    desc: 'Your food is being prepared fresh',
     icon: ChefHat,
-    color: 'text-red-500',
-  },
-  {
-    key: 'BAKING',
-    label: 'Baking in Stone Oven',
-    desc: 'Baking at 300°C for bubbly golden crust',
-    icon: Flame,
-    color: 'text-amber-500',
   },
   {
     key: 'OUT_FOR_DELIVERY',
-    label: 'Out for Delivery',
-    desc: 'Delivery partner on the way in thermal hot bag',
+    label: 'Out for delivery',
+    desc: 'Your order is on the way',
     icon: Bike,
-    color: 'text-[#e31837]',
-  },
-  {
-    key: 'DELIVERED',
-    label: 'Delivered',
-    desc: 'Enjoy your hot cheesy 7 Cheese Pizza!',
-    icon: Package,
-    color: 'text-emerald-600',
   },
 ] as const;
 
@@ -63,35 +47,45 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
   order,
   isOpen,
   onClose,
-  onAdvanceStatus,
 }) => {
   const [currentStageIndex, setCurrentStageIndex] = useState(1);
+  // Ticks so the countdown stays current while the tracker is open.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!isOpen) return;
+    setNow(Date.now());
+    const id = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!order) return;
     const stageMap: Record<ActiveOrder['status'], number> = {
       CONFIRMED: 0,
       PREPARING: 1,
-      BAKING: 2,
-      OUT_FOR_DELIVERY: 3,
-      DELIVERED: 4,
+      BAKING: 1,
+      OUT_FOR_DELIVERY: 2,
+      DELIVERED: 2,
     };
-    setCurrentStageIndex(stageMap[order.status] ?? 1);
+    setCurrentStageIndex(stageMap[order.status] ?? 0);
   }, [order]);
 
   if (!isOpen || !order) return null;
 
   const currentStage = STAGES[currentStageIndex];
-
-  const handleStageClick = (index: number) => {
-    setCurrentStageIndex(index);
-    if (onAdvanceStatus) {
-      onAdvanceStatus(STAGES[index].key);
-    }
-  };
+  const isDelivered = order.status === 'DELIVERED';
+  const isOnTheWay = order.status === 'OUT_FOR_DELIVERY';
+  const minutesLeft = order.deliverBy
+    ? Math.ceil((order.deliverBy - now) / 60_000)
+    : order.estimatedMinutes;
+  const etaText = isDelivered
+    ? 'Delivered!'
+    : minutesLeft <= 0
+    ? 'Any minute now'
+    : `${minutesLeft} min${minutesLeft === 1 ? '' : 's'}`;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[58] overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
       <div
         id="modal-order-tracker"
         className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]"
@@ -121,25 +115,47 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
             </button>
           </div>
 
-          {/* Live ETA Card */}
-          <div className="mt-4 bg-white/10 backdrop-blur-xs border border-white/20 rounded-2xl p-3 sm:p-4 flex items-center justify-between">
-            <div>
-              <span className="text-xs text-red-100 font-medium block">
-                Estimated Delivery
-              </span>
-              <span className="text-2xl sm:text-3xl font-black text-amber-300 font-sans tracking-tight">
-                {currentStageIndex === 4 ? 'Delivered!' : `${order.estimatedMinutes} Mins`}
-              </span>
-            </div>
-            <div className="text-right">
-              <span className="inline-flex items-center gap-1 bg-emerald-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-900 animate-ping" />
-                Live Tracking
-              </span>
-              <span className="text-xs text-red-100 block mt-1 font-mono">
-                Hot & Fresh
+          {/* ETA + store → home animation (illustrative; only the time is calculated) */}
+          <div className="mt-4 bg-white/10 backdrop-blur-xs border border-white/20 rounded-2xl p-3 sm:p-4">
+            <div className="flex items-end justify-between">
+              <div>
+                <span className="text-xs text-red-100 font-medium block">
+                  {isDelivered ? 'Your order' : isOnTheWay ? 'Arriving in' : 'Estimated delivery'}
+                </span>
+                <span className="text-2xl sm:text-3xl font-black text-amber-300 font-sans tracking-tight">{etaText}</span>
+              </div>
+              <span className="text-[11px] text-red-100 text-right max-w-[45%]">
+                {isDelivered ? 'Enjoy your meal!' : isOnTheWay ? 'Rider is on the way' : 'Rider leaves once your food is ready'}
               </span>
             </div>
+
+            <div className="mt-3 flex items-center gap-2">
+              <span className="w-8 h-8 rounded-full bg-white/15 flex items-center justify-center shrink-0" title="Restaurant">
+                <Store className="w-4 h-4 text-white" />
+              </span>
+              <div className="relative flex-1 h-8">
+                <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-white/30" />
+                <div
+                  className={`absolute top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-amber-400 text-slate-900 flex items-center justify-center shadow-lg ${
+                    isOnTheWay ? 'tracker-ride' : ''
+                  }`}
+                  style={isOnTheWay ? undefined : { left: isDelivered ? 'calc(100% - 2rem)' : '0%' }}
+                >
+                  <Bike className="w-4 h-4" />
+                </div>
+              </div>
+              <span
+                className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isDelivered ? 'bg-emerald-400 text-slate-900' : 'bg-white/15 text-white'}`}
+                title="Your address"
+              >
+                <Home className="w-4 h-4" />
+              </span>
+            </div>
+            <style>{`
+              @keyframes tracker-ride { 0% { left: 0% } 85% { left: calc(100% - 2rem) } 100% { left: calc(100% - 2rem) } }
+              .tracker-ride { animation: tracker-ride 4s ease-in-out infinite; }
+              @media (prefers-reduced-motion: reduce) { .tracker-ride { animation: none; left: 50%; } }
+            `}</style>
           </div>
         </div>
 
@@ -169,9 +185,6 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
               <span className="text-xs font-black uppercase tracking-wider text-slate-500">
                 Order Milestones
               </span>
-              <span className="text-[10px] text-slate-400 font-medium">
-                (Click any step to test tracker status)
-              </span>
             </div>
 
             <div className="space-y-3 relative pl-2">
@@ -184,14 +197,11 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                 const IconComponent = stage.icon;
 
                 return (
-                  <button
+                  <div
                     key={stage.key}
-                    id={`btn-tracker-step-${idx}`}
-                    onClick={() => handleStageClick(idx)}
-                    className={`w-full flex items-start gap-3 p-2 rounded-xl text-left transition-all z-10 relative cursor-pointer ${
-                      isCurrent
-                        ? 'bg-red-50/80 border border-red-200'
-                        : 'hover:bg-slate-50'
+                    id={`tracker-step-${idx}`}
+                    className={`w-full flex items-start gap-3 p-2 rounded-xl text-left transition-all z-10 relative ${
+                      isCurrent ? 'bg-red-50/80 border border-red-200' : ''
                     }`}
                   >
                     <div
@@ -229,7 +239,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
                         {stage.desc}
                       </span>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>

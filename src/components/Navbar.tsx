@@ -234,7 +234,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <div
                 className="hidden sm:flex flex-col items-center justify-center bg-slate-900 px-1.5 py-1 rounded text-[11px] font-bold text-amber-400 shrink-0 cursor-pointer"
-                title={gpsState === 'locked' ? 'Live outlet distance from GPS' : 'Detect my location'}
+                title={gpsState === 'locked' ? 'Distance to your nearest outlet' : 'Detect my location'}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (gpsState === 'locating') return;
