@@ -229,22 +229,30 @@ export const BuildYourOwnWizard: React.FC<BuildYourOwnWizardProps> = ({ item, is
             </div>
           )}
 
-          {step === 2 && (
-            <div className="space-y-2.5">
-              {PIZZA_SAUCES.map((s) => (
-                <button key={s.id} id={`btn-wiz-sauce-${s.id}`} onClick={() => setSauce(s.name)} className={card(sauce === s.name)}>
-                  <span className="flex items-center gap-3">
-                    {radio(sauce === s.name)}
-                    <span>
-                      <span className="text-sm font-bold text-stone-900 block">{s.name}</span>
-                      <span className="text-[11px] text-stone-500 block">{s.desc}</span>
-                    </span>
+          {step === 2 && (() => {
+            const sauceRow = (s: (typeof PIZZA_SAUCES)[number]) => (
+              <button key={s.id} id={`btn-wiz-sauce-${s.id}`} onClick={() => setSauce(s.name)} className={card(sauce === s.name)}>
+                <span className="flex items-center gap-3">
+                  {radio(sauce === s.name)}
+                  <span>
+                    <span className="text-sm font-bold text-stone-900 block">{s.name}</span>
+                    <span className="text-[11px] text-stone-500 block">{s.desc}</span>
                   </span>
-                  {priceTag(s.free ? 0 : SAUCE_PRICE, 'Included')}
-                </button>
-              ))}
-            </div>
-          )}
+                </span>
+                {s.free && <span className="text-xs font-bold text-emerald-700 shrink-0">Included</span>}
+              </button>
+            );
+            return (
+              <div className="space-y-2.5">
+                {PIZZA_SAUCES.filter((s) => s.free).map(sauceRow)}
+                <div className="pt-3 flex items-baseline justify-between">
+                  <span className="text-xs font-black uppercase tracking-wider text-stone-600">Special sauces</span>
+                  <span className="text-xs font-bold text-stone-500">+{SAUCE_PRICE} each</span>
+                </div>
+                {PIZZA_SAUCES.filter((s) => !s.free).map(sauceRow)}
+              </div>
+            );
+          })()}
 
           {step === 3 && (
             <div className="space-y-4">

@@ -10,3 +10,9 @@ export function taxesAndChargesFor(subtotal: number): number {
   if (subtotal <= 0) return 0;
   return Math.round(subtotal * GST_RATE + PACKAGING_FEE);
 }
+
+/** Free Choco Lava Cake on orders with items worth at least this much. */
+export const FREE_GIFT_THRESHOLD = 499;
+export const FREE_GIFT_PRODUCT_ID = 'p-dessert-choco-lava';
+export const FREE_GIFT_NAME = 'Choco Lava Cake';
+export const FREE_GIFT_VALUE = 119;

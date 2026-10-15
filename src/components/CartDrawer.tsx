@@ -20,7 +20,7 @@ import {
   Compass
 } from 'lucide-react';
 import { CartItem, Coupon, UserAddress, DeliveryDetails, OrderType, MenuItem } from '../types';
-import { taxesAndChargesFor } from '../lib/billing';
+import { taxesAndChargesFor, FREE_GIFT_THRESHOLD, FREE_GIFT_NAME, FREE_GIFT_VALUE } from '../lib/billing';
 import { COUPONS, MENU_ITEMS } from '../data/mockData';
 import { VegNonVegIcon } from './VegNonVegIcon';
 import { InteractiveMapPicker } from './InteractiveMapPicker';
@@ -42,6 +42,8 @@ interface CartDrawerProps {
   onProceedToCheckout?: () => void;
   /** Opens the size / crust / toppings sheet for a pizza line in the cart. */
   onEditItem?: (cartItemId: string) => void;
+  /** cartItemId → reason, for items that can't be ordered right now (blocks checkout). */
+  unavailableLines?: Record<string, string>;
   onPlaceOrder?: (notes: string, paymentMethod: string, delivery?: DeliveryDetails) => void;
   onQuickAdd: (productId: string) => void;
   onUpgradeItem?: (cartItemId: string) => void;
@@ -135,6 +137,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onSelectAddress,
   onProceedToCheckout,
   onEditItem,
+  unavailableLines = {},
   onPlaceOrder,
   onQuickAdd,
   onUpgradeItem,
@@ -179,7 +182,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   // Pricing calculations
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const freeDeliveryThreshold = 99;
-  const isFreeDeliveryEligible = subtotal >= freeDeliveryThreshold || appliedCoupon?.code === 'FREEDEL';
+  const isFreeDeliveryEligible = subtotal >= freeDeliveryThreshold;
   const deliveryFee = orderType === 'DELIVERY' ? (isFreeDeliveryEligible ? 0 : 40) : 0;
   const taxesAndCharges = taxesAndChargesFor(subtotal);
 
@@ -216,6 +219,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const handleCompleteOrder = () => {
     setFormError('');
     setFieldError({});
+    if (Object.keys(unavailableLines).length) {
+      setFormError('Some items in your cart are not available right now. Remove them to place the order.');
+      return;
+    }
     if (orderType === 'DELIVERY') {
       const digits = receiverPhone.replace(/\D/g, '').replace(/^91/, '');
       const nameBad = !receiverName.trim();
@@ -308,11 +315,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     return m?.originalPrice && m.originalPrice > m.price ? acc + (m.originalPrice - m.price) * line.quantity : acc;
   }, 0);
   const deliverySaving = orderType === 'DELIVERY' && deliveryFee === 0 && subtotal > 0 ? 40 : 0;
-  const savedAmount = mrpSavings + discount + deliverySaving;
+  const giftUnlocked = subtotal >= FREE_GIFT_THRESHOLD;
+  const giftSaving = giftUnlocked ? FREE_GIFT_VALUE : 0;
+  const savedAmount = mrpSavings + discount + deliverySaving + giftSaving;
   const savingsBreakdown = [
     mrpSavings > 0 ? `₹${mrpSavings} off MRP` : '',
     deliverySaving > 0 ? `₹${deliverySaving} free delivery` : '',
     discount > 0 ? `₹${discount} coupon` : '',
+    giftSaving > 0 ? `free ${FREE_GIFT_NAME}` : '',
   ].filter(Boolean).join(' · ');
 
   return (
@@ -376,6 +386,28 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     className="bg-amber-400 h-full rounded-full transition-all duration-300"
                     style={{ width: `${Math.min(100, (subtotal / freeDeliveryThreshold) * 100)}%` }}
                   />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Free Choco Lava Cake unlock */}
+        {cartItems.length > 0 && (
+          <div className={`px-[max(0.875rem,calc((100%_-_48rem)/2))] py-2 text-xs border-b ${giftUnlocked ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+            {giftUnlocked ? (
+              <div className="flex items-center gap-2 font-bold">
+                <span className="text-base leading-none">🎁</span>
+                <span>FREE {FREE_GIFT_NAME} unlocked — added to your order!</span>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between gap-2 font-semibold mb-1">
+                  <span>🎁 Add ₹{FREE_GIFT_THRESHOLD - subtotal} more to get a FREE {FREE_GIFT_NAME}</span>
+                  <span className="shrink-0 font-mono">₹{subtotal}/₹{FREE_GIFT_THRESHOLD}</span>
+                </div>
+                <div className="w-full bg-amber-200/70 h-1.5 rounded-full overflow-hidden">
+                  <div className="bg-amber-500 h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, (subtotal / FREE_GIFT_THRESHOLD) * 100)}%` }} />
                 </div>
               </div>
             )}
@@ -451,6 +483,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                           {item.name}
                         </h4>
 
+                        {unavailableLines[item.cartItemId] && (
+                          <p className="mt-0.5 text-[11px] font-bold text-red-600">⚠ {unavailableLines[item.cartItemId]}</p>
+                        )}
                         {/* Customization Details */}
                         {(item.size || item.crust) && (
                           <p className="text-[11px] text-slate-500 font-medium line-clamp-2 mt-0.5">
@@ -1041,6 +1076,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   </div>
                 )}
 
+                {giftUnlocked && (
+                  <div className="flex justify-between text-emerald-700 font-semibold">
+                    <span>🎁 {FREE_GIFT_NAME}</span>
+                    <span className="font-mono">FREE</span>
+                  </div>
+                )}
+
                 <div className="border-t border-slate-200 pt-2 flex justify-between text-sm font-black text-slate-900">
                   <span>To Pay</span>
                   <span className="font-mono text-base text-[#ED1C24]">₹{grandTotal}</span>
@@ -1062,10 +1104,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         {cartItems.length > 0 && formError && (
           <button
             type="button"
-            onClick={() => receiverBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+            onClick={() =>
+              Object.keys(unavailableLines).length
+                ? document.querySelector('#cart-drawer-panel .overflow-y-auto')?.scrollTo({ top: 0, behavior: 'smooth' })
+                : receiverBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }
             className="shrink-0 bg-red-50 border-t border-red-200 text-red-700 text-xs font-bold py-2 px-[max(0.875rem,calc((100%_-_48rem)/2))] text-left cursor-pointer"
           >
-            ⚠ {formError} <span className="underline">Fill details ↑</span>
+            ⚠ {formError} <span className="underline">{Object.keys(unavailableLines).length ? 'See items ↑' : 'Fill details ↑'}</span>
           </button>
         )}
         {cartItems.length > 0 && (

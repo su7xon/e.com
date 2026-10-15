@@ -86,7 +86,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
   // Pricing calculations
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const freeDeliveryThreshold = 99;
-  const isFreeDeliveryEligible = subtotal >= freeDeliveryThreshold || appliedCoupon?.code === 'FREEDEL';
+  const isFreeDeliveryEligible = subtotal >= freeDeliveryThreshold;
   const deliveryFee = orderType === 'DELIVERY' ? (isFreeDeliveryEligible ? 0 : 40) : 0;
   const taxesAndCharges = taxesAndChargesFor(subtotal);
 

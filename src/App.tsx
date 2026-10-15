@@ -21,8 +21,8 @@ import {
   CRUST_PRICE_MODIFIERS
 } from './data/mockData';
 import { reverseGeocode } from './lib/reverseGeocode';
-import { taxesAndChargesFor } from './lib/billing';
-import { isOfferActive, isScheduleActive, SLIDE_SCHEDULES, LUNCH } from './utils/offerSchedule';
+import { taxesAndChargesFor, FREE_GIFT_THRESHOLD, FREE_GIFT_PRODUCT_ID, FREE_GIFT_NAME } from './lib/billing';
+import { isOfferActive, isScheduleActive, SLIDE_SCHEDULES, LUNCH, OFFER_SCHEDULES, describeSchedule } from './utils/offerSchedule';
 import { Navbar } from './components/Navbar';
 import { DealPopup, TimedDeal } from './components/DealPopup';
 import { ProfileDrawer, CustomerProfile } from './components/ProfileDrawer';
@@ -316,7 +316,12 @@ export default function App() {
     const saved = localStorage.getItem('seven_cheese_menu_items');
     if (!saved) return MENU_ITEMS;
     try {
-      return migrateItems(JSON.parse(saved));
+      // Lunch combos: replace the old "Mon, Wed–Sun · Dine-in" text with what's included.
+      return migrateItems(JSON.parse(saved) as MenuItem[]).map((m) => {
+        if (!m.id.startsWith('p-offer-lunch-') || !/Mon, Wed–Sun/.test(m.description || '')) return m;
+        const fresh = MENU_ITEMS.find((x) => x.id === m.id);
+        return fresh ? { ...m, description: fresh.description } : m;
+      });
     } catch {
       return MENU_ITEMS;
     }
@@ -487,7 +492,8 @@ export default function App() {
     if (!saved) return COUPONS;
     try {
       const parsed = JSON.parse(saved);
-      return Array.isArray(parsed) ? parsed : COUPONS;
+      // Free delivery above ₹99 is automatic — the old FREEDEL coupon is retired.
+      return Array.isArray(parsed) ? parsed.filter((c: Coupon) => c.code !== 'FREEDEL') : COUPONS;
     } catch {
       return COUPONS;
     }
@@ -1156,7 +1162,7 @@ export default function App() {
   const handlePlaceOrder = (notes: string, paymentMethod?: string, delivery?: DeliveryDetails) => {
     const subtotal = cartTotal;
     const couponValid = appliedCoupon && isOfferActive(appliedCoupon, new Date()) ? appliedCoupon : null;
-    const isFreeDel = subtotal >= 99 || couponValid?.code === 'FREEDEL';
+    const isFreeDel = subtotal >= 99;
     const deliveryFee = orderType === 'DELIVERY' ? (isFreeDel ? 0 : 40) : 0;
     const taxesAndCharges = taxesAndChargesFor(subtotal);
     
@@ -1187,10 +1193,26 @@ export default function App() {
     // One id + number shared by the customer's tracker and the restaurant's order.
     const adminOrderId = `ord-${Date.now()}`;
     const orderNumber = `#7C-${Math.floor(1000 + Math.random() * 9000)}`;
+    // Free Choco Lava Cake when the items reach the threshold.
+    const freeGiftLine: CartItem | null =
+      subtotal >= FREE_GIFT_THRESHOLD
+        ? {
+            cartItemId: `free-gift-${Date.now()}`,
+            productId: FREE_GIFT_PRODUCT_ID,
+            name: `${FREE_GIFT_NAME} (FREE)`,
+            isVeg: true,
+            image: '/images/menu/p-dessert-choco-lava.jpg',
+            price: 0,
+            basePrice: 0,
+            extraCheese: false,
+            extraToppings: [],
+            quantity: 1,
+          }
+        : null;
     const newOrder: ActiveOrder = {
       orderId: orderNumber.replace('#', ''),
       adminOrderId,
-      items: [...cartItems],
+      items: [...cartItems, ...(freeGiftLine ? [freeGiftLine] : [])],
       orderType,
       address: `${currentAddress.address}, ${currentAddress.city}`,
       subtotal,
@@ -1238,7 +1260,7 @@ export default function App() {
       address: orderType === 'DINE_IN' ? undefined : fullDeliveryAddress,
       landmark: orderType === 'DINE_IN' ? undefined : orderLandmark || undefined,
       tableNumber: orderType === 'DINE_IN' ? (qrTable?.name ?? 'Table T-01') : undefined,
-      items: cartItems.map((c) => ({
+      items: [...cartItems, ...(freeGiftLine ? [freeGiftLine] : [])].map((c) => ({
         name: c.name,
         quantity: c.quantity,
         price: c.price,
@@ -1293,6 +1315,20 @@ export default function App() {
     goView('home');
     setIsOrderTrackerOpen(true);
   };
+
+  const unavailableLines = useMemo(() => {
+    const out: Record<string, string> = {};
+    cartItems.forEach((line) => {
+      const p = menuItems.find((m) => m.id === line.productId) || MENU_ITEMS.find((m) => m.id === line.productId);
+      if (!p) return;
+      if (p.isAvailable === false) out[line.cartItemId] = 'Sold out right now — remove to order';
+      else if (!isOfferActive(p, now)) {
+        const when = describeSchedule(p.days || p.startTime ? p : OFFER_SCHEDULES[p.id]);
+        out[line.cartItemId] = `Available ${when || 'at set times'} only — remove to order`;
+      }
+    });
+    return out;
+  }, [cartItems, menuItems, now]);
 
   const trackedOrder = useMemo(() => {
     if (!activeOrder) return null;
@@ -1367,11 +1403,17 @@ export default function App() {
     else handleOpenQuickView(item);
   };
   // Featured Hero banner selection
+  // Banner tap: "category:<key>" jumps to that menu section; otherwise open the item.
   const handleSelectFeatured = (productId: string) => {
-    const item = menuItems.find((m) => m.id === productId) || MENU_ITEMS.find((m) => m.id === productId);
-    if (item) {
-      handleOpenCustomize(item);
+    if (productId.startsWith('category:')) {
+      setSelectedCategory(productId.slice('category:'.length));
+      setTimeout(() => document.getElementById('menu-items-section')?.scrollIntoView({ behavior: 'smooth' }), 50);
+      return;
     }
+    const item = menuItems.find((m) => m.id === productId) || MENU_ITEMS.find((m) => m.id === productId);
+    if (!item) return;
+    if (needsCustomize(item)) handleOpenCustomize(item);
+    else handleOpenQuickView(item);
   };
 
   // Reorder last item
@@ -2035,67 +2077,68 @@ export default function App() {
       )}
 
       {/* Combos Tab */}
-      {activeTab === 'combos' && (
-        <div className="max-w-6xl mx-auto px-4 py-8">
-          <div className="mb-6">
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-              Combos & Value Meals
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Super-saver bundles pairing pizzas with garlic breads, desserts and drinks.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {MENU_ITEMS.filter((m) => m.category === 'combos').map((combo) => (
-              <div
-                key={combo.id}
-                className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between"
-              >
-                <div>
-                  <div className="aspect-16/9 rounded-2xl overflow-hidden mb-4 bg-slate-100">
-                    <img
-                      src={combo.image}
-                      alt={combo.name}
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-extrabold text-base text-slate-900">
-                      {combo.name}
-                    </h3>
-                    <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full">
-                      SAVE 25%
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-2">{combo.description}</p>
+      {activeTab === 'combos' && (() => {
+        const combos = activeMenuItems.filter((m) => m.category === 'combos');
+        const lunch = combos.filter((m) => m.id.startsWith('p-offer-lunch-'));
+        const others = combos.filter((m) => !m.id.startsWith('p-offer-lunch-'));
+        const comboCard = (combo: MenuItem) => {
+          const savePct =
+            combo.originalPrice && combo.originalPrice > combo.price
+              ? Math.round(((combo.originalPrice - combo.price) / combo.originalPrice) * 100)
+              : 0;
+          return (
+            <div key={combo.id} className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="aspect-16/9 rounded-2xl overflow-hidden mb-4 bg-slate-100">
+                  <img src={combo.image} alt={combo.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-mono font-black text-lg text-slate-900">
-                      ₹{combo.price}
-                    </span>
-                    {combo.originalPrice && (
-                      <span className="font-mono text-xs text-slate-400 line-through">
-                        ₹{combo.originalPrice}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    id={`btn-add-combo-${combo.id}`}
-                    onClick={() => handleSimpleAddToCart(combo)}
-                    className="bg-[#ED1C24] hover:bg-[#c91430] text-white font-black px-4 py-2 rounded-xl text-xs shadow-md transition-colors cursor-pointer"
-                  >
-                    Add Combo +
-                  </button>
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="font-extrabold text-base text-slate-900">{combo.name}</h3>
+                  {savePct > 0 && (
+                    <span className="shrink-0 bg-emerald-100 text-emerald-800 text-[11px] font-black px-2 py-0.5 rounded-full">SAVE {savePct}%</span>
+                  )}
                 </div>
+                <p className="text-sm text-slate-600 mt-2">{combo.description}</p>
               </div>
-            ))}
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                <div className="flex items-baseline gap-2">
+                  <span className="font-mono font-black text-lg text-slate-900">₹{combo.price}</span>
+                  {combo.originalPrice && combo.originalPrice > combo.price && (
+                    <span className="font-mono text-xs text-slate-400 line-through">₹{combo.originalPrice}</span>
+                  )}
+                </div>
+                <button
+                  id={`btn-add-combo-${combo.id}`}
+                  onClick={() => handleSimpleAddToCart(combo)}
+                  className="bg-[#ED1C24] hover:bg-[#c91430] text-white font-black px-4 py-2 rounded-xl text-xs shadow-md transition-colors cursor-pointer"
+                >
+                  Add Combo +
+                </button>
+              </div>
+            </div>
+          );
+        };
+        return (
+          <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+            {lunch.length > 0 && (
+              <section id="lunch-combos">
+                <div className="mb-4 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3">
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight">🕚 Lunch combos</h2>
+                  <p className="text-xs font-semibold text-amber-800 mt-0.5">Available every day, 11 AM – 2 PM only · Pizza + cold drink + fries</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">{lunch.map(comboCard)}</div>
+              </section>
+            )}
+            <section>
+              <div className="mb-4">
+                <h1 className="text-2xl font-black text-slate-900 tracking-tight">Combos & Value Meals</h1>
+                <p className="text-xs text-slate-500 mt-0.5">Super-saver bundles pairing pizzas with garlic breads, dips, fries and drinks.</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">{others.map(comboCard)}</div>
+            </section>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Profile Tab view */}
       {/* Modals and Drawers */}
@@ -2153,6 +2196,7 @@ export default function App() {
         }}
         onPlaceOrder={(notes, method, delivery) => handlePlaceOrder(notes, method, delivery)}
         onEditItem={handleEditCartItem}
+        unavailableLines={unavailableLines}
         onProceedToCheckout={() => {
           setIsCartOpen(false);
           goView('billing');
