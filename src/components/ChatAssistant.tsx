@@ -140,7 +140,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
     return [
       {
         role: 'assistant',
-        content: 'Namaste! Me 7 Cheese Pizza assistant hu 🍕 Menu recommend karu, best deal batau, ya order track karne me help karu?',
+        content: 'Hi! I\'m the 7 Cheese Pizza assistant 🍕 I can recommend from the menu, find the best deals, or help track your order.',
         addId: null,
       },
     ];
@@ -213,10 +213,10 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
     // Pizza hamesha modal se — chatbot se bhi direct add nahi.
     if (needsCustomize(item) && onOpenCustomize) {
       onOpenCustomize(item);
-      setMsgs((p) => [...p, { role: 'assistant', content: `${item.name} ke liye size/crust select karo! 🍕`, addId: null }]);
+      setMsgs((p) => [...p, { role: 'assistant', content: `Pick a size and crust for ${item.name}! 🍕`, addId: null }]);
     } else {
       onAddToCart(item);
-      setMsgs((p) => [...p, { role: 'assistant', content: `${item.name} cart me add ho gaya! Cart khol ke checkout karo. 🛒`, addId: null }]);
+      setMsgs((p) => [...p, { role: 'assistant', content: `${item.name} added to your cart! Open the cart to check out. 🛒`, addId: null }]);
     }
   };
 
@@ -254,7 +254,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
             <button
               id="btn-chat-clear"
               onClick={() => {
-                setMsgs([{ role: 'assistant', content: 'Namaste! Main Cheesy hoon 🍕 Batao, kaunsi pizza khaane ka mood hai?', addId: null }]);
+                setMsgs([{ role: 'assistant', content: 'Hi! I\'m Cheesy 🍕 What are you in the mood for today?', addId: null }]);
                 try { localStorage.removeItem(STORE_KEY); } catch {}
               }}
               aria-label="Clear chat"

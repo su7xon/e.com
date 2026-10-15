@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import type { MenuItem } from '../../types';
 import type { AdminOrder } from './adminData';
+import { localDateIso, tableLabel } from './adminData';
+import { GST_RATE } from '../../lib/billing';
 import type { Outlet } from './outlets';
 import {
   STORE_HEADER,
@@ -106,7 +108,7 @@ function save(key: string, value: unknown) {
   }
 }
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const todayIso = () => localDateIso();
 
 function downloadCsv(filename: string, rows: (string | number)[][]) {
   const esc = (v: string | number) => {
@@ -126,7 +128,7 @@ function downloadCsv(filename: string, rows: (string | number)[][]) {
 }
 
 const DEFAULT_PARTIES: Party[] = [
-  { id: 'p-walkin', name: 'TABAL NO', phone: '', address: 'Counter', kind: 'TABLE' },
+  { id: 'p-walkin', name: 'TABLE NO', phone: '', address: 'Counter', kind: 'TABLE' },
   { id: 'p-t1', name: 'TABLE NO 1', phone: '', address: 'Dine-in', kind: 'TABLE' },
   { id: 'p-t2', name: 'TABLE NO 2', phone: '', address: 'Dine-in', kind: 'TABLE' },
   { id: 'p-cash', name: 'CASH SALE', phone: '', address: 'Takeaway', kind: 'CUSTOMER' },
@@ -162,6 +164,8 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
   // ---- billing state ----
   const [partyId, setPartyId] = useState(parties[0]?.id ?? 'p-walkin');
   const [saleType, setSaleType] = useState<'CASH' | 'CREDIT'>('CASH');
+  // How the customer paid at the counter (feeds the day-close report).
+  const [payMethod, setPayMethod] = useState<AdminOrder['paymentMethod']>('CASH');
   const [tableNo, setTableNo] = useState('');
   const [phoneNo, setPhoneNo] = useState('');
   const [custName, setCustName] = useState('');
@@ -226,7 +230,7 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
         qty,
         rate,
         disPct: 0,
-        taxPct: taxMap[menu.id] ?? 5,
+        taxPct: taxMap[menu.id] ?? GST_RATE * 100,
       }];
     });
   };
@@ -283,13 +287,13 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
       customerName: billCustomerName,
       customerPhone: phoneNo || activeParty?.phone || '',
       orderType,
-      address: billMode === 'HOME' ? activeParty?.address : tableNo ? `Table ${tableNo}` : activeParty?.address,
-      tableNumber: billMode === 'KOT' && tableNo ? `Table ${tableNo}` : undefined,
+      address: billMode === 'HOME' ? activeParty?.address : billMode === 'KOT' ? undefined : activeParty?.address,
+      tableNumber: billMode === 'KOT' && tableNo ? tableLabel(tableNo) : undefined,
       items: lines.map((l) => ({
         name: l.name,
         quantity: l.qty,
         price: l.rate,
-        isVeg: true,
+        isVeg: safeMenu.find((m) => m.id === l.menuId)?.isVeg ?? true,
         size: l.size,
       })),
       subtotal: Math.round(totals.gross),
@@ -297,10 +301,13 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
       tax: Math.round(totals.tax),
       discount,
       total: Math.round(totals.net),
-      paymentMethod: 'CASH',
+      paymentMethod: payMethod,
       paymentStatus: saleType === 'CREDIT' ? 'PENDING' : 'PAID',
-      status: printKot ? 'KITCHEN' : 'NEW',
+      // Counter takeaway is paid and handed over on the spot; table / delivery bills go to the kitchen.
+      // (Never NEW — a counter sale must not ring the new-order alarm on other devices.)
+      status: billMode === 'SALE' ? 'COMPLETED' : 'KITCHEN',
       createdAt: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+      createdAtMs: Date.now(),
       timeAgo: 'Just now',
       billDateIso: iso,
       saleType,
@@ -333,7 +340,7 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
       timeStr: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }),
       billTypeLabel: billMode === 'KOT' ? 'DINE IN' : billMode === 'HOME' ? 'HOME DELIVERY' : 'CARRY OUT',
       customerName: billCustomerName.toUpperCase(),
-      address: tableNo ? `Table ${tableNo}` : (activeParty?.address ?? ''),
+      address: tableNo ? tableLabel(tableNo) : (activeParty?.address ?? ''),
       phone: phoneNo || activeParty?.phone || '',
       soldBy: STORE_HEADER.soldBy,
       lines: lines.map((l) => {
@@ -347,9 +354,9 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
       gstTotal: totals.tax,
       grandTotal: Math.round(totals.net),
       cgstBase: base,
-      cgstAmt: base * 0.025,
+      cgstAmt: (base * GST_RATE) / 2,
       sgstBase: base,
-      sgstAmt: base * 0.025,
+      sgstAmt: (base * GST_RATE) / 2,
     };
     setLastBill(thermal);
     clearBill();
@@ -490,12 +497,12 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
         if (repSize !== 'all' && size !== repSize) return;
         if (repItem && !it.name.toLowerCase().includes(repItem.toLowerCase())) return;
         const amount = it.quantity * it.price;
-        const tax = (amount * 5) / 100;
+        const tax = (amount * GST_RATE * 100) / 100;
         rows.push({
           date: iso, sno: o.orderNumber, party: o.customerName,
           category: cat, item: it.name, size,
           qty: it.quantity, rate: it.price, amount,
-          disPct: 0, taxPct: 5, tax, net: amount + tax,
+          disPct: 0, taxPct: GST_RATE * 100, tax, net: amount + tax,
         });
       });
     });
@@ -538,9 +545,8 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
     { id: 'SALE', label: 'Sale' },
     { id: 'KOT', label: 'KOT' },
     { id: 'HOME', label: 'Home Delivery' },
-    { id: 'ITEM', label: 'Items' },
     { id: 'PARTY', label: 'Customers' },
-    { id: 'OFFER', label: 'Offers' },
+    { id: 'OFFER', label: 'Counter discounts' },
     { id: 'REPORT', label: 'Sale Report' },
   ];
 
@@ -694,7 +700,7 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                       <div key={l.key} className="p-2 flex items-center gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-slate-800 truncate">{l.name}</div>
-                          <div className="text-[10px] text-slate-500 font-mono">{l.size} • ₹{l.rate} • GST {l.taxPct}%</div>
+                          <div className="text-[11px] text-slate-500 font-mono">{l.size} • ₹{l.rate} • GST {l.taxPct}%</div>
                         </div>
                         <div className="flex items-center gap-1">
                           <button onClick={() => setLines((p) => p.map((x) => x.key === l.key ? { ...x, qty: Math.max(1, x.qty - 1) } : x))} className="w-6 h-6 rounded-lg bg-slate-100 font-bold cursor-pointer">−</button>
@@ -733,9 +739,24 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                   <div className="flex justify-between font-bold text-base text-slate-900"><span>Net Amt.</span><span>₹{totals.net.toFixed(1)}</span></div>
                 </div>
 
+                <div className="mb-2">
+                  <div className="text-[11px] font-bold text-slate-500 mb-1">Payment</div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(['CASH', 'UPI', 'CARD'] as const).map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => setPayMethod(p)}
+                        className={`py-2 rounded-lg text-xs font-bold border cursor-pointer ${payMethod === p ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200'}`}
+                      >
+                        {p === 'CASH' ? 'Cash' : p === 'UPI' ? 'UPI' : 'Card'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => handleSaveBill(false)} disabled={!lines.length} className="bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-xs font-bold py-2.5 rounded-lg cursor-pointer">Save Bill (Customer)</button>
-                  <button onClick={() => handleSaveBill(true)} disabled={!lines.length} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-bold py-2.5 rounded-lg cursor-pointer">Save + Both Print</button>
+                  <button onClick={() => handleSaveBill(false)} disabled={!lines.length} className="bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-xs font-bold py-2.5 rounded-lg cursor-pointer">Save & print bill</button>
+                  <button onClick={() => handleSaveBill(true)} disabled={!lines.length} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-xs font-bold py-2.5 rounded-lg cursor-pointer">Save & print bill + KOT</button>
                   <button onClick={() => lastBill && printThermal(buildCustomerBillHtml(lastBill))} disabled={!lastBill} className="flex items-center justify-center gap-1 bg-white border border-slate-200 text-xs font-bold py-2 rounded-lg cursor-pointer disabled:opacity-40"><Printer className="w-3.5 h-3.5" /> Reprint Bill</button>
                   <button onClick={() => lastBill && printThermal(buildCombinedBillHtml(lastBill))} disabled={!lastBill} className="flex items-center justify-center gap-1 bg-white border border-slate-200 text-xs font-bold py-2 rounded-lg cursor-pointer disabled:opacity-40"><Printer className="w-3.5 h-3.5" /> Reprint Both</button>
                   <button onClick={clearBill} className="bg-slate-100 text-xs font-bold py-2 rounded-lg cursor-pointer col-span-2">Clear</button>

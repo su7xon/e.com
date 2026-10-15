@@ -66,6 +66,7 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
       BAKING: 1,
       OUT_FOR_DELIVERY: 2,
       DELIVERED: 2,
+      CANCELLED: 0,
     };
     setCurrentStageIndex(stageMap[order.status] ?? 0);
   }, [order]);
@@ -75,10 +76,13 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
   const currentStage = STAGES[currentStageIndex];
   const isDelivered = order.status === 'DELIVERED';
   const isOnTheWay = order.status === 'OUT_FOR_DELIVERY';
+  const isCancelled = order.status === 'CANCELLED';
   const minutesLeft = order.deliverBy
     ? Math.ceil((order.deliverBy - now) / 60_000)
     : order.estimatedMinutes;
-  const etaText = isDelivered
+  const etaText = isCancelled
+    ? 'Cancelled'
+    : isDelivered
     ? 'Delivered!'
     : minutesLeft <= 0
     ? 'Any minute now'
@@ -120,12 +124,12 @@ export const OrderTrackerModal: React.FC<OrderTrackerModalProps> = ({
             <div className="flex items-end justify-between">
               <div>
                 <span className="text-xs text-red-100 font-medium block">
-                  {isDelivered ? 'Your order' : isOnTheWay ? 'Arriving in' : 'Estimated delivery'}
+                  {isDelivered || isCancelled ? 'Your order' : isOnTheWay ? 'Arriving in' : 'Estimated delivery'}
                 </span>
                 <span className="text-2xl sm:text-3xl font-black text-amber-300 font-sans tracking-tight">{etaText}</span>
               </div>
               <span className="text-[11px] text-red-100 text-right max-w-[45%]">
-                {isDelivered ? 'Enjoy your meal!' : isOnTheWay ? 'Rider is on the way' : 'Rider leaves once your food is ready'}
+                {isCancelled ? 'The restaurant cancelled this order. Call the store if you were charged.' : isDelivered ? 'Enjoy your meal!' : isOnTheWay ? 'Rider is on the way' : 'Rider leaves once your food is ready'}
               </span>
             </div>
 

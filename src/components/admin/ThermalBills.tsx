@@ -1,4 +1,5 @@
 import type { AdminOrder } from './adminData';
+import { tableLabel, itemBuildText } from './adminData';
 
 // Thermal 80mm bills — same-to-same like Rushda counter printouts.
 // Bill 1 (customer): TAX INVOICE. Bill 2 (owner): KOT.
@@ -11,6 +12,8 @@ export interface ThermalLine {
   rate: number;
   disPct: number;
   amt: number; // line net incl. tax
+  /** Sauce / toppings / cheese — printed on the KOT so the kitchen can make it. */
+  build?: string;
 }
 
 export interface ThermalBillData {
@@ -52,7 +55,8 @@ function shell(title: string, body: string): string {
   body { font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #000; background: #fff; }
   .bill { width: 272px; margin: 0 auto; padding: 8px 6px; }
   .c { text-align: center; }
-  .b { font-weight: bold; }
+  /* Courier has no heavier weight than bold — a thin outline makes headings print darker. */
+  .b { font-weight: 900; -webkit-text-stroke: 0.6px #000; text-stroke: 0.6px #000; letter-spacing: 0.3px; }
   .row { display: flex; justify-content: space-between; }
   hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
   .lg { font-size: 16px; }
@@ -112,10 +116,10 @@ function buildCustomerBody(d: ThermalBillData): string {
     <hr>
     ${lineHtml}
     <div class="row"><span>Total &nbsp;&nbsp;&nbsp;&nbsp; :</span><span>${d.totalQty}</span><span>&nbsp;</span><span>&nbsp;</span><span>${d.totalAmt.toFixed(2)}</span></div>
-    <div>GST : ${d.gstTotal.toFixed(2)}</div>
+    ${d.gstTotal > 0 ? `<div>GST : ${d.gstTotal.toFixed(2)}</div>` : ''}
     <div class="row"><span>&nbsp;</span><span>Grand Total &nbsp;&nbsp;&nbsp;&nbsp; ${d.grandTotal.toFixed(2)}</span></div>
-    <div>CGST ${d.cgstBase} @ 2.5 % : ${d.cgstAmt.toFixed(2)}</div>
-    <div>SGST ${d.sgstBase} @ 2.5 % : ${d.sgstAmt.toFixed(2)}</div>
+    ${d.gstTotal > 0 ? `<div>CGST ${d.cgstBase} @ 2.5 % : ${d.cgstAmt.toFixed(2)}</div>
+    <div>SGST ${d.sgstBase} @ 2.5 % : ${d.sgstAmt.toFixed(2)}</div>` : ''}
     <hr>
     <div class="c">User : ${esc(d.soldBy)}</div>
     <div class="c b">THANKS FOR YOUR KIND VISIT</div>
@@ -124,7 +128,7 @@ function buildCustomerBody(d: ThermalBillData): string {
 
 function buildKotBody(d: ThermalBillData): string {
   const rows = d.lines.map((l) => `
-    <div class="row" style="border-top:1px solid #000;"><span>${esc(l.name)}<br>${esc(l.size)}</span><span>${l.qty}</span></div>`
+    <div class="row" style="border-top:1px solid #000;"><span>${esc(l.name)}<br>${esc(l.build || l.size)}</span><span>${l.qty}</span></div>`
   ).join('');
   return `
     <div class="c b lg">KOT</div>
@@ -150,6 +154,7 @@ export function orderToThermal(o: AdminOrder): ThermalBillData {
   const lines = (o.items || []).map((it) => ({
     name: (it.name || '').toUpperCase(),
     size: it.size || '',
+    build: itemBuildText(it),
     qty: it.quantity,
     rate: it.price,
     disPct: 0,
@@ -163,7 +168,7 @@ export function orderToThermal(o: AdminOrder): ThermalBillData {
     timeStr: o.createdAt || now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }),
     billTypeLabel: o.orderType === 'DELIVERY' ? 'HOME DELIVERY' : o.orderType === 'DINE_IN' ? 'DINE IN' : 'CARRY OUT',
     customerName: (o.customerName || 'WALK-IN').toUpperCase(),
-    address: o.tableNumber ? `Table ${o.tableNumber}` : (o.address || ''),
+    address: o.tableNumber ? tableLabel(o.tableNumber) : (o.address || ''),
     phone: o.customerPhone || o.partyPhone || '',
     soldBy: STORE_HEADER.soldBy,
     lines,
@@ -172,9 +177,9 @@ export function orderToThermal(o: AdminOrder): ThermalBillData {
     gstTotal: o.tax || 0,
     grandTotal: o.total,
     cgstBase: base,
-    cgstAmt: base * 0.025,
+    cgstAmt: (o.tax || 0) > 0 ? base * 0.025 : 0,
     sgstBase: base,
-    sgstAmt: base * 0.025,
+    sgstAmt: (o.tax || 0) > 0 ? base * 0.025 : 0,
   };
 }
 

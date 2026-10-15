@@ -26,6 +26,15 @@ export const CRAVING_CATEGORIES: CategoryItem[] = [
     startingPrice: 199,
   },
   {
+    id: 'cat-sauce-pizzas',
+    name: 'Sauce Pizzas',
+    tag: 'NEW',
+    image: '/images/pizza.png',
+    bannerImage: '/images/menu/p-veg-schezwan.jpg',
+    filterKey: 'sauce-pizzas',
+    startingPrice: 229,
+  },
+  {
     id: 'cat-pan-pizza',
     name: 'Pan Pizzas',
     tag: 'CRISPY',
@@ -130,6 +139,22 @@ export const AVAILABLE_TOPPINGS: ExtraTopping[] = [
   { id: 'top-seekh-kabab', name: 'Chicken Seekh Kabab', price: 40, isVeg: false },
 ];
 
+// Make Your Own Pizza — sauce step. Tomato is free; any other sauce costs SAUCE_PRICE.
+export const SAUCE_PRICE = 40;
+export const PIZZA_SAUCES: { id: string; name: string; desc: string; free?: boolean }[] = [
+  { id: 'tomato', name: 'Tomato Sauce', desc: 'Classic herbed tomato pizza sauce', free: true },
+  { id: 'schezwan', name: 'Schezwan Sauce', desc: 'Fiery Indo-Chinese chilli kick' },
+  { id: 'mexican', name: 'Mexican Salsa', desc: 'Zesty, tangy & mildly spicy' },
+  { id: 'tandoori', name: 'Tandoori Sauce', desc: 'Smoky clay-oven spices' },
+  { id: 'makhani', name: 'Makhani Sauce', desc: 'Rich, buttery & creamy' },
+  { id: 'achari', name: 'Achari Sauce', desc: 'Tangy Indian pickle flavour' },
+  { id: 'hot-garlic', name: 'Hot Garlic Sauce', desc: 'Roasted garlic with red chilli' },
+  { id: 'peri-peri', name: 'Peri-Peri Sauce', desc: "African bird's-eye chilli heat" },
+  { id: 'barbeque', name: 'Barbeque Sauce', desc: 'Sweet, smoky & tangy' },
+];
+/** Make Your Own: this many toppings are free; extra ones are charged at their price. */
+export const FREE_TOPPINGS = 3;
+
 // Make Your Own Pizza — blank base, customer step-by-step banata hai (CustomizeModal me khulta hai)
 export const MAKE_YOUR_OWN_BASE: MenuItem = {
   id: 'p-make-your-own',
@@ -139,7 +164,7 @@ export const MAKE_YOUR_OWN_BASE: MenuItem = {
   isVeg: true,
   price: 149,
   originalPrice: 199,
-  description: 'Start with a fresh hand-tossed base, pick your size, crust and unlimited toppings.',
+  description: 'Pick your size, crust and sauce, add up to 3 free toppings, then choose your cheese.',
   toppings: [],
   image: '/images/menu/p-veg-double-cheese.jpg',
   badge: 'CHEF SPECIAL',

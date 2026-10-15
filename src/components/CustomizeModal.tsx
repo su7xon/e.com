@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Check, Sparkles, ShieldCheck, Flame, Plus, Clock } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Check, Sparkles, ShieldCheck, Flame, Plus, Clock, ChevronDown } from 'lucide-react';
 import { MenuItem, PizzaSize, PizzaCrust, ExtraTopping, CartItem } from '../types';
 import { AVAILABLE_TOPPINGS, SIZE_PRICE_MODIFIERS, CRUST_PRICE_MODIFIERS } from '../data/mockData';
 import { PIZZA_CATEGORIES } from '../lib/customize';
@@ -34,6 +34,62 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
   const [selectedCrust, setSelectedCrust] = useState<PizzaCrust>(item.defaultCrust || 'New Hand Tossed');
   const [extraCheese, setExtraCheese] = useState<boolean>(false);
   const [selectedToppings, setSelectedToppings] = useState<ExtraTopping[]>([]);
+
+  // "Make your own": walk the customer through to toppings before Add to Cart,
+  // so picking a base never sends a half-built pizza to the cart.
+  const isBuildYourOwn = item.id === 'p-make-your-own';
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const toppingsRef = useRef<HTMLDivElement>(null);
+  const [toppingsSeen, setToppingsSeen] = useState(false);
+  // Ignore an Add tap that lands in the first moment after opening (a stray/double tap).
+  const openedAtRef = useRef(Date.now());
+  useEffect(() => {
+    openedAtRef.current = Date.now();
+    setToppingsSeen(false);
+  }, [item?.id]);
+  useEffect(() => {
+    const el = toppingsRef.current;
+    const root = scrollAreaRef.current;
+    if (!el || !root || toppingsSeen || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setToppingsSeen(true);
+      },
+      { root, threshold: 0.35 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [toppingsSeen, item?.id]);
+  const scrollToToppings = () => {
+    toppingsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  // Step 04 (cheese) — Make your own only.
+  const cheeseRef = useRef<HTMLDivElement>(null);
+  const [cheeseSeen, setCheeseSeen] = useState(false);
+  useEffect(() => {
+    setCheeseSeen(false);
+  }, [item?.id]);
+  useEffect(() => {
+    const el = cheeseRef.current;
+    const root = scrollAreaRef.current;
+    if (!el || !root || cheeseSeen || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setCheeseSeen(true);
+      },
+      { root, threshold: 0.6 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [cheeseSeen, item?.id]);
+  const scrollToCheese = () => {
+    cheeseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  const guided = isBuildYourOwn && isPizzaItem && !editingLine;
+  const needsToppingsStep = guided && !toppingsSeen;
+  const needsCheeseStep = guided && toppingsSeen && !cheeseSeen;
+  // A build with any chicken topping is non-veg (cart, KOT and bill dots follow this).
+  const buildIsVeg = item.isVeg && !selectedToppings.some((tp) => !tp.isVeg);
 
   // Reset state when item changes — or load the cart line being edited.
   useEffect(() => {
@@ -91,11 +147,20 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
   };
 
   const handleAdd = () => {
+    if (Date.now() - openedAtRef.current < 700) return;
+    if (needsToppingsStep) {
+      scrollToToppings();
+      return;
+    }
+    if (needsCheeseStep) {
+      scrollToCheese();
+      return;
+    }
     const newCartItem: CartItem = {
       cartItemId: editingLine?.cartItemId ?? `${item.id}-${Date.now()}`,
       productId: item.id,
       name: item.name,
-      isVeg: item.isVeg,
+      isVeg: buildIsVeg,
       image: item.image,
       basePrice: item.price,
       price: totalPrice,
@@ -113,8 +178,8 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
     ? [
         selectedSize,
         selectedCrust,
-        extraCheese ? 'Extra cheese' : null,
         selectedToppings.length ? `${selectedToppings.length} topping${selectedToppings.length > 1 ? 's' : ''}` : null,
+        extraCheese ? 'Extra cheese' : null,
       ]
         .filter(Boolean)
         .join('  •  ')
@@ -152,7 +217,7 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
           />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <VegNonVegIcon isVeg={item.isVeg} size="md" />
+              <VegNonVegIcon isVeg={buildIsVeg} size="md" />
               <h2 className="font-display text-lg sm:text-xl font-bold text-stone-900 leading-tight truncate">
                 {item.name}
               </h2>
@@ -175,7 +240,7 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
         </div>
 
         {/* Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-7">
+        <div ref={scrollAreaRef} className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-7">
 
           {/* Step 1: Size — visual circles (pizzas only) */}
           {isPizzaItem && (
@@ -266,7 +331,10 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
                     <button
                       key={crust}
                       id={`btn-crust-${crust.replace(/\s+/g, '-').toLowerCase()}`}
-                      onClick={() => setSelectedCrust(crust)}
+                      onClick={() => {
+                        setSelectedCrust(crust);
+                        if (isBuildYourOwn) window.setTimeout(scrollToToppings, 250);
+                      }}
                       className={`w-full p-3 rounded-2xl border flex items-center justify-between transition-all text-left cursor-pointer ${
                         isSelected
                           ? 'border-[#C2410C] bg-orange-50 ring-1 ring-[#C2410C] shadow-xs'
@@ -314,10 +382,26 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
 
           {/* Step 4: Toppings — chips (pizzas only) */}
           {isPizzaItem && (
-          <div>
+          <div ref={toppingsRef} className="scroll-mt-3">
             {stepHead('03', 'Load your toppings', `${selectedToppings.length} added · optional`)}
+            {(isBuildYourOwn
+              ? [
+                  { key: 'veg', title: 'Veg toppings', list: AVAILABLE_TOPPINGS.filter((tp) => tp.isVeg) },
+                  { key: 'nonveg', title: 'Non-veg toppings', list: AVAILABLE_TOPPINGS.filter((tp) => !tp.isVeg) },
+                ]
+              : [{ key: 'all', title: '', list: AVAILABLE_TOPPINGS.filter((tp) => (item.isVeg ? tp.isVeg : true)) }]
+            ).map((group) => (
+            <div key={group.key} className={group.key === 'nonveg' ? 'mt-4' : ''}>
+              {group.title && (
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`w-3.5 h-3.5 rounded-[4px] border flex items-center justify-center ${group.key === 'veg' ? 'border-emerald-700' : 'border-red-700'}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${group.key === 'veg' ? 'bg-emerald-700' : 'bg-red-700'}`} />
+                  </span>
+                  <span className="text-xs font-black uppercase tracking-wider text-stone-600">{group.title}</span>
+                </div>
+              )}
             <div className="bg-white rounded-2xl border border-stone-200/80 divide-y divide-stone-100 overflow-hidden">
-              {AVAILABLE_TOPPINGS.filter(t => item.isVeg ? t.isVeg : true).map((topping) => {
+              {group.list.map((topping) => {
                 const isChecked = selectedToppings.some((t) => t.id === topping.id);
                 return (
                   <div
@@ -359,6 +443,44 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
                 );
               })}
             </div>
+            </div>
+            ))}
+          </div>
+          )}
+
+          {/* Step 04: Cheese — Make your own only */}
+          {isBuildYourOwn && isPizzaItem && (
+          <div ref={cheeseRef} className="scroll-mt-3">
+            {stepHead('04', 'Choose your cheese', 'Required')}
+            <div className="space-y-2.5">
+              {[
+                { on: false, title: 'Normal cheese', desc: 'Our regular mozzarella layer', price: 'Included' },
+                { on: true, title: 'Extra cheese', desc: 'Double the cheese, extra stretchy', price: `+₹${getCheeseModifier(selectedSize)}` },
+              ].map((opt) => {
+                const isSelected = extraCheese === opt.on;
+                return (
+                  <button
+                    key={opt.title}
+                    id={opt.on ? 'btn-cheese-extra' : 'btn-cheese-normal'}
+                    onClick={() => setExtraCheese(opt.on)}
+                    className={`w-full p-3 rounded-2xl border flex items-center justify-between transition-all text-left cursor-pointer ${
+                      isSelected ? 'border-[#C2410C] bg-orange-50 ring-1 ring-[#C2410C] shadow-xs' : 'border-stone-200 bg-white hover:border-stone-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected ? 'border-[#C2410C]' : 'border-stone-300'}`}>
+                        {isSelected && <span className="w-2.5 h-2.5 rounded-full bg-[#C2410C]" />}
+                      </span>
+                      <div>
+                        <span className="text-xs sm:text-sm font-bold text-stone-900 block">{opt.title}</span>
+                        <span className="text-[11px] text-stone-500 block">{opt.desc}</span>
+                      </div>
+                    </div>
+                    <span className={`text-xs font-mono font-bold shrink-0 ml-2 ${opt.on ? 'text-stone-800' : 'text-emerald-700'}`}>{opt.price}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
           )}
 
@@ -393,9 +515,18 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
             onClick={handleAdd}
             className="flex-1 max-w-xs flex items-center justify-center gap-2 bg-[#e31837] hover:bg-[#c4122d] active:scale-95 text-white font-extrabold px-6 py-3.5 rounded-full shadow-lg shadow-red-900/20 text-sm tracking-wide transition-all cursor-pointer"
           >
-            <span>{editingLine ? 'Update Item' : 'Add to Cart'}</span>
-            <span>•</span>
-            <span className="font-mono">₹{totalPrice}</span>
+            {needsToppingsStep || needsCheeseStep ? (
+              <>
+                <span>{needsToppingsStep ? 'Next: add toppings' : 'Next: choose cheese'}</span>
+                <ChevronDown className="w-4 h-4" />
+              </>
+            ) : (
+              <>
+                <span>{editingLine ? 'Update Item' : 'Add to Cart'}</span>
+                <span>•</span>
+                <span className="font-mono">₹{totalPrice}</span>
+              </>
+            )}
           </button>
         </div>
 

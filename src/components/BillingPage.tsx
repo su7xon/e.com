@@ -21,6 +21,7 @@ import {
   Navigation,
 } from 'lucide-react';
 import { CartItem, Coupon, UserAddress, DeliveryDetails, OrderType, MenuItem } from '../types';
+import { taxesAndChargesFor } from '../lib/billing';
 import { COUPONS, MENU_ITEMS } from '../data/mockData';
 import { needsCustomize } from '../lib/customize';
 import { VegNonVegIcon } from './VegNonVegIcon';
@@ -87,7 +88,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
   const freeDeliveryThreshold = 99;
   const isFreeDeliveryEligible = subtotal >= freeDeliveryThreshold || appliedCoupon?.code === 'FREEDEL';
   const deliveryFee = orderType === 'DELIVERY' ? (isFreeDeliveryEligible ? 0 : 40) : 0;
-  const taxesAndCharges = subtotal > 0 ? Math.round(subtotal * 0.05 + 15) : 0;
+  const taxesAndCharges = taxesAndChargesFor(subtotal);
 
   let discount = 0;
   if (appliedCoupon && subtotal >= appliedCoupon.minOrder) {

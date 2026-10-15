@@ -17,6 +17,24 @@ import { PRESET_PIZZA_IMAGES } from './adminData';
 import { optimizeImage, blobToDataURL } from '../../lib/imageOptimize';
 import { isLocalPhoto } from '../../lib/imageUpload';
 
+/** Available / Sold out switch — sold-out items disappear from the customer menu. */
+const AvailabilitySwitch: React.FC<{ item: MenuItem; onUpdateItem: (item: MenuItem) => void }> = ({ item, onUpdateItem }) => {
+  const on = item.isAvailable !== false;
+  return (
+    <button
+      role="switch"
+      aria-checked={on}
+      onClick={() => onUpdateItem({ ...item, isAvailable: !on })}
+      title={on ? 'Available — tap to mark sold out' : 'Sold out — tap to make available'}
+      className={`px-2 py-1 rounded-lg text-[11px] font-black border cursor-pointer whitespace-nowrap ${
+        on ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'
+      }`}
+    >
+      {on ? 'Available' : 'Sold out'}
+    </button>
+  );
+};
+
 interface AdminMenuManagerProps {
   menuItems: MenuItem[];
   onAddItem: (item: MenuItem) => void;
@@ -45,7 +63,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
   // Form State for Add / Edit
   const [formData, setFormData] = useState<Partial<MenuItem>>({
     name: '',
-    category: 'signature-7-cheese',
+    category: 'veg-pizza',
     isVeg: true,
     price: 299,
     originalPrice: 399,
@@ -61,15 +79,18 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
 
   const categories: { id: string; label: string }[] = [
     { id: 'all', label: 'All Items' },
-    { id: 'signature-7-cheese', label: '7 Cheese Special' },
     { id: 'veg-pizza', label: 'Veg Pizzas' },
     { id: 'non-veg-pizza', label: 'Non-Veg Pizzas' },
+    { id: 'pan-pizza', label: 'Pan Pizzas' },
     { id: 'burgers', label: 'Burgers' },
     { id: 'wraps', label: 'Wraps' },
-    { id: 'sides', label: 'Sides & Breads' },
-    { id: 'drinks', label: 'Beverages' },
+    { id: 'starters-sides', label: 'Starters & Garlic Bread' },
+    { id: 'pasta', label: 'Pastas' },
+    { id: 'chicken-corner', label: 'Chicken Corner' },
+    { id: 'drinks', label: 'Drinks' },
     { id: 'desserts', label: 'Desserts' },
     { id: 'dips', label: 'Dips' },
+    { id: 'combos', label: 'Combos' },
   ];
 
   const filteredItems = menuItems.filter((item) => {
@@ -93,7 +114,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
     resetUploadState();
     setFormData({
       name: '',
-      category: 'signature-7-cheese',
+      category: 'veg-pizza',
       isVeg: true,
       price: 299,
       originalPrice: 399,
@@ -169,7 +190,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
       const newItem: MenuItem = {
         id: `custom-${Date.now()}`,
         name: formData.name.trim(),
-        category: (formData.category || 'signature-7-cheese') as MenuCategoryType,
+        category: (formData.category || 'veg-pizza') as MenuCategoryType,
         isVeg: formData.isVeg ?? true,
         price: basePrice,
         originalPrice: formData.originalPrice ? Number(formData.originalPrice) : undefined,
@@ -196,7 +217,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
             <h2 className="text-base sm:text-lg font-black text-slate-900">
               Menu Catalog & Stock Manager
             </h2>
-            <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-[10px] font-black">
+            <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-[11px] font-black">
               {menuItems.length} Total Items
             </span>
           </div>
@@ -210,7 +231,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
           <button
             id="btn-admin-restore-menu"
             onClick={() => {
-              if (window.confirm('Pura default menu wapas laaye? (81 items)')) {
+              if (window.confirm('Restore the full default menu? (81 items)')) {
                 onRestoreMenu();
               }
             }}
@@ -267,7 +288,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/70 text-slate-400 uppercase text-[10px] font-bold">
+              <tr className="border-b border-slate-100 bg-slate-50/70 text-slate-400 uppercase text-[11px] font-bold">
                 <th className="py-3 px-4">Item Details</th>
                 <th className="py-3 px-3">Category</th>
                 <th className="py-3 px-3">Type</th>
@@ -306,14 +327,14 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
 
                   {/* Category */}
                   <td className="py-3 px-3">
-                    <span className="capitalize px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold">
+                    <span className="capitalize px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-bold">
                       {item.category.replace(/-/g, ' ')}
                     </span>
                   </td>
 
                   {/* Veg / Non-Veg */}
                   <td className="py-3 px-3">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold ${
                       item.isVeg ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
                     }`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${item.isVeg ? 'bg-emerald-500' : 'bg-red-500'}`} />
@@ -325,14 +346,14 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                   <td className="py-3 px-3">
                     <div className="font-black text-slate-900 text-sm">₹{item.price}</div>
                     {item.originalPrice && (
-                      <div className="text-[10px] text-slate-400 line-through">₹{item.originalPrice}</div>
+                      <div className="text-[11px] text-slate-400 line-through">₹{item.originalPrice}</div>
                     )}
                   </td>
 
                   {/* Badge */}
                   <td className="py-3 px-3">
                     {item.badge ? (
-                      <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[10px] font-black uppercase">
+                      <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[11px] font-black uppercase">
                         {item.badge}
                       </span>
                     ) : (
@@ -343,6 +364,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                   {/* Actions */}
                   <td className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end gap-1.5">
+                      <AvailabilitySwitch item={item} onUpdateItem={onUpdateItem} />
                       <button
                         onClick={() => handleOpenEdit(item)}
                         className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
@@ -401,11 +423,11 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                 <span className="font-bold text-slate-900 text-xs truncate">{item.name}</span>
               </div>
               <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                <span className="capitalize px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[9px] font-bold">
+                <span className="capitalize px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-bold">
                   {item.category.replace(/-/g, ' ')}
                 </span>
                 {item.badge && (
-                  <span className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-[9px] font-black uppercase">
+                  <span className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-[11px] font-black uppercase">
                     {item.badge}
                   </span>
                 )}
@@ -413,11 +435,12 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
               <div className="mt-1 flex items-baseline gap-1.5">
                 <span className="font-black text-slate-900 text-sm">₹{item.price}</span>
                 {item.originalPrice && (
-                  <span className="text-[10px] text-slate-400 line-through">₹{item.originalPrice}</span>
+                  <span className="text-[11px] text-slate-400 line-through">₹{item.originalPrice}</span>
                 )}
               </div>
             </div>
-            <div className="flex flex-col gap-1.5 shrink-0">
+            <div className="flex flex-col items-center gap-1.5 shrink-0">
+              <AvailabilitySwitch item={item} onUpdateItem={onUpdateItem} />
               <button
                 onClick={() => handleOpenEdit(item)}
                 className="p-2 rounded-xl bg-slate-100 active:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
@@ -494,14 +517,18 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                     }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#ED1C24]"
                   >
-                    <option value="signature-7-cheese">7 Cheese Special</option>
                     <option value="veg-pizza">Veg Pizza</option>
                     <option value="non-veg-pizza">Non-Veg Pizza</option>
+                    <option value="pan-pizza">Pan Pizza</option>
                     <option value="burgers">Burgers</option>
                     <option value="wraps">Wraps</option>
-                    <option value="sides">Sides & Breads</option>
+                    <option value="starters-sides">Starters & Garlic Bread</option>
+                    <option value="pasta">Pasta</option>
+                    <option value="chicken-corner">Chicken Corner</option>
                     <option value="drinks">Drinks & Shakes</option>
                     <option value="desserts">Desserts</option>
+                    <option value="dips">Dips</option>
+                    <option value="combos">Combos</option>
                   </select>
                 </div>
 
@@ -564,7 +591,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                     Pizza Size Prices (₹) *
                   </label>
                   <p className="text-[11px] text-slate-500 mb-2">
-                    Small = Regular size. Yehi price customer ko Customize me dikhega.
+                    Small = Regular size. This is the price customers see when customising.
                   </p>
                   <div className="grid grid-cols-3 gap-2">
                     {(
@@ -610,7 +637,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                       key={b}
                       type="button"
                       onClick={() => setFormData({ ...formData, badge: b as MenuItem['badge'] })}
-                      className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all cursor-pointer border ${
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-black uppercase transition-all cursor-pointer border ${
                         formData.badge === b
                           ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-xs'
                           : 'bg-slate-50 text-slate-600 border-slate-200'
@@ -679,7 +706,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                     <span>{isUploading ? 'Optimizing...' : 'Upload Photo from Device'}</span>
                   </button>
                   {isLocalPhoto(formData.image) && !isUploading && (
-                    <span className="flex items-center gap-1 text-[10px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg shrink-0">
+                    <span className="flex items-center gap-1 text-[11px] font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-lg shrink-0">
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       Firestore Ready
                     </span>
@@ -700,14 +727,14 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                   placeholder="https://... (or upload from above)"
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#ED1C24] mb-2"
                 />
-                <div className="text-[10px] text-slate-400 mb-1">Or choose a high-quality preset photo:</div>
+                <div className="text-[11px] text-slate-400 mb-1">Or choose a high-quality preset photo:</div>
                 <div className="flex flex-wrap gap-1.5">
                   {PRESET_PIZZA_IMAGES.map((p, i) => (
                     <button
                       key={i}
                       type="button"
                       onClick={() => setFormData({ ...formData, image: p.url })}
-                      className={`px-2 py-1 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
+                      className={`px-2 py-1 rounded-md text-[11px] font-bold border transition-all cursor-pointer ${
                         formData.image === p.url
                           ? 'bg-slate-900 text-white border-slate-900'
                           : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'

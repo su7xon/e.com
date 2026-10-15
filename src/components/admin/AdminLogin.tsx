@@ -44,7 +44,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onBackToStore, 
             <Store className="w-5 h-5 text-[#ED1C24]" />
             <div>
               <div className="text-xs font-bold text-slate-900">{OUTLETS[0].shortName}</div>
-              <div className="text-[10px] font-medium text-slate-400">{OUTLETS[0].area}</div>
+              <div className="text-[11px] font-medium text-slate-400">{OUTLETS[0].area}</div>
             </div>
           </div>
 

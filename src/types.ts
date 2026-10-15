@@ -25,6 +25,7 @@ export type MenuCategoryType =
   | 'drinks'
   | 'desserts' 
   | 'dips'
+  | 'sauce-pizzas'
   | 'combos'
   | 'veg' 
   | 'non-veg'
@@ -53,6 +54,8 @@ export interface MenuItem {
   outletId?: string;
   /** A shared item hidden by an outlet (delete = hide from own outlet only). */
   hiddenInOutlets?: string[];
+  /** false = sold out / switched off in admin; hidden from customers. Missing = available. */
+  isAvailable?: boolean;
   /** Optional schedule for offer combos. */
   days?: number[];
   startTime?: string;
@@ -71,6 +74,8 @@ export interface CartItem {
   crust?: PizzaCrust;
   extraCheese: boolean;
   extraToppings: ExtraTopping[];
+  /** Make Your Own: chosen sauce name. */
+  sauce?: string;
   quantity: number;
 }
 
@@ -131,7 +136,9 @@ export interface ActiveOrder {
   tax: number;
   discount: number;
   total: number;
-  status: 'CONFIRMED' | 'PREPARING' | 'BAKING' | 'OUT_FOR_DELIVERY' | 'DELIVERED';
+  status: 'CONFIRMED' | 'PREPARING' | 'BAKING' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
+  /** The restaurant's copy of this order (admin "orders" id) — the tracker follows its status. */
+  adminOrderId?: string;
   timestamp: string;
   estimatedMinutes: number;
   /** Expected delivery time (epoch ms) — the tracker counts down to it. */

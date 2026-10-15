@@ -176,7 +176,7 @@ export const AdminOffersManager: React.FC<AdminOffersManagerProps> = ({
       <div className="hidden md:block bg-white rounded-2xl border border-slate-200 overflow-hidden">
         <table className="w-full text-left text-xs">
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/70 text-slate-500 uppercase text-[10px] font-bold tracking-wide">
+            <tr className="border-b border-slate-100 bg-slate-50/70 text-slate-500 uppercase text-[11px] font-bold tracking-wide">
               <th className="py-3 px-4">Combo</th>
               <th className="py-3 px-3">Type</th>
               <th className="py-3 px-3">Price</th>
@@ -212,7 +212,7 @@ export const AdminOffersManager: React.FC<AdminOffersManagerProps> = ({
                     </div>
                   </td>
                   <td className="py-3 px-3">
-                    <span className="px-2 py-1 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold">
+                    <span className="px-2 py-1 rounded-md bg-slate-100 text-slate-600 text-[11px] font-bold">
                       {c.subCategoryTitle || 'Combo'}
                     </span>
                   </td>
@@ -224,7 +224,7 @@ export const AdminOffersManager: React.FC<AdminOffersManagerProps> = ({
                   </td>
                   <td className="py-3 px-3">
                     {off !== null ? (
-                      <span className="px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold">
+                      <span className="px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 text-[11px] font-bold">
                         {off}% off
                       </span>
                     ) : (
@@ -291,7 +291,7 @@ export const AdminOffersManager: React.FC<AdminOffersManagerProps> = ({
                 <div className="flex items-center gap-2 mt-1">
                   <span className="font-bold text-slate-900 text-sm">₹{c.price}</span>
                   {off !== null && (
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
                       {off}% off
                     </span>
                   )}

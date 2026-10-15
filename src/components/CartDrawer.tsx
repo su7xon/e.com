@@ -20,6 +20,7 @@ import {
   Compass
 } from 'lucide-react';
 import { CartItem, Coupon, UserAddress, DeliveryDetails, OrderType, MenuItem } from '../types';
+import { taxesAndChargesFor } from '../lib/billing';
 import { COUPONS, MENU_ITEMS } from '../data/mockData';
 import { VegNonVegIcon } from './VegNonVegIcon';
 import { InteractiveMapPicker } from './InteractiveMapPicker';
@@ -180,7 +181,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const freeDeliveryThreshold = 99;
   const isFreeDeliveryEligible = subtotal >= freeDeliveryThreshold || appliedCoupon?.code === 'FREEDEL';
   const deliveryFee = orderType === 'DELIVERY' ? (isFreeDeliveryEligible ? 0 : 40) : 0;
-  const taxesAndCharges = subtotal > 0 ? Math.round(subtotal * 0.05 + 15) : 0;
+  const taxesAndCharges = taxesAndChargesFor(subtotal);
 
   // Coupon discount computation
   let discount = 0;
@@ -452,8 +453,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
                         {/* Customization Details */}
                         {(item.size || item.crust) && (
-                          <p className="text-[10px] text-slate-500 font-medium truncate mt-0.5">
-                            {item.size} • {item.crust}
+                          <p className="text-[11px] text-slate-500 font-medium line-clamp-2 mt-0.5">
+                            {[item.size, item.crust, item.sauce, item.extraToppings?.length ? item.extraToppings.map((tp) => tp.name).join(', ') : ''].filter(Boolean).join(' • ')}
                           </p>
                         )}
                         {item.extraCheese && (
@@ -469,7 +470,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
                         {/* Domino's-style crust upgrade strip */}
                         {isPizzaLine(item.name, menuList.find((m) => m.id === item.productId)?.category ?? '') &&
-                          !upsellDismissed[item.cartItemId] && item.crust !== 'Cheese Burst' && (
+                          !upsellDismissed[item.cartItemId] && item.crust !== 'Cheese Burst' &&
+                          item.productId !== 'p-make-your-own' && (
                           <div className="mt-1.5 bg-slate-100 rounded-lg p-1.5 flex items-center gap-2">
                             <img
                               src="/images/seven_cheese_pizza_1788869697088.jpg"
@@ -1025,10 +1027,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   </span>
                 </div>
 
-                <div className="flex justify-between text-slate-600">
-                  <span>Taxes & Restaurant Packaging</span>
-                  <span className="font-mono font-semibold">₹{taxesAndCharges}</span>
-                </div>
+                {taxesAndCharges > 0 && (
+                  <div className="flex justify-between text-slate-600">
+                    <span>Taxes & Restaurant Packaging</span>
+                    <span className="font-mono font-semibold">₹{taxesAndCharges}</span>
+                  </div>
+                )}
 
                 {discount > 0 && (
                   <div className="flex justify-between text-emerald-600 font-bold">

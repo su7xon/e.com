@@ -75,7 +75,7 @@ export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({
             <h2 className="text-base sm:text-lg font-black text-slate-900">
               Coupons & Promo Offers Manager
             </h2>
-            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-black uppercase">
+            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full text-[11px] font-black uppercase">
               {coupons.length} Active Deals
             </span>
           </div>
@@ -115,7 +115,7 @@ export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({
           >
             {/* Top Tag & Delete */}
             <div className="flex items-start justify-between">
-              <span className="bg-gradient-to-r from-red-600 to-amber-600 text-white px-2 py-0.5 rounded-md text-[9px] font-black tracking-wider uppercase shadow-xs">
+              <span className="bg-gradient-to-r from-red-600 to-amber-600 text-white px-2 py-0.5 rounded-md text-[11px] font-black tracking-wider uppercase shadow-xs">
                 {c.tag || 'DEAL'}
               </span>
 

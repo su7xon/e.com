@@ -21,11 +21,13 @@ import {
   CRUST_PRICE_MODIFIERS
 } from './data/mockData';
 import { reverseGeocode } from './lib/reverseGeocode';
+import { taxesAndChargesFor } from './lib/billing';
 import { isOfferActive, isScheduleActive, SLIDE_SCHEDULES, LUNCH } from './utils/offerSchedule';
 import { Navbar } from './components/Navbar';
 import { DealPopup, TimedDeal } from './components/DealPopup';
 import { ProfileDrawer, CustomerProfile } from './components/ProfileDrawer';
 import { FilterSheet } from './components/FilterSheet';
+import { BuildYourOwnWizard } from './components/BuildYourOwnWizard';
 import { OfferDetailSheet } from './components/OfferDetailSheet';
 import { HeroBanner, DEFAULT_SLIDES, BannerSlide } from './components/HeroBanner';
 import { CravingCategories } from './components/CravingCategories';
@@ -414,7 +416,7 @@ export default function App() {
     const timer = window.setTimeout(() => {
       if (!gotFirstSnapshot) {
         setOrderSyncStatus((s) => (s === 'connecting' ? 'error' : s));
-        setOrderSyncError((e) => e || 'timeout-no-snapshot — Firestore se jawab nahi (internet / adblock / VPN / Rules check karo)');
+        setOrderSyncError((e) => e || 'timeout-no-snapshot: no response from Firestore (check internet, ad blocker, VPN or Firestore Rules)');
         console.error('[orders] Firestore snapshot timeout — check internet, adblock, or Firestore Rules.');
         // Auto-diagnose: tap ka wait mat karo, turant asli wajah nikalo
         diagnoseFirestoreNet().then((info) => {
@@ -469,7 +471,7 @@ export default function App() {
         gotFirstSnapshot = true;
         window.clearTimeout(timer);
         setOrderSyncStatus('error');
-        setOrderSyncError(msg || 'permission-denied — Firestore Rules me read allow karo');
+        setOrderSyncError(msg || 'permission-denied: allow read access in your Firestore Rules');
         console.error('[orders] Firestore subscribe error:', msg);
       }
     );
@@ -803,7 +805,10 @@ export default function App() {
     return () => window.clearInterval(id);
   }, []);
   const activeCoupons = useMemo(() => coupons.filter((c) => isOfferActive(c, now)), [coupons, now]);
-  const activeMenuItems = useMemo(() => menuItems.filter((m) => isOfferActive(m, now)), [menuItems, now]);
+  const activeMenuItems = useMemo(
+    () => menuItems.filter((m) => m.isAvailable !== false && isOfferActive(m, now)),
+    [menuItems, now],
+  );
   // While a deal runs (Tuesday / Friday / lunch) show just its banners;
   // otherwise show the generic upsell banners (and any "Always" banners).
   const activeSlides = useMemo(() => {
@@ -967,6 +972,14 @@ export default function App() {
   const [quickViewItem, setQuickViewItem] = useState<MenuItem | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isOrderTrackerOpen, setIsOrderTrackerOpen] = useState(false);
+  // The tracker shows the restaurant's live status (orders sync to every device).
+  const ADMIN_TO_TRACKER: Record<AdminOrder['status'], ActiveOrder['status']> = {
+    NEW: 'CONFIRMED',
+    KITCHEN: 'PREPARING',
+    DISPATCHED: 'OUT_FOR_DELIVERY',
+    COMPLETED: 'DELIVERED',
+    CANCELLED: 'CANCELLED',
+  };
 
   // Header profile icon → account drawer. Name/phone saved from checkout or edited in the drawer.
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -1145,7 +1158,7 @@ export default function App() {
     const couponValid = appliedCoupon && isOfferActive(appliedCoupon, new Date()) ? appliedCoupon : null;
     const isFreeDel = subtotal >= 99 || couponValid?.code === 'FREEDEL';
     const deliveryFee = orderType === 'DELIVERY' ? (isFreeDel ? 0 : 40) : 0;
-    const taxesAndCharges = Math.round(subtotal * 0.05 + 15);
+    const taxesAndCharges = taxesAndChargesFor(subtotal);
     
     let discount = 0;
     if (couponValid && subtotal >= couponValid.minOrder) {
@@ -1171,8 +1184,12 @@ export default function App() {
         : outletInfo.distanceKm || 3;
     const etaMinutes = Math.min(60, Math.max(20, Math.round(15 + etaKm * 3)));
 
+    // One id + number shared by the customer's tracker and the restaurant's order.
+    const adminOrderId = `ord-${Date.now()}`;
+    const orderNumber = `#7C-${Math.floor(1000 + Math.random() * 9000)}`;
     const newOrder: ActiveOrder = {
-      orderId: `DOM-${Math.floor(10000 + Math.random() * 90000)}`,
+      orderId: orderNumber.replace('#', ''),
+      adminOrderId,
       items: [...cartItems],
       orderType,
       address: `${currentAddress.address}, ${currentAddress.city}`,
@@ -1211,14 +1228,15 @@ export default function App() {
 
     // Push into Admin live orders
     const newAdminOrder: AdminOrder = {
-      id: `ord-${Date.now()}`,
-      orderNumber: `#7C-${Math.floor(1000 + Math.random() * 9000)}`,
+      id: adminOrderId,
+      orderNumber,
       outletId: orderOutlet.id,
       customerName: receiverName,
       customerPhone: receiverPhone,
       orderType: orderType === 'DINE_IN' ? 'DINE_IN' : 'DELIVERY',
-      address: fullDeliveryAddress,
-      landmark: orderLandmark || undefined,
+      // Dine-in orders are served at the table — no street address on them.
+      address: orderType === 'DINE_IN' ? undefined : fullDeliveryAddress,
+      landmark: orderType === 'DINE_IN' ? undefined : orderLandmark || undefined,
       tableNumber: orderType === 'DINE_IN' ? (qrTable?.name ?? 'Table T-01') : undefined,
       items: cartItems.map((c) => ({
         name: c.name,
@@ -1228,6 +1246,8 @@ export default function App() {
         size: c.size,
         crust: c.crust,
         extraCheese: c.extraCheese,
+        sauce: c.sauce,
+        toppings: c.extraToppings?.length ? c.extraToppings.map((tp) => tp.name) : undefined,
         notes: notes || undefined,
       })),
       subtotal,
@@ -1239,6 +1259,7 @@ export default function App() {
       paymentStatus: paymentMethod === 'cash' ? 'PENDING' : 'PAID',
       status: 'NEW',
       createdAt: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+      createdAtMs: Date.now(),
       timeAgo: 'Just now',
       cookingNotes: notes || undefined,
       deliveryLat: hasGps ? currentAddress.lat : undefined,
@@ -1272,6 +1293,13 @@ export default function App() {
     goView('home');
     setIsOrderTrackerOpen(true);
   };
+
+  const trackedOrder = useMemo(() => {
+    if (!activeOrder) return null;
+    const remote = activeOrder.adminOrderId ? adminOrders.find((o) => o.id === activeOrder.adminOrderId) : undefined;
+    return remote ? { ...activeOrder, status: ADMIN_TO_TRACKER[remote.status] } : activeOrder;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOrder, adminOrders]);
 
   // Filtered Products (menu dono outlets me same — shared catalog)
   const filteredProducts = useMemo(() => {
@@ -1308,6 +1336,7 @@ export default function App() {
         if (selectedCategory === 'desserts' && cat !== 'desserts') return false;
         if (selectedCategory === 'combos' && cat !== 'combos') return false;
         if (selectedCategory === 'dips' && cat !== 'dips') return false;
+        if (selectedCategory === 'sauce-pizzas' && !/Different Sauces/.test(item.subCategoryTitle || '')) return false;
       }
 
       return true;
@@ -1390,7 +1419,7 @@ export default function App() {
         />
 
         <OrderTrackerModal
-          order={activeOrder}
+          order={trackedOrder}
           isOpen={isOrderTrackerOpen}
           onClose={() => setIsOrderTrackerOpen(false)}
           onAdvanceStatus={(nextStatus) => {
@@ -1735,6 +1764,8 @@ export default function App() {
                     ? 'Popping Boba Drinks, Shakes & Mocktails'
                     : selectedCategory === 'desserts'
                     ? 'Molten Desserts'
+                    : selectedCategory === 'sauce-pizzas'
+                    ? 'Sauce Pizzas — Veg & Non-Veg'
                     : selectedCategory === 'dips'
                     ? 'Signature Dips'
                     : selectedCategory === 'combos'
@@ -2068,16 +2099,29 @@ export default function App() {
 
       {/* Profile Tab view */}
       {/* Modals and Drawers */}
-      <CustomizeModal
-        item={customizingItem}
-        isOpen={isCustomizeOpen}
-        onClose={() => {
-          setIsCustomizeOpen(false);
-          setEditingLine(null);
-        }}
-        onConfirmAddToCart={handleConfirmCustomize}
-        editingLine={editingLine}
-      />
+      {customizingItem?.id === MAKE_YOUR_OWN_BASE.id ? (
+        <BuildYourOwnWizard
+          item={customizingItem}
+          isOpen={isCustomizeOpen}
+          onClose={() => {
+            setIsCustomizeOpen(false);
+            setEditingLine(null);
+          }}
+          onConfirm={handleConfirmCustomize}
+          editingLine={editingLine}
+        />
+      ) : (
+        <CustomizeModal
+          item={customizingItem}
+          isOpen={isCustomizeOpen}
+          onClose={() => {
+            setIsCustomizeOpen(false);
+            setEditingLine(null);
+          }}
+          onConfirmAddToCart={handleConfirmCustomize}
+          editingLine={editingLine}
+        />
+      )}
 
       <QuickViewModal
         item={quickViewItem}
@@ -2127,7 +2171,7 @@ export default function App() {
       />
 
       <OrderTrackerModal
-        order={activeOrder}
+        order={trackedOrder}
         isOpen={isOrderTrackerOpen}
         onClose={() => setIsOrderTrackerOpen(false)}
         onAdvanceStatus={(nextStatus) => {

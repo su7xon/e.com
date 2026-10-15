@@ -144,7 +144,7 @@ export const AdminStoreImages: React.FC<AdminStoreImagesProps> = ({
                       <span className="hidden sm:inline">Upload</span>
                     </button>
                     {savedTick === key && (
-                      <span className="flex items-center gap-1 text-[10px] font-black text-emerald-700 shrink-0">
+                      <span className="flex items-center gap-1 text-[11px] font-black text-emerald-700 shrink-0">
                         <CheckCircle2 className="w-3.5 h-3.5" /> Live
                       </span>
                     )}
@@ -199,7 +199,7 @@ export const AdminStoreImages: React.FC<AdminStoreImagesProps> = ({
                     referrerPolicy="no-referrer"
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Craving photo</div>
+                    <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Craving photo</div>
                     <div className="flex gap-2">
                       <div className="relative flex-1">
                         <Link2 className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -214,7 +214,7 @@ export const AdminStoreImages: React.FC<AdminStoreImagesProps> = ({
                         {uploadingId === key ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
                       </button>
                       {savedTick === key && (
-                        <span className="flex items-center gap-1 text-[10px] font-black text-emerald-700 shrink-0">
+                        <span className="flex items-center gap-1 text-[11px] font-black text-emerald-700 shrink-0">
                           <CheckCircle2 className="w-3.5 h-3.5" /> Live
                         </span>
                       )}
@@ -230,7 +230,7 @@ export const AdminStoreImages: React.FC<AdminStoreImagesProps> = ({
                     referrerPolicy="no-referrer"
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Category card photo</div>
+                    <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Category card photo</div>
                     <div className="flex gap-2">
                       <div className="relative flex-1">
                         <Link2 className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -245,7 +245,7 @@ export const AdminStoreImages: React.FC<AdminStoreImagesProps> = ({
                         {uploadingId === bannerKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
                       </button>
                       {savedTick === bannerKey && (
-                        <span className="flex items-center gap-1 text-[10px] font-black text-emerald-700 shrink-0">
+                        <span className="flex items-center gap-1 text-[11px] font-black text-emerald-700 shrink-0">
                           <CheckCircle2 className="w-3.5 h-3.5" /> Live
                         </span>
                       )}

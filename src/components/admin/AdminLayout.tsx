@@ -24,12 +24,14 @@ import {
   Printer
 } from 'lucide-react';
 import { MenuItem, Coupon, CategoryItem } from '../../types';
-import { AdminOrder } from './adminData';
+import { AdminOrder, normalizeOrder } from './adminData';
 import { Outlet } from './outlets';
 import { OutletQr } from './OutletQr';
 import { BannerSlide, SlideSchedule } from '../HeroBanner';
 import { AdminDashboard } from './AdminDashboard';
 import { AdminLiveOrders } from './AdminLiveOrders';
+import { OrderExport } from './OrderExport';
+import { NewOrderAlert } from './NewOrderAlert';
 import { AdminDelivery } from './AdminDelivery';
 import { RushdaBilling } from './RushdaBilling';
 import { AdminMenuManager } from './AdminMenuManager';
@@ -97,7 +99,22 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   categories,
   onUpdateCategoryImage
 }) => {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'live-orders' | 'delivery' | 'rushda' | 'menu' | 'offers' | 'coupons' | 'images' | 'qr'>('dashboard');
+  type AdminTab = 'dashboard' | 'live-orders' | 'delivery' | 'rushda' | 'menu' | 'offers' | 'coupons' | 'images' | 'qr';
+  const ADMIN_TABS: AdminTab[] = ['dashboard', 'live-orders', 'delivery', 'rushda', 'menu', 'offers', 'coupons', 'images', 'qr'];
+  // The open page is kept in the URL (#live-orders …) so a refresh stays on it.
+  const [activeTab, setActiveTabState] = useState<AdminTab>(() => {
+    const h = window.location.hash.replace('#', '') as AdminTab;
+    return ADMIN_TABS.includes(h) ? h : 'dashboard';
+  });
+  const setActiveTab = (tab: AdminTab) => {
+    setActiveTabState(tab);
+    try {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${tab}`);
+    } catch {
+      // ignore
+    }
+  };
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isAlertSoundOn, setIsAlertSoundOn] = useState(true);
@@ -112,6 +129,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     () => (typeof Notification !== 'undefined' ? Notification.permission : 'unsupported')
   );
   const knownOrderIds = useRef<Set<string> | null>(null);
+  // New orders waiting for someone to accept them (popup + repeating alarm).
+  const [alertQueue, setAlertQueue] = useState<string[]>([]);
+  const [alarmMuted, setAlarmMuted] = useState(false);
   // Counter billing se isi device pe banaya order — uspe khud bep-bep mat bajao.
   // Kitchen ke dusre device pe alarm normal bajega, sirf banane wali screen mute rahegi.
   const selfCreatedIds = useRef<Set<string>>(new Set());
@@ -126,7 +146,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
 
   // Strict per-outlet: har outlet ko SIRF apne order dikhenge.
   // Legacy orders (bina outletId) dono me dikhenge taaki purana data kho na jaye.
-  const visibleOrders = orders.filter((o) => !o.outletId || o.outletId === outlet.id);
+  const visibleOrders = orders.filter((o) => !o.outletId || o.outletId === outlet.id).map(normalizeOrder);
 
   const activeOrdersCount = visibleOrders.filter(o => o.status === 'NEW' || o.status === 'KITCHEN').length;
   const activeDeliveryCount = visibleOrders.filter(o => o.orderType === 'DELIVERY' && (o.status === 'NEW' || o.status === 'KITCHEN' || o.status === 'DISPATCHED')).length;
@@ -149,7 +169,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         syncStatus === 'live'
           ? 'Connected to Firestore — orders arrive live from all devices'
           : syncStatus === 'error'
-            ? `Cannot reach Firestore — showing this device only. Reason: ${syncError || 'unknown'}. Tap to retry. Firestore Rules + internet check karo.`
+            ? `Cannot reach Firestore — showing this device only. Reason: ${syncError || 'unknown'}. Tap to retry. Check your Firestore Rules and internet connection.`
             : 'Connecting to live order sync…'
       }
       className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-black border shrink-0 cursor-pointer ${
@@ -171,7 +191,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             ? 'Live sync'
             : syncStatus === 'error'
               ? netInfo
-                ? `Sync fail (${netInfo}) — tap to retry`
+                ? `Sync failed (${netInfo}). Tap to retry.`
                 : `Sync error — tap to retry${shortErr ? `: ${shortErr}` : ''}`
               : 'Connecting…'}
         </span>
@@ -267,11 +287,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     if (!external.length) return;
     const latest = external[0];
     const itemCount = (latest.items || []).reduce((n, it) => n + (it.quantity || 1), 0);
-    // Repeat alarm 3x (12s) so kitchen hears even if tab background.
-    if (soundOnRef.current) {
-      playNewOrderAlert(4000);
-      window.setTimeout(() => { if (soundOnRef.current) playNewOrderAlert(4000); }, 4500);
-      window.setTimeout(() => { if (soundOnRef.current) playNewOrderAlert(4000); }, 9000);
+    // This outlet's new orders go into the popup queue; the alarm repeats until they're accepted.
+    const mine = external.filter((o) => o.status === 'NEW' && (!o.outletId || o.outletId === outlet.id)).map((o) => o.id);
+    if (mine.length) {
+      setAlertQueue((q) => [...q, ...mine.filter((id) => !q.includes(id))]);
+      setAlarmMuted(false);
     }
     flashTitle(`🔔 NEW ORDER ${latest.orderNumber} — ₹${latest.total}`);
 
@@ -311,9 +331,41 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders]);
 
+  // Popup shows the oldest waiting order that is still NEW (accepted elsewhere = drops out).
+  const pendingAlerts = alertQueue
+    .map((id) => visibleOrders.find((o) => o.id === id))
+    .filter((o): o is AdminOrder => !!o && o.status === 'NEW');
+  const currentAlert = pendingAlerts[0] ?? null;
+  useEffect(() => {
+    if (alertQueue.length && pendingAlerts.length !== alertQueue.length) {
+      setAlertQueue(pendingAlerts.map((o) => o.id));
+    }
+    if (!pendingAlerts.length) stopTitleFlash();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingAlerts.length, alertQueue.length]);
+
+  // Repeating siren while an order waits (every 6 s) unless muted or alerts are off.
+  const alarmActive = pendingAlerts.length > 0 && !alarmMuted && isAlertSoundOn;
+  useEffect(() => {
+    if (!alarmActive) return;
+    playNewOrderAlert(4000);
+    const id = window.setInterval(() => playNewOrderAlert(4000), 6000);
+    return () => window.clearInterval(id);
+  }, [alarmActive]);
+
+  const acceptAlert = (o: AdminOrder) => {
+    onUpdateOrderStatus(o.id, 'KITCHEN');
+    setAlertQueue((q) => q.filter((id) => id !== o.id));
+  };
+  const viewAlert = (o: AdminOrder) => {
+    setAlertQueue((q) => q.filter((id) => id !== o.id));
+    setActiveTab('live-orders');
+  };
+
+  // Test plays the real new-order siren, so staff know what to listen for.
   const handleTestAlert = () => {
     if (isAlertSoundOn) {
-      playPosChime(3000);
+      playNewOrderAlert(3000);
     }
   };
 
@@ -355,367 +407,289 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
+  const NAV: { id: AdminTab; label: string; icon: typeof LayoutDashboard; badge?: number; badgeColor?: string }[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'live-orders', label: 'Live Orders', icon: ShoppingBag, badge: activeOrdersCount || undefined, badgeColor: 'bg-red-500 text-white' },
+    { id: 'delivery', label: 'Delivery (Rider)', icon: Bike, badge: activeDeliveryCount || undefined, badgeColor: 'bg-blue-600 text-white' },
+    { id: 'rushda', label: 'Counter Billing', icon: Receipt },
+    { id: 'menu', label: 'Menu Catalog', icon: UtensilsCrossed, badge: menuItems.length, badgeColor: 'bg-slate-100 text-slate-600' },
+    { id: 'offers', label: 'Combos & Offers', icon: Sparkles, badge: menuItems.filter((m) => m.category === 'combos').length, badgeColor: 'bg-amber-50 text-amber-700' },
+    { id: 'coupons', label: 'Promo Codes', icon: Tag, badge: coupons.length, badgeColor: 'bg-emerald-50 text-emerald-700' },
+    { id: 'images', label: 'Store Images', icon: ImageIcon },
+    { id: 'qr', label: 'Tables & QR Codes', icon: QrCode },
+  ];
+  const currentLabel = NAV.find((n) => n.id === activeTab)?.label ?? 'Dashboard';
+
+  // Alert / printing / test controls live in one Settings panel instead of the header.
+  const SettingsPanel = () => (
+    <>
+      <div className="fixed inset-0 z-[55]" onClick={() => setIsSettingsOpen(false)} aria-hidden="true" />
+      <div
+        role="dialog"
+        aria-label="Alert and printer settings"
+        className="fixed z-[56] right-3 top-14 md:top-16 w-[calc(100%-1.5rem)] max-w-sm bg-white rounded-2xl border border-slate-200 shadow-2xl p-4 space-y-4"
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-black text-slate-900">Alerts & printing</h3>
+          <button onClick={() => setIsSettingsOpen(false)} aria-label="Close" className="text-slate-400 hover:text-slate-700 cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <label className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-700">
+          <span className="flex items-center gap-2">
+            {isAlertSoundOn ? <Volume2 className="w-4 h-4 text-emerald-600" /> : <VolumeX className="w-4 h-4 text-slate-400" />}
+            New-order alarm
+          </span>
+          <input type="checkbox" checked={isAlertSoundOn} onChange={() => setIsAlertSoundOn(!isAlertSoundOn)} className="w-5 h-5 accent-emerald-600" />
+        </label>
+
+        <div className="space-y-2">
+          <label className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-700">
+            <span className="flex items-center gap-2">
+              <Printer className="w-4 h-4 text-purple-600" />
+              Auto-print new orders
+            </span>
+            <input
+              id="btn-toggle-autoprint"
+              type="checkbox"
+              checked={isAutoPrintOn}
+              onChange={() => {
+                const next = !isAutoPrintOn;
+                setIsAutoPrintOn(next);
+                localStorage.setItem('seven_cheese_autoprint_enabled', String(next));
+              }}
+              className="w-5 h-5 accent-purple-600"
+            />
+          </label>
+          <select
+            id="select-autoprint-type"
+            value={autoPrintType}
+            onChange={(e) => {
+              const val = e.target.value as 'COMBINED' | 'KOT' | 'INVOICE';
+              setAutoPrintType(val);
+              localStorage.setItem('seven_cheese_autoprint_type', val);
+            }}
+            className="w-full text-xs font-bold bg-white text-slate-700 border border-slate-200 rounded-lg px-2 py-2 cursor-pointer"
+          >
+            <option value="COMBINED">Print bill + KOT</option>
+            <option value="KOT">Print KOT only</option>
+            <option value="INVOICE">Print bill only</option>
+          </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            id="btn-test-alert"
+            onClick={handleTestAlert}
+            className="flex items-center justify-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 py-2 rounded-xl text-xs font-bold cursor-pointer"
+          >
+            <Bell className="w-4 h-4" /> Test alarm
+          </button>
+          <button
+            onClick={handleTestPrint}
+            className="flex items-center justify-center gap-1.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 py-2 rounded-xl text-xs font-bold cursor-pointer"
+          >
+            <Printer className="w-4 h-4" /> Test print
+          </button>
+        </div>
+
+        {notifPerm !== 'granted' && notifPerm !== 'unsupported' && (
+          <button
+            id="btn-enable-alerts"
+            onClick={() => void handleEnableAlerts()}
+            className="w-full flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 py-2 rounded-xl text-xs font-bold cursor-pointer"
+            title="Allow sound + pop-up alerts when this tab is in the background"
+          >
+            <Bell className="w-4 h-4" /> Allow notifications
+          </button>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col md:flex-row antialiased font-sans">
-      {/* Mobile Header Bar */}
-      <div className="md:hidden bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-xs">
+      {/* Mobile header */}
+      <div className="md:hidden bg-white border-b border-slate-200 px-3 py-2.5 flex items-center gap-2 sticky top-0 z-40 shadow-xs">
         <button
           onClick={() => setIsMobileSidebarOpen(true)}
-          className="p-1.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200"
+          className="p-1.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 shrink-0"
+          aria-label="Open menu"
         >
           <MenuIcon className="w-5 h-5" />
         </button>
-
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-[#ED1C24] flex items-center justify-center text-white font-black text-xs shadow-xs">
-            7
-          </div>
-          <span className="font-black text-sm text-slate-900 tracking-tight">7 Cheese Admin POS • {outlet.shortName}</span>
+        <div className="min-w-0 flex-1">
+          <div className="font-black text-sm text-slate-900 truncate">{currentLabel}</div>
+          <div className="text-[11px] text-slate-500 truncate">{outlet.name}</div>
         </div>
-
-        <button
-          onClick={onBackToStore}
-          className="flex items-center gap-1 text-xs font-bold text-[#ED1C24] bg-red-50 border border-red-200 px-2.5 py-1 rounded-xl"
-        >
-          <Store className="w-3.5 h-3.5" />
-          <span>Store</span>
+        <SyncBadge compact />
+        <button onClick={handleRefresh} className="p-2 rounded-xl bg-slate-100 text-slate-700 shrink-0" aria-label="Refresh live data">
+          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+        </button>
+        <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-xl bg-slate-100 text-slate-700 shrink-0" aria-label="Alerts and printing settings">
+          <Settings className="w-4 h-4" />
         </button>
       </div>
 
       {/* Mobile drawer backdrop */}
       {isMobileSidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[1px] md:hidden"
-          onClick={() => setIsMobileSidebarOpen(false)}
-          aria-hidden="true"
-        />
+        <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[1px] md:hidden" onClick={() => setIsMobileSidebarOpen(false)} aria-hidden="true" />
       )}
 
-      {/* Sidebar Navigation */}
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col justify-between transition-transform duration-300 shadow-xl md:shadow-none md:static md:translate-x-0 ${
-        isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      }`}>
-        <div>
-          {/* Brand Header */}
+      {/* Sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 flex flex-col justify-between transition-transform duration-300 shadow-xl md:shadow-none md:sticky md:top-0 md:h-screen md:translate-x-0 ${
+          isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="min-h-0 overflow-y-auto">
           <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#ED1C24] to-red-500 flex items-center justify-center text-white font-black text-base shadow-md shadow-red-500/20">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#ED1C24] to-red-500 flex items-center justify-center text-white font-black text-base shadow-md shadow-red-500/20 shrink-0">
                 7
               </div>
-              <div>
-                <div className="font-black text-sm text-slate-900 tracking-tight leading-none">
-                  7 CHEESE PIZZA
-                </div>
-                <div className="text-[10px] text-slate-500 font-semibold tracking-wider uppercase mt-1 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  {outlet.shortName} POS
-                </div>
-                <div className="text-[10px] text-slate-400 font-medium mt-0.5 line-clamp-1">{outlet.area}</div>
+              <div className="min-w-0">
+                <div className="font-black text-sm text-slate-900 tracking-tight leading-none">7 CHEESE PIZZA</div>
+                <div className="text-[11px] text-slate-500 font-medium mt-1 truncate">{outlet.area}</div>
               </div>
             </div>
-
-            <button
-              onClick={() => setIsMobileSidebarOpen(false)}
-              className="md:hidden text-slate-400 hover:text-slate-600"
-            >
+            <button onClick={() => setIsMobileSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-slate-600" aria-label="Close menu">
               <X className="w-5 h-5" />
             </button>
           </div>
 
-          {/* Navigation Items */}
           <nav className="p-3 space-y-1">
-            {[
-              { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-              { id: 'live-orders', label: 'Live Orders & KOT', icon: ShoppingBag, badge: activeOrdersCount > 0 ? activeOrdersCount : undefined, badgeColor: 'bg-red-500 text-white' },
-              { id: 'delivery', label: 'Delivery (Rider)', icon: Bike, badge: activeDeliveryCount > 0 ? activeDeliveryCount : undefined, badgeColor: 'bg-blue-600 text-white' },
-              { id: 'rushda', label: 'Counter Billing', icon: Receipt, badge: undefined, badgeColor: 'bg-slate-100 text-slate-600' },
-              { id: 'menu', label: 'Menu Catalog', icon: UtensilsCrossed, badge: menuItems.length, badgeColor: 'bg-slate-100 text-slate-600' },
-              { id: 'offers', label: 'Combos & Offers', icon: Sparkles, badge: menuItems.filter((m) => m.category === 'combos').length, badgeColor: 'bg-amber-50 text-amber-700' },
-              { id: 'coupons', label: 'Promo Codes', icon: Tag, badge: coupons.length, badgeColor: 'bg-emerald-50 text-emerald-700' },
-              { id: 'images', label: 'Store Images', icon: ImageIcon, badge: slides.length + categories.length, badgeColor: 'bg-violet-50 text-violet-700' },
-              { id: 'qr', label: 'Outlet QR Code', icon: QrCode, badge: undefined, badgeColor: 'bg-slate-100 text-slate-600' },
-            ].map((item) => {
+            {NAV.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
               return (
                 <button
                   key={item.id}
                   onClick={() => {
-                    setActiveTab(item.id as typeof activeTab);
+                    setActiveTab(item.id);
                     setIsMobileSidebarOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    isActive
-                      ? 'bg-slate-900 text-white shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${
+                    isActive ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
+                  <span className="flex items-center gap-3">
                     <Icon className={`w-4 h-4 ${isActive ? 'text-amber-400' : 'text-slate-400'}`} />
-                    <span>{item.label}</span>
-                  </div>
+                    {item.label}
+                  </span>
                   {item.badge !== undefined && (
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${item.badgeColor}`}>
-                      {item.badge}
-                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-[11px] font-black ${item.badgeColor}`}>{item.badge}</span>
                   )}
                 </button>
               );
             })}
-
             <button
               onClick={() => {
                 setIsShiftModalOpen(true);
                 setIsMobileSidebarOpen(false);
               }}
-              className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer"
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer"
             >
-              <div className="flex items-center gap-3">
-                <FileText className="w-4 h-4 text-amber-500" />
-                <span>Shift Z-Report</span>
-              </div>
-              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                DAILY
-              </span>
+              <FileText className="w-4 h-4 text-amber-500" />
+              Day close report
             </button>
           </nav>
         </div>
 
-        {/* Sidebar Footer: Back to Store */}
-        <div className="p-4 border-t border-slate-100 space-y-3">
-          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
-            <div className="text-[11px] font-bold text-slate-800 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Store Live & Open</span>
-            </div>
-            <div className="text-[10px] text-slate-500 mt-0.5">30 Mins Express Guarantee active</div>
-          </div>
-
+        <div className="p-4 border-t border-slate-100 space-y-2 shrink-0">
           <button
             id="btn-admin-back-store"
             onClick={onBackToStore}
             className="w-full flex items-center justify-center gap-2 bg-[#ED1C24] hover:bg-[#c91430] active:scale-95 text-white py-2.5 rounded-xl text-xs font-black shadow-md shadow-red-500/20 transition-all cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Return to Customer Store</span>
+            Back to customer store
           </button>
-
           <button
             id="btn-admin-logout"
             onClick={onLogout}
             className="w-full flex items-center justify-center gap-2 bg-white hover:bg-slate-100 text-slate-600 py-2 rounded-xl text-xs font-bold border border-slate-200 transition-all cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
-            <span>Logout ({outlet.shortName})</span>
+            Log out
           </button>
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        {/* Mobile quick tools (desktop header is md+ only) */}
-        <div className="md:hidden px-4 pt-3 flex items-center gap-2 sticky top-[57px] z-30 bg-slate-50/95 backdrop-blur pb-2">
-          <button
-            onClick={() => setIsAlertSoundOn(!isAlertSoundOn)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
-              isAlertSoundOn
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                : 'bg-white text-slate-500 border-slate-200'
-            }`}
-          >
-            {isAlertSoundOn ? <Volume2 className="w-3.5 h-3.5 text-emerald-600" /> : <VolumeX className="w-3.5 h-3.5 text-slate-400" />}
-            <span>Alert {isAlertSoundOn ? 'ON' : 'OFF'}</span>
-          </button>
-          <button
-            onClick={() => {
-              const next = !isAutoPrintOn;
-              setIsAutoPrintOn(next);
-              localStorage.setItem('seven_cheese_autoprint_enabled', String(next));
-            }}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-colors cursor-pointer ${
-              isAutoPrintOn
-                ? 'bg-purple-50 text-purple-800 border-purple-200'
-                : 'bg-white text-slate-500 border-slate-200'
-            }`}
-            title="Auto-Print orders"
-          >
-            <Printer className="w-3.5 h-3.5 text-purple-600" />
-            <span>Print {isAutoPrintOn ? 'ON' : 'OFF'}</span>
-          </button>
-          <button
-            onClick={handleTestAlert}
-            className="flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-300 px-3 py-1.5 rounded-xl text-[11px] font-bold cursor-pointer"
-          >
-            <Bell className="w-3.5 h-3.5 text-amber-600" />
-            <span>Test Sound</span>
-          </button>
-          {notifPerm !== 'granted' && notifPerm !== 'unsupported' && (
-            <button
-              onClick={() => void handleEnableAlerts()}
-              className="flex items-center gap-1.5 bg-blue-50 text-blue-800 border border-blue-300 px-3 py-1.5 rounded-xl text-[11px] font-bold cursor-pointer animate-pulse"
-            >
-              <Bell className="w-3.5 h-3.5 text-blue-600" />
-              <span>Enable Alerts</span>
-            </button>
-          )}
-          <button
-            onClick={handleRefresh}
-            className="p-2 rounded-xl bg-white text-slate-700 border border-slate-200 cursor-pointer"
-            title="Refresh Live Data"
-            aria-label="Refresh live data"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-          </button>
-          <SyncBadge compact />
-          {activeOrdersCount > 0 && (
-            <span className="ml-auto bg-[#ED1C24] text-white px-2.5 py-1 rounded-full text-[10px] font-black animate-pulse shrink-0">
-              {activeOrdersCount} LIVE
-            </span>
-          )}
-        </div>
-
-        {/* Top Executive Header Bar (Desktop & Tablet) */}
-        <header className="hidden md:flex bg-white border-b border-slate-200 px-6 py-3.5 items-center justify-between sticky top-0 z-30 shadow-xs">
-          <div className="flex items-center gap-3">
-            <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
-              <span>Sales & KOT Register</span>
-              <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full text-[10px] font-black uppercase">
-                LIVE POS
-              </span>
-            </div>
-            <span className="text-slate-300">|</span>
-            <div className="text-xs text-slate-500 font-medium">
-              {outlet.name} - {outlet.area}
+      {/* Main */}
+      <main className="flex-1 flex flex-col min-w-0 pb-20 md:pb-0">
+        {/* Desktop header */}
+        <header className="hidden md:flex bg-white border-b border-slate-200 px-6 py-3 items-center justify-between gap-4 sticky top-0 z-30 shadow-xs">
+          <div className="min-w-0">
+            <div className="font-black text-slate-900 text-base truncate">{currentLabel}</div>
+            <div className="text-xs text-slate-500 truncate">
+              {outlet.name} — {outlet.area}
             </div>
           </div>
-
-          {/* Action Tools */}
-          <div className="flex items-center gap-2">
-            {/* Alert Toggle */}
-            <button
-              onClick={() => setIsAlertSoundOn(!isAlertSoundOn)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-                isAlertSoundOn
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
-                  : 'bg-slate-100 text-slate-500 border-slate-200'
-              }`}
-            >
-              {isAlertSoundOn ? <Volume2 className="w-3.5 h-3.5 text-emerald-600" /> : <VolumeX className="w-3.5 h-3.5 text-slate-400" />}
-              <span>Alert: {isAlertSoundOn ? 'ON' : 'OFF'}</span>
-            </button>
-
-            {/* Auto-Print Controls */}
-            <div className="flex items-center gap-1 bg-slate-100/80 border border-slate-200 p-1 rounded-xl">
+          <div className="flex items-center gap-2 shrink-0">
+            {activeOrdersCount > 0 && (
               <button
-                id="btn-toggle-autoprint"
-                onClick={() => {
-                  const next = !isAutoPrintOn;
-                  setIsAutoPrintOn(next);
-                  localStorage.setItem('seven_cheese_autoprint_enabled', String(next));
-                }}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  isAutoPrintOn
-                    ? 'bg-purple-600 text-white shadow-xs'
-                    : 'bg-white text-slate-600 hover:text-slate-800 border border-slate-200/60'
-                }`}
-                title="Auto-prints incoming orders to thermal printer. Use Chrome --kiosk-printing for 100% silent direct print."
+                onClick={() => setActiveTab('live-orders')}
+                className="bg-[#ED1C24] text-white px-3 py-1.5 rounded-xl text-xs font-black cursor-pointer"
               >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Auto-Print: {isAutoPrintOn ? 'ON' : 'OFF'}</span>
-              </button>
-
-              <select
-                id="select-autoprint-type"
-                value={autoPrintType}
-                onChange={(e) => {
-                  const val = e.target.value as 'COMBINED' | 'KOT' | 'INVOICE';
-                  setAutoPrintType(val);
-                  localStorage.setItem('seven_cheese_autoprint_type', val);
-                }}
-                className="text-[11px] font-bold bg-white text-slate-700 border border-slate-200 rounded-lg px-2 py-1 cursor-pointer outline-none hover:border-slate-300"
-                title="Format to print automatically"
-              >
-                <option value="COMBINED">Invoice + KOT</option>
-                <option value="KOT">KOT Only</option>
-                <option value="INVOICE">Invoice Only</option>
-              </select>
-
-              <button
-                onClick={handleTestPrint}
-                className="text-[11px] font-bold text-purple-700 hover:bg-purple-100/60 px-2 py-1 rounded-lg transition-colors cursor-pointer"
-                title="Test print a sample receipt to verify printer"
-              >
-                Test Print
-              </button>
-            </div>
-
-            {/* Test 3s Alert Button */}
-            <button
-              id="btn-test-alert"
-              onClick={handleTestAlert}
-              className="flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
-            >
-              <Bell className="w-3.5 h-3.5 text-amber-600" />
-              <span>Test 3s Alert</span>
-            </button>
-
-            {/* Enable browser notifications + background audio */}
-            {notifPerm !== 'granted' && notifPerm !== 'unsupported' && (
-              <button
-                id="btn-enable-alerts"
-                onClick={() => void handleEnableAlerts()}
-                className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer animate-pulse"
-                title="Allow sound + popup alerts when this tab is in background"
-              >
-                <Bell className="w-3.5 h-3.5 text-blue-600" />
-                <span>Enable Alerts</span>
+                {activeOrdersCount} open order{activeOrdersCount === 1 ? '' : 's'}
               </button>
             )}
-
-            {/* Refresh */}
-            <button
-              onClick={handleRefresh}
-              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-              title="Refresh Live Data"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            </button>
-
             <SyncBadge />
-
-            <span className="text-slate-200 mx-1">|</span>
-
-            {/* Back to Store / Log Out */}
-            <button
-              onClick={onBackToStore}
-              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs"
-            >
-              <Store className="w-3.5 h-3.5 text-amber-400" />
-              <span>Back to Store</span>
+            <button onClick={handleRefresh} className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer" title="Refresh live data" aria-label="Refresh live data">
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
-
-            {/* Outlet Logout */}
             <button
-              onClick={onLogout}
-              title={`Logout from ${outlet.shortName}`}
-              className="flex items-center gap-1.5 bg-white hover:bg-red-50 text-slate-500 hover:text-[#ED1C24] px-3 py-1.5 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-slate-200"
+              onClick={() => setIsSettingsOpen(true)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border cursor-pointer ${
+                isAlertSoundOn ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50' : 'bg-amber-50 text-amber-800 border-amber-300'
+              }`}
             >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>{outlet.shortName}</span>
+              <Settings className="w-4 h-4" />
+              {isAlertSoundOn ? 'Settings' : 'Alarm off'}
             </button>
           </div>
         </header>
 
-        {/* Dynamic Page Views */}
-        <div className="p-3 max-w-7xl w-full mx-auto">
-          {/* Sirf {outlet.shortName} ke orders — dusre outlet ka order yahan kabhi nahi dikhega. */}
-          <div className="flex items-center gap-2 mb-2">
-            <div className="flex items-center bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse mr-2" />
-              <span>{outlet.shortName} orders ({visibleOrders.length})</span>
-            </div>
-          </div>
+        {isSettingsOpen && <SettingsPanel />}
 
+        {/* Phone bottom tabs */}
+        <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-200 grid grid-cols-5">
+          {([
+            { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
+            { id: 'live-orders', label: 'Orders', icon: ShoppingBag, badge: activeOrdersCount },
+            { id: 'delivery', label: 'Delivery', icon: Bike, badge: activeDeliveryCount },
+            { id: 'rushda', label: 'Billing', icon: Receipt },
+          ] as const).map((b) => {
+            const Icon = b.icon;
+            const active = activeTab === b.id;
+            return (
+              <button
+                key={b.id}
+                onClick={() => setActiveTab(b.id)}
+                className={`relative flex flex-col items-center gap-0.5 py-2 text-[11px] font-bold cursor-pointer ${active ? 'text-[#ED1C24]' : 'text-slate-500'}`}
+              >
+                <Icon className="w-5 h-5" />
+                {b.label}
+                {'badge' in b && b.badge ? (
+                  <span className="absolute top-1 right-[22%] min-w-4 h-4 px-1 rounded-full bg-[#ED1C24] text-white text-[11px] font-black flex items-center justify-center">
+                    {b.badge}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => setIsMobileSidebarOpen(true)}
+            className="flex flex-col items-center gap-0.5 py-2 text-[11px] font-bold text-slate-500 cursor-pointer"
+          >
+            <MenuIcon className="w-5 h-5" />
+            More
+          </button>
+        </nav>
+
+        <div className="p-3 sm:p-4 max-w-7xl w-full mx-auto">
           {activeTab === 'dashboard' && (
             <AdminDashboard
               orders={visibleOrders}
@@ -732,6 +706,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               orders={visibleOrders}
               onUpdateOrderStatus={onUpdateOrderStatus}
               onDeleteOrder={onDeleteOrder}
+              headerActions={<OrderExport orders={visibleOrders} />}
             />
           )}
 
@@ -803,6 +778,15 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         orders={visibleOrders}
         isOpen={isShiftModalOpen}
         onClose={() => setIsShiftModalOpen(false)}
+        outletName={`${outlet.name} — ${outlet.area}`}
+      />
+      <NewOrderAlert
+        order={currentAlert}
+        moreWaiting={Math.max(0, pendingAlerts.length - 1)}
+        muted={alarmMuted || !isAlertSoundOn}
+        onAccept={acceptAlert}
+        onView={viewAlert}
+        onToggleMute={() => setAlarmMuted((m) => !m)}
       />
     </div>
   );

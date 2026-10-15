@@ -1,5 +1,17 @@
-import React, { useState } from 'react';
-import { AdminOrder, formatTimeAgo } from './adminData';
+import React, { useMemo, useState } from 'react';
+import { Bike, UtensilsCrossed, ShoppingBag, FileText } from 'lucide-react';
+import {
+  AdminOrder,
+  ORDER_TYPE_META,
+  SalesPeriod,
+  formatTimeAgo,
+  orderTimeMs,
+  ordersInRange,
+  periodRange,
+  summarizeOrders,
+  tableLabel,
+} from './adminData';
+import { OrderExport } from './OrderExport';
 
 interface AdminDashboardProps {
   orders: AdminOrder[];
@@ -7,212 +19,180 @@ interface AdminDashboardProps {
   onOpenShiftModal: () => void;
 }
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({
-  orders,
-  onNavigateTab,
-  onOpenShiftModal
-}) => {
-  const [period, setPeriod] = useState<'today' | 'yesterday' | 'week' | 'month' | 'all'>('today');
+const PERIODS: { id: SalesPeriod; label: string }[] = [
+  { id: 'today', label: 'Today' },
+  { id: 'yesterday', label: 'Yesterday' },
+  { id: 'week', label: 'Last 7 days' },
+  { id: 'month', label: 'This month' },
+  { id: 'all', label: 'All time' },
+];
 
-  // Firestore can send a partial/legacy doc (without total) — guard against NaN.
-  const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : Number(v) || 0);
-  const grossRevenue = orders.reduce((acc, o) => acc + (o.status !== 'CANCELLED' ? num(o.total) : 0), 0);
-  const deliveryOrders = orders.filter(o => o.orderType === 'DELIVERY');
-  const dineInOrders = orders.filter(o => o.orderType === 'DINE_IN');
-  const activeDelivery = deliveryOrders.filter(o => o.status === 'NEW' || o.status === 'KITCHEN' || o.status === 'DISPATCHED').length;
-  const activeDineIn = dineInOrders.filter(o => o.status === 'NEW' || o.status === 'KITCHEN').length;
-  const avgOrderValue = orders.length > 0 ? Math.round(grossRevenue / orders.length) : 0;
+const STATUS_CHIP: Record<AdminOrder['status'], string> = {
+  NEW: 'bg-red-50 text-red-700',
+  KITCHEN: 'bg-amber-50 text-amber-800',
+  DISPATCHED: 'bg-blue-50 text-blue-700',
+  COMPLETED: 'bg-emerald-50 text-emerald-700',
+  CANCELLED: 'bg-slate-100 text-slate-500',
+};
+const STATUS_TEXT: Record<AdminOrder['status'], string> = {
+  NEW: 'New',
+  KITCHEN: 'In kitchen',
+  DISPATCHED: 'Out for delivery',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
+};
 
-  const deliverySales = deliveryOrders.reduce((acc, o) => acc + num(o.total), 0);
-  const dineInSales = dineInOrders.reduce((acc, o) => acc + num(o.total), 0);
-  const gstCollected = Math.round(grossRevenue * 0.05);
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, onNavigateTab, onOpenShiftModal }) => {
+  const [period, setPeriod] = useState<SalesPeriod>('today');
+  const inPeriod = useMemo(() => ordersInRange(orders, periodRange(period)), [orders, period]);
+  const s = useMemo(() => summarizeOrders(inPeriod), [inPeriod]);
+  const periodLabel = PERIODS.find((p) => p.id === period)?.label ?? '';
+  const inr = (n: number) => `₹${n.toLocaleString('en-IN')}`;
+
+  const typeCards = [
+    { t: 'DELIVERY' as const, icon: Bike },
+    { t: 'DINE_IN' as const, icon: UtensilsCrossed },
+    { t: 'TAKEAWAY' as const, icon: ShoppingBag },
+  ];
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="bg-white rounded-lg border border-slate-200 px-3 py-2 flex flex-row items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-bold text-slate-900">Today's Sales</h2>
-          <p className="text-[11px] text-slate-500">
-            {orders.length} orders • Live updating
-          </p>
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-black text-slate-900">Sales overview</h2>
+          <p className="text-xs text-slate-500">{periodLabel} · {s.count} orders · updates live</p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <select
-            value={period}
-            onChange={(e) => setPeriod(e.target.value as typeof period)}
-            className="text-[11px] font-medium border border-slate-200 rounded-lg px-2 py-1 bg-white focus:outline-none cursor-pointer"
-          >
-            <option value="today">Today</option>
-            <option value="yesterday">Yesterday</option>
-            <option value="week">Last 7 Days</option>
-            <option value="month">This Month</option>
-            <option value="all">All Time</option>
-          </select>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl overflow-x-auto [scrollbar-width:none]">
+            {PERIODS.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setPeriod(p.id)}
+                className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${
+                  period === p.id ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <OrderExport orders={orders} />
           <button
             onClick={onOpenShiftModal}
-            className="text-[11px] font-bold bg-slate-900 text-white px-2.5 py-1 rounded-lg cursor-pointer"
+            className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-700 text-white px-3 py-2 rounded-xl text-xs font-black cursor-pointer"
           >
-            Day Close Report
+            <FileText className="w-4 h-4" />
+            Day close report
           </button>
         </div>
       </div>
 
-      {/* 4 numbers */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-        <div className="bg-white rounded-lg border border-slate-200 px-3 py-2">
-          <div className="text-[11px] text-slate-500">Total Sale</div>
-          <div className="text-xl font-bold text-slate-900 leading-tight">₹{grossRevenue.toLocaleString('en-IN')}</div>
-          <div className="text-[11px] text-slate-500">{orders.length} orders</div>
-        </div>
-
-        <div className="bg-white rounded-lg border border-slate-200 px-3 py-2">
-          <div className="text-[11px] text-slate-500">Dine-In (Running)</div>
-          <div className="text-xl font-bold text-slate-900 leading-tight">{activeDineIn}</div>
-          <div className="text-[11px] text-slate-500">{dineInOrders.length} tables today</div>
-        </div>
-
-        <div className="bg-white rounded-lg border border-slate-200 px-3 py-2">
-          <div className="text-[11px] text-slate-500">Delivery (Running)</div>
-          <div className="text-xl font-bold text-slate-900 leading-tight">{activeDelivery}</div>
-          <div className="text-[11px] text-slate-500">{deliveryOrders.length} deliveries today</div>
-        </div>
-
-        <div className="bg-white rounded-lg border border-slate-200 px-3 py-2">
-          <div className="text-[11px] text-slate-500">Average Bill</div>
-          <div className="text-xl font-bold text-slate-900 leading-tight">₹{avgOrderValue}</div>
-          <div className="text-[11px] text-slate-500">per order</div>
-        </div>
+      {/* Headline numbers */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: 'Total sales', value: inr(s.gross), sub: `${s.count} orders` },
+          { label: 'Average bill', value: inr(s.avg), sub: 'per order' },
+          { label: 'Running now', value: String(s.running), sub: 'new, in kitchen or on the way' },
+          { label: 'Tax collected', value: inr(s.gst), sub: s.gst ? 'on bills' : 'no GST on bills right now' },
+        ].map((c) => (
+          <div key={c.label} className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+            <div className="text-xs font-semibold text-slate-500">{c.label}</div>
+            <div className="text-2xl font-black text-slate-900 leading-tight mt-0.5">{c.value}</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">{c.sub}</div>
+          </div>
+        ))}
       </div>
 
-      {/* Sale split */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-        <div className="bg-white rounded-lg border border-slate-200 px-3 py-1.5">
-          <div className="text-[11px] text-slate-500">Delivery Sale</div>
-          <div className="text-base font-bold text-slate-900 leading-tight">₹{deliverySales}</div>
-          <div className="text-[11px] text-slate-500">{deliveryOrders.length} bills</div>
-        </div>
-
-        <div className="bg-white rounded-lg border border-slate-200 px-3 py-1.5">
-          <div className="text-[11px] text-slate-500">Dine-In Sale</div>
-          <div className="text-base font-bold text-slate-900 leading-tight">₹{dineInSales}</div>
-          <div className="text-[11px] text-slate-500">{dineInOrders.length} tables</div>
-        </div>
-
-        <div className="bg-white rounded-lg border border-slate-200 px-3 py-1.5">
-          <div className="text-[11px] text-slate-500">GST (5%)</div>
-          <div className="text-base font-bold text-slate-900 leading-tight">₹{gstCollected}</div>
-          <div className="text-[11px] text-slate-500">included in bill</div>
-        </div>
-
-        <div className="bg-white rounded-lg border border-slate-200 px-3 py-1.5">
-          <div className="text-[11px] text-slate-500">Total Orders</div>
-          <div className="text-base font-bold text-slate-900 leading-tight">{orders.length}</div>
-          <div className="text-[11px] text-slate-500">delivery + dine-in</div>
-        </div>
+      {/* By order type */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {typeCards.map(({ t, icon: Icon }) => {
+          const m = ORDER_TYPE_META[t];
+          const b = s.byType[t];
+          return (
+            <div key={t} className={`bg-white rounded-2xl border border-slate-200/80 border-l-[6px] ${m.edge} p-4 shadow-xs`}>
+              <div className={`flex items-center gap-2 text-sm font-black ${m.tone}`}>
+                <Icon className="w-4 h-4" />
+                {m.label}
+              </div>
+              <div className="text-xl font-black text-slate-900 mt-1">{inr(b.total)}</div>
+              <div className="mt-1 flex gap-3 text-[11px] text-slate-500">
+                <span>
+                  <b className="text-slate-800">{b.count}</b> orders
+                </span>
+                <span>
+                  avg <b className="text-slate-800">{inr(b.count ? Math.round(b.total / b.count) : 0)}</b>
+                </span>
+                <span>
+                  <b className="text-slate-800">{b.running}</b> running
+                </span>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Delivery vs Dine-in */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-        <div className="bg-white rounded-lg border border-slate-200 px-3 py-2">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-            <h3 className="text-xs font-bold text-slate-900">Delivery <span className="font-normal text-slate-500">• Home delivery</span></h3>
-            <div className="text-xs font-bold text-slate-900">₹{deliverySales}</div>
-          </div>
-          <div className="mt-1.5 grid grid-cols-3 gap-2 text-[11px]">
-            <div className="flex justify-between gap-1">
-              <span className="text-slate-500">Orders</span>
-              <span className="font-bold">{deliveryOrders.length}</span>
+      {/* Payments */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+        <h3 className="text-sm font-black text-slate-900">Payments</h3>
+        <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          {[
+            { label: 'UPI', v: s.byPay.UPI, c: 'text-emerald-700' },
+            { label: 'Card', v: s.byPay.CARD, c: 'text-emerald-700' },
+            { label: 'Cash', v: s.byPay.CASH, c: 'text-amber-700' },
+            { label: 'Pending / credit', v: s.byPay.PENDING, c: 'text-red-600' },
+          ].map((p) => (
+            <div key={p.label} className="rounded-xl bg-slate-50 border border-slate-200 p-3">
+              <div className="font-semibold text-slate-500">{p.label}</div>
+              <div className={`text-base font-black ${p.c}`}>{inr(p.v)}</div>
             </div>
-            <div className="flex justify-between gap-1">
-              <span className="text-slate-500">Avg bill</span>
-              <span className="font-bold">₹{deliveryOrders.length > 0 ? Math.round(deliverySales / deliveryOrders.length) : 0}</span>
-            </div>
-            <div className="flex justify-between gap-1">
-              <span className="text-slate-500">Running</span>
-              <span className="font-bold">{activeDelivery}</span>
-            </div>
-          </div>
+          ))}
         </div>
-
-        <div className="bg-white rounded-lg border border-slate-200 px-3 py-2">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
-            <h3 className="text-xs font-bold text-slate-900">Dine-In <span className="font-normal text-slate-500">• Table orders</span></h3>
-            <div className="text-xs font-bold text-slate-900">₹{dineInSales}</div>
-          </div>
-          <div className="mt-1.5 grid grid-cols-3 gap-2 text-[11px]">
-            <div className="flex justify-between gap-1">
-              <span className="text-slate-500">Tables</span>
-              <span className="font-bold">{dineInOrders.length}</span>
-            </div>
-            <div className="flex justify-between gap-1">
-              <span className="text-slate-500">Avg bill</span>
-              <span className="font-bold">₹{dineInOrders.length > 0 ? Math.round(dineInSales / dineInOrders.length) : 0}</span>
-            </div>
-            <div className="flex justify-between gap-1">
-              <span className="text-slate-500">Running</span>
-              <span className="font-bold">{activeDineIn}</span>
-            </div>
-          </div>
-        </div>
+        {s.cancelled.length > 0 && (
+          <p className="mt-2 text-[11px] text-slate-500">
+            {s.cancelled.length} cancelled order(s) worth {inr(s.cancelledTotal)} are not counted in sales.
+          </p>
+        )}
       </div>
 
       {/* Recent orders */}
-      <div className="bg-white rounded-lg border border-slate-200 px-3 py-2">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-xs font-bold text-slate-900">Recent Orders</h3>
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-black text-slate-900">Recent orders</h3>
           <button
             onClick={() => onNavigateTab('live-orders')}
-            className="text-[11px] font-bold text-slate-900 underline underline-offset-2 cursor-pointer"
+            className="text-xs font-bold text-[#ED1C24] hover:underline cursor-pointer"
           >
-            View all
+            Open Live Orders →
           </button>
         </div>
-
-        <div className="overflow-hidden">
-          <table className="w-full text-left text-[11px]">
-            <thead>
-              <tr className="border-b border-slate-100 text-slate-500">
-                <th className="py-1 px-2 font-medium">Order</th>
-                <th className="py-1 px-2 font-medium">Type</th>
-                <th className="py-1 px-2 font-medium">Customer</th>
-                <th className="py-1 px-2 font-medium hidden md:table-cell">Items</th>
-                <th className="py-1 px-2 font-medium">Amount</th>
-                <th className="py-1 px-2 font-medium">Status</th>
-                <th className="py-1 px-2 font-medium text-right">Time</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {orders.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-4 text-center text-slate-400">
-                    No orders yet.
-                  </td>
-                </tr>
-              ) : (
-                orders.slice(0, 3).map((ord) => (
-                  <tr key={ord.id}>
-                    <td className="py-1.5 px-2 font-bold">{ord.orderNumber}</td>
-                    <td className="py-1.5 px-2 text-slate-600">
-                      {ord.orderType === 'DELIVERY' ? 'Delivery' : (ord.tableNumber || 'Dine-In')}
-                    </td>
-                    <td className="py-1.5 px-2">
-                      <span className="font-medium">{ord.customerName}</span>
-                      <span className="text-slate-400"> • {ord.customerPhone}</span>
-                    </td>
-                    <td className="py-1.5 px-2 text-slate-600 max-w-[220px] truncate hidden md:table-cell">
-                      {(ord.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ')}
-                    </td>
-                    <td className="py-1.5 px-2 font-bold">₹{num(ord.total)}</td>
-                    <td className="py-1.5 px-2 text-slate-600">{ord.status}</td>
-                    <td className="py-1.5 px-2 text-right text-slate-500">{formatTimeAgo(ord.id, ord.timeAgo)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        {inPeriod.length === 0 ? (
+          <p className="py-6 text-center text-xs text-slate-400">No orders in this period.</p>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {[...inPeriod]
+              .sort((a, b) => (orderTimeMs(b) ?? 0) - (orderTimeMs(a) ?? 0))
+              .slice(0, 8)
+              .map((o) => {
+                const m = ORDER_TYPE_META[o.orderType];
+                return (
+                  <div key={o.id} className="py-2 flex items-center gap-3 text-xs">
+                    <span className="font-mono font-black text-slate-900 w-24 shrink-0 truncate">{o.orderNumber}</span>
+                    <span className={`shrink-0 px-2 py-0.5 rounded-md border text-[11px] font-bold ${m.chip}`}>
+                      {o.orderType === 'DINE_IN' ? tableLabel(o.tableNumber) : m.short}
+                    </span>
+                    <span className="flex-1 min-w-0 truncate text-slate-600">
+                      {o.customerName || 'Walk-in'}
+                      <span className="hidden md:inline text-slate-400"> · {(o.items || []).map((i) => `${i.quantity}× ${i.name}`).join(', ')}</span>
+                    </span>
+                    <span className={`shrink-0 px-2 py-0.5 rounded-md text-[11px] font-bold ${STATUS_CHIP[o.status]}`}>{STATUS_TEXT[o.status]}</span>
+                    <span className="shrink-0 font-black text-slate-900 w-14 text-right">{inr(o.total || 0)}</span>
+                    <span className="shrink-0 text-slate-400 w-16 text-right hidden sm:inline">{formatTimeAgo(o.id, o.createdAt)}</span>
+                  </div>
+                );
+              })}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -71,13 +71,13 @@ export const AdminDelivery: React.FC<AdminDeliveryProps> = ({
           <Bike className="w-5 h-5 text-[#ED1C24]" />
           <h2 className="text-base sm:text-lg font-black text-slate-900">Delivery — Rider Queue</h2>
           {countOnWay > 0 && (
-            <span className="bg-blue-600 text-white px-2 py-0.5 rounded-full text-[10px] font-black uppercase animate-pulse">
+            <span className="bg-blue-600 text-white px-2 py-0.5 rounded-full text-[11px] font-black uppercase animate-pulse">
               {countOnWay} ON WAY
             </span>
           )}
         </div>
         <p className="text-xs text-slate-500 mt-0.5">
-          Delivery boy view: address, landmark, phone, Maps navigate — sab ek jagah.
+          Rider view: address, landmark, phone and Maps navigation, all in one place.
         </p>
       </div>
 
@@ -99,7 +99,7 @@ export const AdminDelivery: React.FC<AdminDeliveryProps> = ({
               }`}
             >
               <span>{tab.label}</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+              <span className={`px-1.5 py-0.2 rounded-full text-[11px] font-black ${
                 filter === tab.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
               }`}>
                 {tab.count}
@@ -125,7 +125,7 @@ export const AdminDelivery: React.FC<AdminDeliveryProps> = ({
             <CheckCircle className="w-6 h-6" />
           </div>
           <h3 className="text-sm font-bold text-slate-800">No deliveries here</h3>
-          <p className="text-xs text-slate-500 mt-1">Filter badlo ya naye delivery orders ka wait karo.</p>
+          <p className="text-xs text-slate-500 mt-1">Change the filter or wait for new delivery orders.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -141,7 +141,7 @@ export const AdminDelivery: React.FC<AdminDeliveryProps> = ({
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase ${
+                    <span className={`px-2 py-0.5 rounded-md text-[11px] font-black uppercase ${
                       o.status === 'NEW' ? 'bg-red-50 text-red-700 border border-red-200 animate-pulse' :
                       o.status === 'KITCHEN' ? 'bg-amber-50 text-amber-700 border border-amber-200' :
                       o.status === 'DISPATCHED' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
@@ -152,7 +152,7 @@ export const AdminDelivery: React.FC<AdminDeliveryProps> = ({
                     {onDeleteOrder && (
                       <button
                         onClick={() => {
-                          if (window.confirm(`Delete order ${o.orderNumber}? Yeh sab devices se hat jayega.`)) {
+                          if (window.confirm(`Delete order ${o.orderNumber}? It will be removed from all devices.`)) {
                             onDeleteOrder(o.id);
                           }
                         }}
@@ -178,7 +178,7 @@ export const AdminDelivery: React.FC<AdminDeliveryProps> = ({
                         <span>Call</span>
                       </a>
                     ) : (
-                      <span className="text-[10px] text-slate-400 font-bold">No phone</span>
+                      <span className="text-[11px] text-slate-400 font-bold">No phone</span>
                     )}
                   </div>
                   {o.customerPhone && (
@@ -196,7 +196,7 @@ export const AdminDelivery: React.FC<AdminDeliveryProps> = ({
                     </div>
                   )}
                   {(o.deliveryLat && o.deliveryLng) && (
-                    <span className="inline-block bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-black px-1.5 py-0.5 rounded uppercase">
+                    <span className="inline-block bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-black px-1.5 py-0.5 rounded uppercase">
                       GPS Pinned
                     </span>
                   )}
@@ -219,7 +219,7 @@ export const AdminDelivery: React.FC<AdminDeliveryProps> = ({
                   </a>
                   {o.customerPhone ? (
                     <a
-                      href={`https://wa.me/91${waDigits(o.customerPhone)}?text=${encodeURIComponent(`Namaste! 7 Cheese Pizza rider (${o.orderNumber}). Apni live location share karein taaki rider seedha pahunche.`)}`}
+                      href={`https://wa.me/91${waDigits(o.customerPhone)}?text=${encodeURIComponent(`Hello! This is your 7 Cheese Pizza rider (${o.orderNumber}). Please share your live location so I can reach you directly.`)}`}
                       target="_blank"
                       rel="noreferrer"
                       className="flex items-center justify-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 py-2.5 rounded-xl text-xs font-black hover:bg-emerald-100 transition-colors"
@@ -236,13 +236,23 @@ export const AdminDelivery: React.FC<AdminDeliveryProps> = ({
               </div>
 
               <div className="pt-3 border-t border-slate-100">
-                {(o.status === 'NEW' || o.status === 'KITCHEN') && (
+                {/* One step at a time: New → Kitchen → Out for delivery → Delivered */}
+                {o.status === 'NEW' && (
+                  <button
+                    onClick={() => onUpdateOrderStatus(o.id, 'KITCHEN')}
+                    className="w-full flex items-center justify-center gap-1.5 bg-[#ED1C24] hover:bg-[#c91430] text-white py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer"
+                  >
+                    <ChefHat className="w-4 h-4" />
+                    <span>Accept · Send to kitchen</span>
+                  </button>
+                )}
+                {o.status === 'KITCHEN' && (
                   <button
                     onClick={() => onUpdateOrderStatus(o.id, 'DISPATCHED')}
                     className="w-full flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer"
                   >
                     <Bike className="w-4 h-4" />
-                    <span>Dispatch Rider</span>
+                    <span>Picked up · Out for delivery</span>
                   </button>
                 )}
                 {o.status === 'DISPATCHED' && (
@@ -259,15 +269,6 @@ export const AdminDelivery: React.FC<AdminDeliveryProps> = ({
                     <CheckCircle className="w-4 h-4" />
                     <span>Delivered</span>
                   </div>
-                )}
-                {(o.status === 'NEW' || o.status === 'KITCHEN') && (
-                  <button
-                    onClick={() => onUpdateOrderStatus(o.id, 'KITCHEN')}
-                    className="w-full mt-2 flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer"
-                  >
-                    <ChefHat className="w-3.5 h-3.5" />
-                    <span>Send to Kitchen first</span>
-                  </button>
                 )}
               </div>
             </div>
