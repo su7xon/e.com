@@ -14,6 +14,7 @@ import {
   MAKE_YOUR_OWN_BASE,
   MENU_VERSION,
   REMOVED_MENU_IDS,
+  OLD_LUNCH_PRICES,
   CRAVING_CATEGORIES,
   DEFAULT_ADDRESSES,
   COUPONS,
@@ -21,7 +22,8 @@ import {
   CRUST_PRICE_MODIFIERS
 } from './data/mockData';
 import { reverseGeocode } from './lib/reverseGeocode';
-import { taxesAndChargesFor, FREE_GIFT_THRESHOLD, FREE_GIFT_PRODUCT_ID, FREE_GIFT_NAME } from './lib/billing';
+import { taxesAndChargesFor, bestDiscount, FREE_GIFT_THRESHOLD, FREE_GIFT_PRODUCT_ID, FREE_GIFT_NAME } from './lib/billing';
+import { computeDayDeal, offerByKey } from './lib/deals';
 import { isOfferActive, isScheduleActive, SLIDE_SCHEDULES, LUNCH, OFFER_SCHEDULES, describeSchedule } from './utils/offerSchedule';
 import { Navbar } from './components/Navbar';
 import { DealPopup, TimedDeal } from './components/DealPopup';
@@ -29,6 +31,7 @@ import { ProfileDrawer, CustomerProfile } from './components/ProfileDrawer';
 import { FilterSheet } from './components/FilterSheet';
 import { BuildYourOwnWizard } from './components/BuildYourOwnWizard';
 import { OfferDetailSheet } from './components/OfferDetailSheet';
+import { OffersPage } from './components/OffersPage';
 import { HeroBanner, DEFAULT_SLIDES, BannerSlide } from './components/HeroBanner';
 import { CravingCategories } from './components/CravingCategories';
 import { CategoryMarquee } from './components/CategoryMarquee';
@@ -154,7 +157,7 @@ export default function App() {
   };
   // Navigation & Mode (reload pe bhi wahi view — admin me the to admin me hi raho)
   const [orderType, setOrderType] = useState<OrderType>('DELIVERY');
-  const [activeTab, setActiveTab] = useState<'menu' | 'reorder' | 'makeyourown' | 'combos' | 'profile'>('menu');
+  const [activeTab, setActiveTab] = useState<'menu' | 'reorder' | 'makeyourown' | 'combos' | 'profile' | 'offers'>('menu');
   const [currentView, setCurrentView] = useState<AppView>(() => {
     // URL route first — a link always wins over the saved view.
     const routed = getRouteView();
@@ -309,6 +312,13 @@ export default function App() {
     safeSet('seven_cheese_categories', JSON.stringify(storeCategories));
   }, [storeCategories]);
 
+  // Lunch combos still at their old default price get the price on the lunch banner.
+  const withLunchPrice = (m: MenuItem): MenuItem => {
+    if (OLD_LUNCH_PRICES[m.id] !== m.price) return m;
+    const fresh = MENU_ITEMS.find((x) => x.id === m.id);
+    return fresh ? { ...m, price: fresh.price } : m;
+  };
+
   // Live Menu Items State (Syncs with Admin)
   const [menuItems, setMenuItems] = useState<MenuItem[]>(() => {
     // Brochure menu upgrade: purana cached menu (drinks/combos/7cheese) poora replace
@@ -317,11 +327,14 @@ export default function App() {
     if (!saved) return MENU_ITEMS;
     try {
       // Lunch combos: replace the old "Mon, Wed–Sun · Dine-in" text with what's included.
-      return migrateItems(JSON.parse(saved) as MenuItem[]).map((m) => {
-        if (!m.id.startsWith('p-offer-lunch-') || !/Mon, Wed–Sun/.test(m.description || '')) return m;
-        const fresh = MENU_ITEMS.find((x) => x.id === m.id);
-        return fresh ? { ...m, description: fresh.description } : m;
-      });
+      return migrateItems(JSON.parse(saved) as MenuItem[])
+        .filter((m) => !REMOVED_MENU_IDS.includes(m.id))
+        .map((m) => {
+          if (!m.id.startsWith('p-offer-lunch-') || !/Mon, Wed–Sun/.test(m.description || '')) return m;
+          const fresh = MENU_ITEMS.find((x) => x.id === m.id);
+          return fresh ? { ...m, description: fresh.description } : m;
+        })
+        .map(withLunchPrice);
     } catch {
       return MENU_ITEMS;
     }
@@ -365,7 +378,7 @@ export default function App() {
             byId.delete(m.id);
             return;
           }
-          byId.set(m.id, { ...m, image: fixImg(m.image) });
+          byId.set(m.id, withLunchPrice({ ...m, image: fixImg(m.image) }));
         });
         // Safety: local me bachi hui stale ids bhi nikalo
         REMOVED_MENU_IDS.forEach((id) => byId.delete(id));
@@ -492,8 +505,10 @@ export default function App() {
     if (!saved) return COUPONS;
     try {
       const parsed = JSON.parse(saved);
-      // Free delivery above ₹99 is automatic — the old FREEDEL coupon is retired.
-      return Array.isArray(parsed) ? parsed.filter((c: Coupon) => c.code !== 'FREEDEL') : COUPONS;
+      // Free delivery above ₹99 is automatic, and Tuesday / Friday deals are worked out in the cart,
+      // so the old FREEDEL / TUESDAYTREAT / FUNDAYFRIDAY coupons are retired.
+      const retired = ['FREEDEL', 'TUESDAYTREAT', 'FUNDAYFRIDAY'];
+      return Array.isArray(parsed) ? parsed.filter((c: Coupon) => !retired.includes(c.code)) : COUPONS;
     } catch {
       return COUPONS;
     }
@@ -901,47 +916,43 @@ export default function App() {
   // Offer tapped in "Offers for you" → its own detail sheet.
   const [viewOffer, setViewOffer] = useState<Coupon | null>(null);
 
+  // Offers page, optionally scrolled to one offer (#offer-<key>).
+  const openOffers = (key?: string) => {
+    setActiveTab('offers');
+    setTimeout(() => {
+      const el = key ? document.getElementById(`offer-${key}`) : null;
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+      else window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 60);
+  };
+
   // Timed deals (Tuesday, Friday, lunch 11am-2pm) pop up while running, once per deal per day.
   // Everyday coupons live in Profile → Deals & Offers and at checkout.
   const timedDeals = useMemo<TimedDeal[]>(() => {
     const slideImage = (s: string) => heroSlides.find((x) => x.schedule === s)?.image;
     const deals: TimedDeal[] = [];
-    const couponDeal = (code: string, schedule: string, when: string) => {
-      const c = activeCoupons.find((x) => x.code === code);
-      if (!c) return;
+    const offerDeal = (key: 'tuesday' | 'friday' | 'lunch', id: string, when: string) => {
+      const o = offerByKey(key);
+      if (!o || !isScheduleActive(o.schedule, now)) return;
+      if (key === 'lunch' && !activeMenuItems.some((m) => m.id.startsWith('p-offer-lunch-'))) return;
       deals.push({
-        id: code,
-        title: c.title,
-        subtitle: c.description,
+        id,
+        title: o.name,
+        subtitle: o.summary,
         when,
-        image: slideImage(schedule),
-        ctaLabel: 'View offer',
+        image: slideImage(key),
+        ctaLabel: 'See offer',
         onCta: () => {
           setDealPopupId(null);
-          setViewOffer(c);
+          openOffers(key);
         },
       });
     };
-    couponDeal('TUESDAYTREAT', 'tuesday', 'Today only · Tuesday');
-    couponDeal('FUNDAYFRIDAY', 'friday', 'Today only · Friday');
-    const lunch = activeMenuItems.filter((m) => m.id.startsWith('p-offer-lunch-'));
-    if (lunch.length && isScheduleActive(LUNCH, now)) {
-      deals.push({
-        id: 'LUNCH',
-        title: 'Lunch Combo Deal',
-        subtitle: `Pizza + cold drink + fries combos from ₹${Math.min(...lunch.map((m) => m.price))}.`,
-        when: 'Today · 11 AM – 2 PM',
-        image: slideImage('lunch'),
-        ctaLabel: 'See lunch combos',
-        onCta: () => {
-          setDealPopupId(null);
-          setSelectedCategory('combos');
-          setTimeout(() => document.getElementById('menu-items-section')?.scrollIntoView({ behavior: 'smooth' }), 50);
-        },
-      });
-    }
+    offerDeal('tuesday', 'TUESDAYTREAT', 'Today only · Tuesday');
+    offerDeal('friday', 'FUNDAYFRIDAY', 'Today only · Friday');
+    offerDeal('lunch', 'LUNCH', 'Today · 11 AM – 2 PM');
     return deals;
-  }, [activeCoupons, activeMenuItems, heroSlides, now]);
+  }, [activeMenuItems, heroSlides, now]);
 
   const [dealPopupId, setDealPopupId] = useState<string | null>(null);
   const dealSeenKey = (id: string) => {
@@ -1166,15 +1177,9 @@ export default function App() {
     const deliveryFee = orderType === 'DELIVERY' ? (isFreeDel ? 0 : 40) : 0;
     const taxesAndCharges = taxesAndChargesFor(subtotal);
     
-    let discount = 0;
-    if (couponValid && subtotal >= couponValid.minOrder) {
-      if (couponValid.discountType === 'percentage') {
-        const calc = Math.round((subtotal * couponValid.value) / 100);
-        discount = couponValid.maxDiscount ? Math.min(calc, couponValid.maxDiscount) : calc;
-      } else {
-        discount = couponValid.value;
-      }
-    }
+    const best = bestDiscount(subtotal, couponValid, dayDeal?.discount ?? 0);
+    const discount = best.discount;
+    const dealUsed = best.source === 'deal' ? dayDeal : null;
     const finalTotal = Math.max(0, subtotal + deliveryFee + taxesAndCharges - discount);
 
     const formattedPaymentMethod = paymentMethod
@@ -1270,12 +1275,16 @@ export default function App() {
         extraCheese: c.extraCheese,
         sauce: c.sauce,
         toppings: c.extraToppings?.length ? c.extraToppings.map((tp) => tp.name) : undefined,
+        offer: dealUsed?.free[c.cartItemId]
+          ? `FREE ×${dealUsed.free[c.cartItemId].qty} · ${dealUsed.name}`
+          : undefined,
         notes: notes || undefined,
       })),
       subtotal,
       deliveryFee,
       tax: taxesAndCharges,
       discount,
+      discountLabel: dealUsed ? dealUsed.name : best.source === 'coupon' ? couponValid?.code : undefined,
       total: finalTotal,
       paymentMethod: (paymentMethod?.toUpperCase() as any) || 'UPI',
       paymentStatus: paymentMethod === 'cash' ? 'PENDING' : 'PAID',
@@ -1329,6 +1338,9 @@ export default function App() {
     });
     return out;
   }, [cartItems, menuItems, now]);
+
+  // Tuesday Treat / Funday Friday worked out on the cart.
+  const dayDeal = useMemo(() => computeDayDeal(cartItems, menuItems, now), [cartItems, menuItems, now]);
 
   const trackedOrder = useMemo(() => {
     if (!activeOrder) return null;
@@ -1405,6 +1417,10 @@ export default function App() {
   // Featured Hero banner selection
   // Banner tap: "category:<key>" jumps to that menu section; otherwise open the item.
   const handleSelectFeatured = (productId: string) => {
+    if (productId.startsWith('offer:')) {
+      openOffers(productId.slice('offer:'.length));
+      return;
+    }
     if (productId.startsWith('category:')) {
       setSelectedCategory(productId.slice('category:'.length));
       setTimeout(() => document.getElementById('menu-items-section')?.scrollIntoView({ behavior: 'smooth' }), 50);
@@ -1699,7 +1715,7 @@ export default function App() {
         profile={customerProfile}
         onSaveProfile={saveCustomerProfile}
         hasActiveOrder={!!activeOrder}
-        onOpenDeals={() => setIsDealsModalOpen(true)}
+        onOpenDeals={() => openOffers()}
         onTrackOrder={() => setIsOrderTrackerOpen(true)}
         onOrderHistory={() => {
           setActiveTab('reorder');
@@ -1822,7 +1838,7 @@ export default function App() {
               {/* Quick Coupon banner pill */}
               <button
                 id="btn-quick-view-deals"
-                onClick={() => setIsDealsModalOpen(true)}
+                onClick={() => openOffers()}
                 className="hidden sm:flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-[#e31837] border border-red-200 px-3 py-1 rounded-full text-xs font-extrabold transition-colors cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" />
@@ -2131,7 +2147,15 @@ export default function App() {
             )}
             <section>
               <div className="mb-4">
-                <h1 className="text-2xl font-black text-slate-900 tracking-tight">Combos & Value Meals</h1>
+                <div className="flex items-center justify-between gap-3">
+                  <h1 className="text-2xl font-black text-slate-900 tracking-tight">Combos & Value Meals</h1>
+                  <button
+                    onClick={() => openOffers()}
+                    className="shrink-0 text-xs font-black text-[#ED1C24] hover:underline cursor-pointer"
+                  >
+                    See all offers ›
+                  </button>
+                </div>
                 <p className="text-xs text-slate-500 mt-0.5">Super-saver bundles pairing pizzas with garlic breads, dips, fries and drinks.</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">{others.map(comboCard)}</div>
@@ -2139,6 +2163,35 @@ export default function App() {
           </div>
         );
       })()}
+
+      {activeTab === 'offers' && (
+        <OffersPage
+          now={now}
+          slides={heroSlides}
+          lunchCombos={menuItems.filter((m) => m.id.startsWith('p-offer-lunch-') && m.isAvailable !== false)}
+          coupons={activeCoupons}
+          appliedCode={appliedCoupon?.code}
+          cartQty={(pid) => cartItems.filter((c) => c.productId === pid).reduce((s, c) => s + c.quantity, 0)}
+          onAddCombo={handleSimpleAddToCart}
+          onRemoveCombo={(pid) => {
+            const line = [...cartItems].reverse().find((c) => c.productId === pid);
+            if (line) handleUpdateCartQuantity(line.cartItemId, -1);
+          }}
+          onApplyCoupon={(c) => {
+            setAppliedCoupon(c);
+            if (cartItems.length > 0) setIsCartOpen(true);
+          }}
+          onBrowse={(key) => {
+            setActiveTab('menu');
+            setSelectedCategory(key);
+            setTimeout(() => document.getElementById('menu-items-section')?.scrollIntoView({ behavior: 'smooth' }), 80);
+          }}
+          onBack={() => {
+            setActiveTab('menu');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        />
+      )}
 
       {/* Profile Tab view */}
       {/* Modals and Drawers */}
@@ -2197,6 +2250,7 @@ export default function App() {
         onPlaceOrder={(notes, method, delivery) => handlePlaceOrder(notes, method, delivery)}
         onEditItem={handleEditCartItem}
         unavailableLines={unavailableLines}
+        dayDeal={dayDeal}
         onProceedToCheckout={() => {
           setIsCartOpen(false);
           goView('billing');
@@ -2346,7 +2400,7 @@ export default function App() {
         }}
         onSeeAll={() => {
           setViewOffer(null);
-          setIsDealsModalOpen(true);
+          openOffers();
         }}
         onClose={() => setViewOffer(null)}
       />

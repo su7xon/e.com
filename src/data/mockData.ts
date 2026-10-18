@@ -2026,7 +2026,7 @@ export const MENU_ITEMS: MenuItem[] = [
     category: 'combos',
     subCategoryTitle: 'Offer Combos',
     isVeg: false,
-    price: 189,
+    price: 169,
     originalPrice: 249,
     description: '1 Regular Non-Veg Pizza + 1 Cold Drink + 1 Fries. Lunch special, 11 AM – 2 PM.',
     image: 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&auto=format&fit=crop&q=80',
@@ -2040,7 +2040,7 @@ export const MENU_ITEMS: MenuItem[] = [
     category: 'combos',
     subCategoryTitle: 'Offer Combos',
     isVeg: true,
-    price: 199,
+    price: 209,
     originalPrice: 269,
     description: '1 Medium Veg Pizza + 1 Cold Drink + 1 Fries. Lunch special, 11 AM – 2 PM.',
     image: 'https://images.unsplash.com/photo-1571407970349-bc81e7e96d47?w=800&auto=format&fit=crop&q=80',
@@ -2055,28 +2055,13 @@ export const MENU_ITEMS: MenuItem[] = [
     category: 'combos',
     subCategoryTitle: 'Offer Combos',
     isVeg: false,
-    price: 249,
+    price: 229,
     originalPrice: 329,
     description: '1 Medium Non-Veg Pizza + 1 Cold Drink + 1 Fries. Lunch special, 11 AM – 2 PM.',
     image: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=800&auto=format&fit=crop&q=80',
     badge: 'POPULAR',
     rating: 4.8,
     reviewsCount: 1950,
-    isCustomizable: false,
-  },
-  {
-    id: 'p-offer-tuesday-treat',
-    name: 'Tuesday Treat',
-    category: 'combos',
-    subCategoryTitle: 'Offer Combos',
-    isVeg: true,
-    price: 199,
-    originalPrice: 299,
-    description: 'Free size upgrade on Medium Pizzas. Tuesday only · Dine-in.',
-    image: 'https://images.unsplash.com/photo-1534308983496-4fabb1a015ee?w=800&auto=format&fit=crop&q=80',
-    badge: 'MUST TRY',
-    rating: 4.8,
-    reviewsCount: 2400,
     isCustomizable: false,
   },
 ];
@@ -2087,8 +2072,16 @@ export const MENU_VERSION = '2026-10-02-remove-funday-friday-item';
 
 // Ids removed from the brochure menu — filtered out of Firestore merges and
 // deleted from Firestore on version upgrade.
+// Lunch combo prices before the Oct 2026 banner; saved copies still at these get the new price.
+export const OLD_LUNCH_PRICES: Record<string, number> = {
+  'p-offer-lunch-regular-nonveg': 189,
+  'p-offer-lunch-medium-veg': 199,
+  'p-offer-lunch-medium-nonveg': 249,
+};
+
 export const REMOVED_MENU_IDS: string[] = [
   'p-offer-funday-friday',
+  'p-offer-tuesday-treat',
   'p-7cheese-signature',
   'p-7cheese-burst-supreme',
   'p-7cheese-chicken-overload',
@@ -2099,24 +2092,6 @@ export const REMOVED_MENU_IDS: string[] = [
 ];
 
 export const COUPONS: Coupon[] = [
-  {
-    code: 'TUESDAYTREAT',
-    discountType: 'percentage',
-    value: 40,
-    minOrder: 349,
-    title: 'Tuesday Treat: Free Pizza Deal',
-    description: 'Medium Pizza FREE with Large Pizza, or Small FREE with Medium Pizza!',
-    tag: 'TUESDAY SPECIAL',
-  },
-  {
-    code: 'FUNDAYFRIDAY',
-    discountType: 'percentage',
-    value: 50,
-    minOrder: 399,
-    title: 'Funday Friday BOGO Deal',
-    description: 'BUY ONE GET ONE FREE on all Medium & Large Pizzas!',
-    tag: 'BOGO FRIDAY',
-  },
   {
     code: '7CHEESE50',
     discountType: 'percentage',

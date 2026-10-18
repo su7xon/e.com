@@ -9,7 +9,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 
-export type StoreTab = 'menu' | 'reorder' | 'makeyourown' | 'combos' | 'profile';
+export type StoreTab = 'menu' | 'reorder' | 'makeyourown' | 'combos' | 'profile' | 'offers';
 
 interface BottomNavProps {
   activeTab: StoreTab;

@@ -30,6 +30,8 @@ export interface ThermalBillData {
   totalAmt: number; // sum of line amts
   gstTotal: number;
   grandTotal: number; // rounded
+  discount?: number;
+  discountLabel?: string;
   cgstBase: number;
   cgstAmt: number;
   sgstBase: number;
@@ -117,6 +119,7 @@ function buildCustomerBody(d: ThermalBillData): string {
     ${lineHtml}
     <div class="row"><span>Total &nbsp;&nbsp;&nbsp;&nbsp; :</span><span>${d.totalQty}</span><span>&nbsp;</span><span>&nbsp;</span><span>${d.totalAmt.toFixed(2)}</span></div>
     ${d.gstTotal > 0 ? `<div>GST : ${d.gstTotal.toFixed(2)}</div>` : ''}
+    ${d.discount ? `<div>Discount${d.discountLabel ? ` (${d.discountLabel})` : ''} : -${d.discount.toFixed(2)}</div>` : ''}
     <div class="row"><span>&nbsp;</span><span>Grand Total &nbsp;&nbsp;&nbsp;&nbsp; ${d.grandTotal.toFixed(2)}</span></div>
     ${d.gstTotal > 0 ? `<div>CGST ${d.cgstBase} @ 2.5 % : ${d.cgstAmt.toFixed(2)}</div>
     <div>SGST ${d.sgstBase} @ 2.5 % : ${d.sgstAmt.toFixed(2)}</div>` : ''}
@@ -176,6 +179,8 @@ export function orderToThermal(o: AdminOrder): ThermalBillData {
     totalAmt: o.subtotal + (o.tax || 0),
     gstTotal: o.tax || 0,
     grandTotal: o.total,
+    discount: o.discount || 0,
+    discountLabel: o.discountLabel,
     cgstBase: base,
     cgstAmt: (o.tax || 0) > 0 ? base * 0.025 : 0,
     sgstBase: base,

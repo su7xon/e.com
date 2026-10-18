@@ -12,9 +12,6 @@ export const LUNCH: OfferSchedule = { startTime: '11:00', endTime: '14:00' };
 
 /** Built-in schedules for the default offers, keyed by coupon code or combo item id. */
 export const OFFER_SCHEDULES: Record<string, OfferSchedule> = {
-  TUESDAYTREAT: TUESDAY,
-  FUNDAYFRIDAY: FRIDAY,
-  'p-offer-tuesday-treat': TUESDAY,
   'p-offer-lunch-regular-veg': LUNCH,
   'p-offer-lunch-regular-nonveg': LUNCH,
   'p-offer-lunch-medium-veg': LUNCH,

@@ -20,12 +20,16 @@ export interface AdminOrder {
     sauce?: string;
     /** Topping names chosen by the customer. */
     toppings?: string[];
+    /** e.g. "FREE ×1 · Tuesday Treat" when a day deal made this line free. */
+    offer?: string;
     notes?: string;
   }[];
   subtotal: number;
   deliveryFee: number;
   tax: number;
   discount: number;
+  /** What the discount was: deal name or coupon code. */
+  discountLabel?: string;
   total: number;
   paymentMethod: 'UPI' | 'CASH' | 'CARD';
   paymentStatus: 'PAID' | 'PENDING';
@@ -228,13 +232,14 @@ export function normalizeOrder(o: AdminOrder): AdminOrder {
 }
 
 /** "Medium • Thin Crust • Schezwan Sauce • Paneer, Corn • Extra cheese" — what the kitchen needs to make it. */
-export function itemBuildText(it: { size?: string; crust?: string; sauce?: string; toppings?: string[]; extraCheese?: boolean }): string {
+export function itemBuildText(it: { size?: string; crust?: string; sauce?: string; toppings?: string[]; extraCheese?: boolean; offer?: string }): string {
   return [
     it.size && it.size !== 'NA' ? it.size : '',
     it.crust || '',
     it.sauce || '',
     it.toppings && it.toppings.length ? it.toppings.join(', ') : '',
     it.extraCheese ? 'Extra cheese' : '',
+    it.offer || '',
   ]
     .filter(Boolean)
     .join(' • ');

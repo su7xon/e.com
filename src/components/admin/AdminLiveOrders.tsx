@@ -473,7 +473,7 @@ export const AdminLiveOrders: React.FC<AdminLiveOrdersProps> = ({
                 </div>
                 {selectedKotOrder.discount > 0 && (
                   <div className="flex justify-between text-[11px] text-emerald-600">
-                    <span>Discount:</span>
+                    <span>Discount{selectedKotOrder.discountLabel ? ` (${selectedKotOrder.discountLabel})` : ''}:</span>
                     <span>-₹{selectedKotOrder.discount}</span>
                   </div>
                 )}

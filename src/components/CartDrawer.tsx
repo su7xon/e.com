@@ -20,7 +20,8 @@ import {
   Compass
 } from 'lucide-react';
 import { CartItem, Coupon, UserAddress, DeliveryDetails, OrderType, MenuItem } from '../types';
-import { taxesAndChargesFor, FREE_GIFT_THRESHOLD, FREE_GIFT_NAME, FREE_GIFT_VALUE } from '../lib/billing';
+import { taxesAndChargesFor, bestDiscount, FREE_GIFT_THRESHOLD, FREE_GIFT_NAME, FREE_GIFT_VALUE } from '../lib/billing';
+import type { DayDealResult } from '../lib/deals';
 import { COUPONS, MENU_ITEMS } from '../data/mockData';
 import { VegNonVegIcon } from './VegNonVegIcon';
 import { InteractiveMapPicker } from './InteractiveMapPicker';
@@ -44,6 +45,8 @@ interface CartDrawerProps {
   onEditItem?: (cartItemId: string) => void;
   /** cartItemId → reason, for items that can't be ordered right now (blocks checkout). */
   unavailableLines?: Record<string, string>;
+  /** Tuesday Treat / Funday Friday result for this cart. */
+  dayDeal?: DayDealResult | null;
   onPlaceOrder?: (notes: string, paymentMethod: string, delivery?: DeliveryDetails) => void;
   onQuickAdd: (productId: string) => void;
   onUpgradeItem?: (cartItemId: string) => void;
@@ -138,6 +141,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onProceedToCheckout,
   onEditItem,
   unavailableLines = {},
+  dayDeal = null,
   onPlaceOrder,
   onQuickAdd,
   onUpgradeItem,
@@ -186,16 +190,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const deliveryFee = orderType === 'DELIVERY' ? (isFreeDeliveryEligible ? 0 : 40) : 0;
   const taxesAndCharges = taxesAndChargesFor(subtotal);
 
-  // Coupon discount computation
-  let discount = 0;
-  if (appliedCoupon && subtotal >= appliedCoupon.minOrder) {
-    if (appliedCoupon.discountType === 'percentage') {
-      const calculated = Math.round((subtotal * appliedCoupon.value) / 100);
-      discount = appliedCoupon.maxDiscount ? Math.min(calculated, appliedCoupon.maxDiscount) : calculated;
-    } else {
-      discount = appliedCoupon.value;
-    }
-  }
+  // Day deal and coupon don't stack — the bigger saving applies.
+  const best = bestDiscount(subtotal, appliedCoupon, dayDeal?.discount ?? 0);
+  const discount = best.discount;
+  const dealApplied = best.source === 'deal' && dayDeal ? dayDeal : null;
+  const couponApplied = best.source === 'coupon';
 
   const grandTotal = Math.max(0, subtotal + deliveryFee + taxesAndCharges - discount);
 
@@ -321,7 +320,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const savingsBreakdown = [
     mrpSavings > 0 ? `₹${mrpSavings} off MRP` : '',
     deliverySaving > 0 ? `₹${deliverySaving} free delivery` : '',
-    discount > 0 ? `₹${discount} coupon` : '',
+    discount > 0 ? (dealApplied ? `₹${discount} ${dealApplied.name}` : `₹${discount} coupon`) : '',
     giftSaving > 0 ? `free ${FREE_GIFT_NAME}` : '',
   ].filter(Boolean).join(' · ');
 
@@ -387,6 +386,27 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     style={{ width: `${Math.min(100, (subtotal / freeDeliveryThreshold) * 100)}%` }}
                   />
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tuesday Treat / Funday Friday */}
+        {cartItems.length > 0 && dayDeal && (dayDeal.discount > 0 || dayDeal.hint) && (
+          <div className="px-[max(0.875rem,calc((100%_-_48rem)/2))] py-2 text-xs border-b bg-red-50 border-red-200 text-red-900 space-y-0.5">
+            {dayDeal.discount > 0 && (
+              <div className="flex items-center gap-2 font-bold">
+                <span className="text-base leading-none">🎉</span>
+                <span>
+                  {dayDeal.name}: ₹{dayDeal.discount} off
+                  {dealApplied ? ' — applied!' : appliedCoupon ? ` — your coupon saves more` : ''}
+                </span>
+              </div>
+            )}
+            {dayDeal.hint && (
+              <div className="flex items-center gap-2 font-semibold">
+                <span className="text-base leading-none">🍕</span>
+                <span>{dayDeal.hint}</span>
               </div>
             )}
           </div>
@@ -483,6 +503,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                           {item.name}
                         </h4>
 
+                        {dealApplied?.free[item.cartItemId] && (
+                          <p className="mt-0.5 inline-block text-[10px] font-black text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">
+                            {dealApplied.free[item.cartItemId].qty > 1 ? `${dealApplied.free[item.cartItemId].qty} ` : ''}FREE · {dealApplied.name}
+                          </p>
+                        )}
                         {unavailableLines[item.cartItemId] && (
                           <p className="mt-0.5 text-[11px] font-bold text-red-600">⚠ {unavailableLines[item.cartItemId]}</p>
                         )}
@@ -741,7 +766,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         <span className="text-xs font-bold text-emerald-700">Applied!</span>
                       </div>
                       <p className="text-[11px] text-emerald-600 font-medium mt-0.5">
-                        You saved ₹{discount} with this coupon
+                        {couponApplied
+                          ? `You saved ₹${discount} with this coupon`
+                          : dealApplied
+                            ? `Not used — ${dealApplied.name} saves you more`
+                            : `Add ₹${Math.max(0, appliedCoupon.minOrder - subtotal)} more to use this coupon`}
                       </p>
                     </div>
                     <button
@@ -1071,7 +1100,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
                 {discount > 0 && (
                   <div className="flex justify-between text-emerald-600 font-bold">
-                    <span>Coupon Discount ({appliedCoupon?.code})</span>
+                    <span>{dealApplied ? `🎉 ${dealApplied.name}` : `Coupon Discount (${appliedCoupon?.code})`}</span>
                     <span className="font-mono">-₹{discount}</span>
                   </div>
                 )}

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Check, Sparkles, ShieldCheck, Flame, Plus, Clock, ChevronDown } from 'lucide-react';
 import { MenuItem, PizzaSize, PizzaCrust, ExtraTopping, CartItem } from '../types';
 import { AVAILABLE_TOPPINGS, SIZE_PRICE_MODIFIERS, CRUST_PRICE_MODIFIERS } from '../data/mockData';
+import { pizzaSizePrice } from '../lib/deals';
 import { PIZZA_CATEGORIES } from '../lib/customize';
 import { VegNonVegIcon } from './VegNonVegIcon';
 
@@ -127,11 +128,7 @@ export const CustomizeModal: React.FC<CustomizeModalProps> = ({
   };
 
   // Base price for selected size (pizzas only — drinks/sides stay flat)
-  const baseSizePrice = isPizzaItem
-    ? (item.sizePrices && item.sizePrices[selectedSize]
-      ? item.sizePrices[selectedSize]!
-      : item.price + (SIZE_PRICE_MODIFIERS[selectedSize] || 0))
-    : item.price;
+  const baseSizePrice = isPizzaItem ? pizzaSizePrice(item, selectedSize) : item.price;
 
   const crustMod = isPizzaItem ? getCrustModifier(selectedCrust, selectedSize) : 0;
   const cheeseMod = extraCheese && isPizzaItem ? getCheeseModifier(selectedSize) : 0;
