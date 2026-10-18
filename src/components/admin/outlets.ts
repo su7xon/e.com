@@ -186,26 +186,30 @@ export function getOutletTables(outletId: string): OutletTable[] {
   return seeded;
 }
 
-export function saveOutletTables(outletId: string, tables: OutletTable[]): void {
+/** Persist tables. Returns false when the browser refused the write (storage full / private mode). */
+export function saveOutletTables(outletId: string, tables: OutletTable[]): boolean {
   try {
     localStorage.setItem(tablesKey(outletId), JSON.stringify(tables));
+    return true;
   } catch {
-    // ignore
+    return false;
   }
 }
 
-export function addOutletTable(outletId: string, name: string): OutletTable {
+/** Add a table. `saved: false` means it could not be persisted — caller must tell the user. */
+export function addOutletTable(outletId: string, name: string): { table: OutletTable; saved: boolean } {
   const table: OutletTable = {
     id: `${outletId}-t${Date.now().toString(36)}`,
     outletId,
     name: name.trim(),
   };
-  saveOutletTables(outletId, [...getOutletTables(outletId), table]);
-  return table;
+  const saved = saveOutletTables(outletId, [...getOutletTables(outletId), table]);
+  return { table, saved };
 }
 
-export function deleteOutletTable(outletId: string, tableId: string): void {
-  saveOutletTables(
+/** Remove a table. Returns false when the write failed. */
+export function deleteOutletTable(outletId: string, tableId: string): boolean {
+  return saveOutletTables(
     outletId,
     getOutletTables(outletId).filter((t) => t.id !== tableId)
   );

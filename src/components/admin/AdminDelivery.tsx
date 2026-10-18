@@ -13,7 +13,7 @@ import {
   CheckCircle,
   Trash2,
 } from 'lucide-react';
-import { AdminOrder, formatTimeAgo } from './adminData';
+import { AdminOrder } from './adminData';
 
 interface AdminDeliveryProps {
   orders: AdminOrder[];
@@ -137,7 +137,7 @@ export const AdminDelivery: React.FC<AdminDeliveryProps> = ({
                     <span className="font-mono font-black text-sm text-slate-900">{o.orderNumber}</span>
                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
                       <Clock className="w-3 h-3" />
-                      <span>{o.createdAt} ({formatTimeAgo(o.id, o.timeAgo)})</span>
+                      <span>{o.createdAt}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">

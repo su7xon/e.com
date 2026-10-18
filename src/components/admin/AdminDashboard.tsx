@@ -110,7 +110,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ orders, onNaviga
           const m = ORDER_TYPE_META[t];
           const b = s.byType[t];
           return (
-            <div key={t} className={`bg-white rounded-2xl border border-slate-200/80 border-l-[6px] ${m.edge} p-4 shadow-xs`}>
+            <div key={t} className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
               <div className={`flex items-center gap-2 text-sm font-black ${m.tone}`}>
                 <Icon className="w-4 h-4" />
                 {m.label}

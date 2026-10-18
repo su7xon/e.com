@@ -120,6 +120,7 @@ export const OutletQr: React.FC<OutletQrProps> = ({ outlet }) => {
   const [copied, setCopied] = useState(false);
   const [tables, setTables] = useState<OutletTable[]>(() => getOutletTables(outlet.id));
   const [newTableName, setNewTableName] = useState('');
+  const [storageWarning, setStorageWarning] = useState('');
 
   // Outlet change pe token + tables reload
   React.useEffect(() => {
@@ -162,15 +163,36 @@ export const OutletQr: React.FC<OutletQrProps> = ({ outlet }) => {
 
   const handleAddTable = () => {
     const name = newTableName.trim();
-    if (!name) return;
+    if (!name) {
+      window.alert('Type a table name first, for example "Table T-03", then press Add Table.');
+      return;
+    }
     const exists = tables.some((t) => t.name.toLowerCase() === name.toLowerCase());
     if (exists) {
       window.alert(`A table named "${name}" already exists.`);
       return;
     }
-    addOutletTable(outlet.id, name);
-    setTables(getOutletTables(outlet.id));
+
+    const { table, saved } = addOutletTable(outlet.id, name);
     setNewTableName('');
+
+    if (saved) {
+      setStorageWarning('');
+      setTables(getOutletTables(outlet.id));
+    } else {
+      // Browser refused the write (storage full / private mode). Keep it visible this session
+      // instead of silently doing nothing.
+      setStorageWarning(
+        `"${name}" could not be saved on this device — the browser blocked storage (full or private mode). ` +
+          'Free some space (or open the panel in a normal window) and add the table again. It shows below until you close this page.'
+      );
+      setTables((prev) => [...prev, table]);
+    }
+
+    // New card sits at the bottom of the list — bring it into view so the click is visibly confirmed.
+    window.setTimeout(() => {
+      document.querySelector(`[data-table-id="${table.id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }, 80);
   };
 
   return (
@@ -291,17 +313,30 @@ export const OutletQr: React.FC<OutletQrProps> = ({ outlet }) => {
           </button>
         </div>
 
+        {storageWarning && (
+          <div className="mb-4 text-[11px] font-semibold text-red-700 bg-red-50 border border-red-200 rounded-xl p-3">
+            {storageWarning}
+          </div>
+        )}
+
         <div className="space-y-3">
           {tables.map((t) => (
-            <TableQrCard
-              key={t.id}
-              outlet={outlet}
-              table={t}
-              onDelete={() => {
-                deleteOutletTable(outlet.id, t.id);
-                setTables(getOutletTables(outlet.id));
-              }}
-            />
+            <div key={t.id} data-table-id={t.id}>
+              <TableQrCard
+                outlet={outlet}
+                table={t}
+                onDelete={() => {
+                  const removed = deleteOutletTable(outlet.id, t.id);
+                  if (!removed) {
+                    window.alert(
+                      `"${t.name}" could not be deleted — this browser is blocking storage (full or private mode). ` +
+                        'Free some space and try again.'
+                    );
+                  }
+                  setTables(getOutletTables(outlet.id));
+                }}
+              />
+            </div>
           ))}
           {tables.length === 0 && (
             <div className="text-center text-xs text-slate-500 border border-dashed border-slate-300 rounded-2xl p-8">

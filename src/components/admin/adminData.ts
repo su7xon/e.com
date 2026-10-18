@@ -91,23 +91,31 @@ export function tableLabel(t?: string): string {
   return /^table\b/i.test(t.trim()) ? t.trim().replace(/^table/i, 'Table') : `Table ${t.trim()}`;
 }
 
-export function formatTimeAgo(id: string, fallback: string): string {
-  if (!id.startsWith('ord-')) return fallback;
-  const timestamp = parseInt(id.replace('ord-', ''), 10);
+/**
+ * Human "how long ago" from the order id timestamp. Only genuinely fresh orders
+ * say "Just now" — older ones keep counting up in mins / hrs / days. The stored
+ * `timeAgo` field is never reused as a display value (it is frozen at "Just now"
+ * from creation time and made every old order look brand new).
+ */
+export function formatTimeAgo(id: string, fallback = ''): string {
+  const m = /^ord-(\d{12,})$/.exec(id);
+  const timestamp = m ? Number(m[1]) : NaN;
   if (isNaN(timestamp)) return fallback;
-  
+
   const diffMs = Date.now() - timestamp;
   const diffMins = Math.floor(diffMs / 60000);
-  
+
   if (diffMins < 1) return 'Just now';
   if (diffMins === 1) return '1 min ago';
   if (diffMins < 60) return `${diffMins} mins ago`;
-  
+
   const diffHours = Math.floor(diffMins / 60);
   if (diffHours === 1) return '1 hr ago';
   if (diffHours < 24) return `${diffHours} hrs ago`;
-  
-  return fallback;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) return 'yesterday';
+  return `${diffDays} days ago`;
 }
 
 export const PRESET_PIZZA_IMAGES = [

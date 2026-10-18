@@ -210,11 +210,12 @@ export const AdminLiveOrders: React.FC<AdminLiveOrdersProps> = ({
             const placedMs = orderTimeMs(ord);
             const waitingMin = placedMs ? Math.max(0, Math.floor((now - placedMs) / 60_000)) : null;
             const isOpen = ord.status === 'NEW' || ord.status === 'KITCHEN';
+            const ago = formatTimeAgo(ord.id);
             const TypeIcon = ord.orderType === 'DELIVERY' ? Bike : ord.orderType === 'DINE_IN' ? UtensilsCrossed : ShoppingBag;
             return (
               <div
                 key={ord.id}
-                className={`bg-white rounded-2xl border border-l-[6px] ${meta.edge} p-4 shadow-xs transition-all flex flex-col justify-between ${
+                className={`bg-white rounded-2xl border p-4 shadow-xs transition-all flex flex-col justify-between ${
                   ord.status === 'NEW' ? 'border-red-300 ring-2 ring-red-500/15' : 'border-slate-200/80'
                 } ${ord.status === 'CANCELLED' ? 'opacity-70' : ''}`}
               >
@@ -254,7 +255,7 @@ export const AdminLiveOrders: React.FC<AdminLiveOrdersProps> = ({
                         waiting {fmtWait(waitingMin)}
                       </span>
                     )}
-                    {!isOpen && <span>{formatTimeAgo(ord.id, ord.timeAgo)}</span>}
+                    {!isOpen && ago && <span>{ago}</span>}
                   </div>
 
                   {/* Customer + where it goes */}
