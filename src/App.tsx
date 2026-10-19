@@ -312,11 +312,16 @@ export default function App() {
     safeSet('seven_cheese_categories', JSON.stringify(storeCategories));
   }, [storeCategories]);
 
-  // Lunch combos still at their old default price get the price on the lunch banner.
+  // Lunch combos still at their old default price / stock photo get the ones from the lunch banner.
   const withLunchPrice = (m: MenuItem): MenuItem => {
-    if (OLD_LUNCH_PRICES[m.id] !== m.price) return m;
+    if (!m.id.startsWith('p-offer-lunch-')) return m;
     const fresh = MENU_ITEMS.find((x) => x.id === m.id);
-    return fresh ? { ...m, price: fresh.price } : m;
+    if (!fresh) return m;
+    return {
+      ...m,
+      price: OLD_LUNCH_PRICES[m.id] === m.price ? fresh.price : m.price,
+      image: !m.image || m.image.startsWith('https://images.unsplash.com/') ? fresh.image : m.image,
+    };
   };
 
   // Live Menu Items State (Syncs with Admin)

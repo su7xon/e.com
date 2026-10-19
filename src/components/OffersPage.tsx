@@ -98,9 +98,17 @@ export const OffersPage: React.FC<OffersPageProps> = ({
                     const qty = cartQty(c.id);
                     return (
                       <div key={c.id} className="flex items-center gap-3 px-3 py-2.5">
-                        <VegNonVegIcon isVeg={c.isVeg} />
+                        <img
+                          src={c.image}
+                          alt={c.name}
+                          className="w-16 h-14 sm:w-20 sm:h-16 shrink-0 rounded-xl object-cover bg-slate-100"
+                          referrerPolicy="no-referrer"
+                        />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-bold text-slate-900 truncate">{c.name.replace('Lunch Combo — ', '')}</p>
+                          <p className="text-sm font-bold text-slate-900 truncate flex items-center gap-1.5">
+                            <VegNonVegIcon isVeg={c.isVeg} size="sm" />
+                            {c.name.replace('Lunch Combo — ', '')}
+                          </p>
                           <p className="text-[11px] text-slate-500 truncate">{c.description}</p>
                         </div>
                         <span className="font-mono font-black text-sm text-slate-900">₹{c.price}</span>
