@@ -22,8 +22,8 @@ import {
   CRUST_PRICE_MODIFIERS
 } from './data/mockData';
 import { reverseGeocode } from './lib/reverseGeocode';
-import { taxesAndChargesFor, bestDiscount, FREE_GIFT_THRESHOLD, FREE_GIFT_PRODUCT_ID, FREE_GIFT_NAME } from './lib/billing';
-import { computeDayDeal, offerByKey } from './lib/deals';
+import { taxesAndChargesFor, bestDiscount, freeGiftEligible, FREE_GIFT_PRODUCT_ID, FREE_GIFT_NAME } from './lib/billing';
+import { computeDayDeal, offerByKey, isDayDealDay } from './lib/deals';
 import { isOfferActive, isScheduleActive, SLIDE_SCHEDULES, LUNCH, OFFER_SCHEDULES, describeSchedule } from './utils/offerSchedule';
 import { Navbar } from './components/Navbar';
 import { DealPopup, TimedDeal } from './components/DealPopup';
@@ -831,19 +831,32 @@ export default function App() {
     return () => window.clearInterval(id);
   }, []);
   const activeCoupons = useMemo(() => coupons.filter((c) => isOfferActive(c, now)), [coupons, now]);
+  // Tuesday / Friday are day-deal days: the lunch offer takes a back seat all day.
+  const dayDealDay = isDayDealDay(now);
   const activeMenuItems = useMemo(
-    () => menuItems.filter((m) => m.isAvailable !== false && isOfferActive(m, now)),
-    [menuItems, now],
+    () =>
+      menuItems.filter(
+        (m) =>
+          m.isAvailable !== false &&
+          isOfferActive(m, now) &&
+          !(dayDealDay && m.id.startsWith('p-offer-lunch-')),
+      ),
+    [menuItems, now, dayDealDay],
   );
   // While a deal runs (Tuesday / Friday / lunch) show just its banners;
   // otherwise show the generic upsell banners (and any "Always" banners).
   const activeSlides = useMemo(() => {
     const isDeal = (s: BannerSlide) => s.schedule === 'tuesday' || s.schedule === 'friday' || s.schedule === 'lunch';
-    const liveDeals = heroSlides.filter((s) => isDeal(s) && isScheduleActive(SLIDE_SCHEDULES[s.schedule as string], now));
+    const liveDeals = heroSlides.filter(
+      (s) =>
+        isDeal(s) &&
+        !(dayDealDay && s.schedule === 'lunch') &&
+        isScheduleActive(SLIDE_SCHEDULES[s.schedule as string], now),
+    );
     if (liveDeals.length > 0) return liveDeals;
     const generic = heroSlides.filter((s) => !isDeal(s));
     return generic.length > 0 ? generic : heroSlides;
-  }, [heroSlides, now]);
+  }, [heroSlides, now, dayDealDay]);
   // An applied coupon that goes out of its window is dropped automatically.
   useEffect(() => {
     if (appliedCoupon && !isOfferActive(appliedCoupon, now)) setAppliedCoupon(null);
@@ -939,6 +952,7 @@ export default function App() {
     const offerDeal = (key: 'tuesday' | 'friday' | 'lunch', id: string, when: string) => {
       const o = offerByKey(key);
       if (!o || !isScheduleActive(o.schedule, now)) return;
+      if (key === 'lunch' && dayDealDay) return;
       if (key === 'lunch' && !activeMenuItems.some((m) => m.id.startsWith('p-offer-lunch-'))) return;
       deals.push({
         id,
@@ -957,7 +971,7 @@ export default function App() {
     offerDeal('friday', 'FUNDAYFRIDAY', 'Today only · Friday');
     offerDeal('lunch', 'LUNCH', 'Today · 11 AM – 2 PM');
     return deals;
-  }, [activeMenuItems, heroSlides, now]);
+  }, [activeMenuItems, heroSlides, now, dayDealDay]);
 
   const [dealPopupId, setDealPopupId] = useState<string | null>(null);
   const dealSeenKey = (id: string) => {
@@ -1203,9 +1217,9 @@ export default function App() {
     // One id + number shared by the customer's tracker and the restaurant's order.
     const adminOrderId = `ord-${Date.now()}`;
     const orderNumber = `#7C-${Math.floor(1000 + Math.random() * 9000)}`;
-    // Free Choco Lava Cake when the items reach the threshold.
+    // Free Choco Lava Cake when the items reach the threshold — not with another offer.
     const freeGiftLine: CartItem | null =
-      subtotal >= FREE_GIFT_THRESHOLD
+      freeGiftEligible(subtotal, best.discount)
         ? {
             cartItemId: `free-gift-${Date.now()}`,
             productId: FREE_GIFT_PRODUCT_ID,
@@ -2141,7 +2155,7 @@ export default function App() {
         };
         return (
           <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
-            {lunch.length > 0 && (
+            {lunch.length > 0 && !dayDealDay && (
               <section id="lunch-combos">
                 <div className="mb-4 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3">
                   <h2 className="text-xl font-black text-slate-900 tracking-tight">🕚 Lunch combos</h2>

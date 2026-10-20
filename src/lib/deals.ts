@@ -9,6 +9,10 @@ export const pizzaSizePrice = (item: MenuItem, size: PizzaSize): number =>
 
 export type OfferKey = 'tuesday' | 'friday' | 'lunch' | 'free-lava' | 'free-delivery';
 
+/** True on Tuesday / Friday, when the day deal runs all day. */
+export const isDayDealDay = (now: Date): boolean =>
+  isScheduleActive(TUESDAY, now) || isScheduleActive(FRIDAY, now);
+
 export interface OfferInfo {
   key: OfferKey;
   name: string;
@@ -59,7 +63,7 @@ export const OFFERS: OfferInfo[] = [
     slideSchedule: 'lunch',
     summary: 'Pizza + cold drink + fries, from ₹149.',
     perks: ['1 Regular or Medium pizza (Veg / Non-Veg)', '1 Cold Drink', '1 Fries'],
-    terms: ['Available 11:00 AM – 2:00 PM only'],
+    terms: ['Available 11:00 AM – 2:00 PM only', 'Not on Tuesday / Friday – the day deal runs instead'],
   },
   {
     key: 'free-lava',
@@ -67,7 +71,7 @@ export const OFFERS: OfferInfo[] = [
     when: 'Every day',
     summary: `A FREE ${FREE_GIFT_NAME} on orders of ₹${FREE_GIFT_THRESHOLD} or more.`,
     perks: [`Add items worth ₹${FREE_GIFT_THRESHOLD}+ and the cake is added for free`],
-    terms: ['One free cake per order'],
+    terms: ['One free cake per order', "Can't be combined with a coupon or another running offer"],
   },
   {
     key: 'free-delivery',

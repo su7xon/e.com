@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowLeft, Check, Clock, Minus, Plus, Tag } from 'lucide-react';
 import { Coupon, MenuItem } from '../types';
 import { BannerSlide } from './HeroBanner';
-import { OFFERS, OfferInfo } from '../lib/deals';
+import { OFFERS, OfferInfo, isDayDealDay } from '../lib/deals';
 import { isScheduleActive } from '../utils/offerSchedule';
 import { VegNonVegIcon } from './VegNonVegIcon';
 
@@ -42,6 +42,8 @@ export const OffersPage: React.FC<OffersPageProps> = ({
         ? slides.find((s) => s.id === 'slide-generic-free-lava')?.image
         : undefined;
   const lunchOn = isScheduleActive(OFFERS.find((o) => o.key === 'lunch')?.schedule, now);
+  // Tuesday / Friday belong to the day deal — don't show the lunch offer on those days.
+  const dayDealDay = isDayDealDay(now);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-5 pb-28 space-y-5">
@@ -60,6 +62,7 @@ export const OffersPage: React.FC<OffersPageProps> = ({
       </div>
 
       {OFFERS.map((o) => {
+        if (o.key === 'lunch' && dayDealDay) return null;
         const on = o.schedule ? isScheduleActive(o.schedule, now) : true;
         const img = imageFor(o);
         return (

@@ -20,7 +20,7 @@ import {
   Compass
 } from 'lucide-react';
 import { CartItem, Coupon, UserAddress, DeliveryDetails, OrderType, MenuItem } from '../types';
-import { taxesAndChargesFor, bestDiscount, FREE_GIFT_THRESHOLD, FREE_GIFT_NAME, FREE_GIFT_VALUE } from '../lib/billing';
+import { taxesAndChargesFor, bestDiscount, freeGiftEligible, FREE_GIFT_THRESHOLD, FREE_GIFT_NAME, FREE_GIFT_VALUE } from '../lib/billing';
 import type { DayDealResult } from '../lib/deals';
 import { COUPONS, MENU_ITEMS } from '../data/mockData';
 import { VegNonVegIcon } from './VegNonVegIcon';
@@ -314,7 +314,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     return m?.originalPrice && m.originalPrice > m.price ? acc + (m.originalPrice - m.price) * line.quantity : acc;
   }, 0);
   const deliverySaving = orderType === 'DELIVERY' && deliveryFee === 0 && subtotal > 0 ? 40 : 0;
-  const giftUnlocked = subtotal >= FREE_GIFT_THRESHOLD;
+  const giftUnlocked = freeGiftEligible(subtotal, discount);
   const giftSaving = giftUnlocked ? FREE_GIFT_VALUE : 0;
   const savedAmount = mrpSavings + discount + deliverySaving + giftSaving;
   const savingsBreakdown = [
@@ -412,8 +412,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           </div>
         )}
 
-        {/* Free Choco Lava Cake unlock */}
-        {cartItems.length > 0 && (
+        {/* Free Choco Lava Cake unlock — standalone offer, hidden while another offer applies */}
+        {cartItems.length > 0 && discount <= 0 && (
           <div className={`px-[max(0.875rem,calc((100%_-_48rem)/2))] py-2 text-xs border-b ${giftUnlocked ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
             {giftUnlocked ? (
               <div className="flex items-center gap-2 font-bold">

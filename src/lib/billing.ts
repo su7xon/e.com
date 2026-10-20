@@ -19,6 +19,13 @@ export const FREE_GIFT_PRODUCT_ID = 'p-dessert-choco-lava';
 export const FREE_GIFT_NAME = 'Choco Lava Cake';
 export const FREE_GIFT_VALUE = 119;
 
+/**
+ * The free cake is a standalone offer. It never stacks with a coupon or a
+ * running day deal (Tuesday / Friday) — once another offer is applied, no cake.
+ */
+export const freeGiftEligible = (subtotal: number, appliedDiscount = 0): boolean =>
+  subtotal >= FREE_GIFT_THRESHOLD && appliedDiscount <= 0;
+
 /** What a coupon takes off the item subtotal (0 when below its minimum order). */
 export function couponDiscountFor(subtotal: number, coupon: Coupon | null | undefined): number {
   if (!coupon || subtotal < coupon.minOrder) return 0;
