@@ -798,6 +798,7 @@ export default function App() {
   });
   // Short confirmation after a location fix: "Delivering to … · nearest outlet …".
   const [locationNote, setLocationNote] = useState<string | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
   useEffect(() => {
     if (!locationNote) return;
     const id = window.setTimeout(() => setLocationNote(null), 5000);
@@ -834,6 +835,13 @@ export default function App() {
   const requestGps = React.useCallback(() => {
     if (!('geolocation' in navigator)) {
       setGpsState('denied');
+      setLocationError('Geolocation is not supported by this browser.');
+      return;
+    }
+    // GPS works only on HTTPS (or localhost). On plain HTTP the browser blocks it.
+    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+      setGpsState('denied');
+      setLocationError('Location needs HTTPS. Open the site over https:// or use localhost.');
       return;
     }
     setGpsState('locating');
@@ -849,8 +857,19 @@ export default function App() {
         }
         applyGpsFix(fix);
       },
-      () => setGpsState('denied'),
-      { enableHighAccuracy: true, timeout: 12000, maximumAge: 600000 }
+      (err) => {
+        setGpsState('denied');
+        if (err.code === 1) {
+          setLocationError('Location permission denied. Allow it from the lock icon in the address bar, then retry.');
+        } else if (err.code === 2) {
+          setLocationError('Location unavailable. Turn on GPS / Location and retry.');
+        } else if (err.code === 3) {
+          setLocationError('Location request timed out. Move near open sky and retry.');
+        } else {
+          setLocationError('Could not get location. Try again.');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   }, [applyGpsFix]);
 
@@ -2532,6 +2551,7 @@ export default function App() {
             dismissLocPrompt();
             setIsAddressModalOpen(true);
           }}
+          locationError={locationError}
         />
       )}
 

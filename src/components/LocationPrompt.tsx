@@ -9,6 +9,8 @@ interface LocationPromptProps {
   onDismiss: () => void;
   /** Type or pin an address instead of sharing location. */
   onEnterAddress: () => void;
+  /** Specific error message (permission denied / timeout / https required, etc.) */
+  locationError?: string | null;
 }
 
 /**
@@ -23,6 +25,7 @@ export const LocationPrompt: React.FC<LocationPromptProps> = ({
   onAllow,
   onDismiss,
   onEnterAddress,
+  locationError,
 }) => {
   if (hasFix || gpsState === 'locked') return null;
 
@@ -56,6 +59,12 @@ export const LocationPrompt: React.FC<LocationPromptProps> = ({
         <p className="mt-1 text-[11px] text-slate-400">
           We use it to find your nearest store and delivery distance.
         </p>
+
+        {locationError && (
+          <p className="mt-1 text-[11px] text-red-600 font-medium">
+            {locationError}
+          </p>
+        )}
 
         <div className="mt-5 space-y-2">
           <button
