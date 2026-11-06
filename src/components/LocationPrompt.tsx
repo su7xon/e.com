@@ -1,5 +1,4 @@
 import React from 'react';
-import { MapPin, Loader2 } from 'lucide-react';
 
 interface LocationPromptProps {
   gpsState: 'idle' | 'locating' | 'locked' | 'denied';
@@ -14,10 +13,10 @@ interface LocationPromptProps {
 }
 
 /**
- * First-screen location gate (Domino's style): centered dialog over a dimmed page.
+ * Minimal location hint — small non-intrusive bottom banner.
+ * No modal overlay, no confusing mobile location arrow.
  * Allow -> browser location prompt -> coords saved for outlet distance + order routing.
- * Enter address -> address sheet. Browse first -> menu loads; the cart asks for a location before checkout.
- * NOTE: hasCart kept for compat — centered dialog needs no bottom offset, so no overlap.
+ * Enter address -> address sheet. Dismiss -> browse freely; cart asks for location before checkout.
  */
 export const LocationPrompt: React.FC<LocationPromptProps> = ({
   gpsState,
@@ -33,63 +32,56 @@ export const LocationPrompt: React.FC<LocationPromptProps> = ({
   const locating = gpsState === 'locating';
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4">
+    <div className="fixed bottom-4 left-4 right-4 z-[60] flex items-center justify-center pointer-events-none">
       <div
         role="dialog"
         aria-modal="true"
-        aria-labelledby="loc-gate-title"
-        className="w-full max-w-xs bg-white text-slate-800 rounded-md shadow-2xl p-5 text-center animate-in zoom-in-95 duration-200"
+        aria-labelledby="loc-hint-title"
+        className="pointer-events-auto w-full max-w-sm bg-white border border-slate-200 rounded-xl shadow-lg p-4 text-center animate-in slide-in-from-bottom duration-200"
       >
         {locating ? (
-          <Loader2 className="w-5 h-5 text-[#ED1C24] mx-auto animate-spin" />
+          <p id="loc-hint-title" className="text-xs text-slate-600 font-medium mb-3">
+            Detecting location…
+          </p>
+        ) : denied ? (
+          <p id="loc-hint-title" className="text-xs text-red-600 font-medium mb-3">
+            Location blocked — enter address manually below
+          </p>
         ) : (
-          <MapPin className="w-5 h-5 text-[#ED1C24] mx-auto" />
-        )}
-        <h3 id="loc-gate-title" className="mt-3 text-sm leading-relaxed">
-          {denied ? (
-            <>Location is blocked. Allow it from the lock icon in the address bar, then retry.</>
-          ) : locating ? (
-            <>Finding your location…</>
-          ) : (
-            <>
-              Where should we deliver your <b>7 Cheese</b> order?
-            </>
-          )}
-        </h3>
-        <p className="mt-1 text-[11px] text-slate-400">
-          We use it to find your nearest store and delivery distance.
-        </p>
-
-        {locationError && (
-          <p className="mt-1 text-[11px] text-red-600 font-medium">
-            {locationError}
+          <p id="loc-hint-title" className="text-xs text-slate-600 font-medium mb-3">
+            Share location to find your nearest store
           </p>
         )}
 
-        <div className="mt-5 space-y-2">
+        {locationError && (
+          <p className="text-[10px] text-red-500 font-medium mb-3">{locationError}</p>
+        )}
+
+        <div className="flex gap-2">
           <button
             id="btn-loc-use-gps"
             onClick={onAllow}
             disabled={locating}
-            className="w-full bg-[#ED1C24] hover:bg-[#c91430] disabled:opacity-70 text-white text-sm font-bold px-6 py-2.5 rounded-md cursor-pointer"
+            className="flex-1 bg-[#ED1C24] hover:bg-[#c91430] disabled:opacity-60 text-white text-xs font-bold py-2 rounded-lg cursor-pointer disabled:cursor-not-allowed"
           >
-            {denied ? 'Try again' : locating ? 'Detecting…' : 'Use my location'}
+            {denied ? 'Retry' : locating ? 'Detecting…' : 'Allow'}
           </button>
           <button
             id="btn-loc-enter-address"
             onClick={onEnterAddress}
-            className="w-full bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 text-sm font-bold px-6 py-2.5 rounded-md cursor-pointer"
+            className="flex-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold py-2 rounded-lg cursor-pointer"
           >
             Enter address
           </button>
-          <button
-            id="btn-loc-browse"
-            onClick={onDismiss}
-            className="text-xs text-slate-600 underline underline-offset-4 cursor-pointer"
-          >
-            Browse the menu first
-          </button>
         </div>
+
+        <button
+          id="btn-loc-dismiss"
+          onClick={onDismiss}
+          className="mt-3 text-[10px] text-slate-400 underline underline-offset-2 cursor-pointer"
+        >
+          Maybe later
+        </button>
       </div>
     </div>
   );

@@ -835,13 +835,7 @@ export default function App() {
   const requestGps = React.useCallback(() => {
     if (!('geolocation' in navigator)) {
       setGpsState('denied');
-      setLocationError('Geolocation is not supported by this browser.');
-      return;
-    }
-    // GPS works only on HTTPS (or localhost). On plain HTTP the browser blocks it.
-    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-      setGpsState('denied');
-      setLocationError('Location needs HTTPS. Open the site over https:// or use localhost.');
+      setLocationError('Location not supported on this device.');
       return;
     }
     setGpsState('locating');
@@ -850,6 +844,7 @@ export default function App() {
         const fix = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setUserGps(fix);
         setGpsState('locked');
+        setLocationError(null);
         try {
           localStorage.setItem('seven_cheese_user_gps', JSON.stringify(fix));
         } catch {
@@ -859,17 +854,9 @@ export default function App() {
       },
       (err) => {
         setGpsState('denied');
-        if (err.code === 1) {
-          setLocationError('Location permission denied. Allow it from the lock icon in the address bar, then retry.');
-        } else if (err.code === 2) {
-          setLocationError('Location unavailable. Turn on GPS / Location and retry.');
-        } else if (err.code === 3) {
-          setLocationError('Location request timed out. Move near open sky and retry.');
-        } else {
-          setLocationError('Could not get location. Try again.');
-        }
+        setLocationError('Could not access location. You can enter your address manually instead.');
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   }, [applyGpsFix]);
 
@@ -2626,13 +2613,12 @@ export default function App() {
         }}
       />
       {locationNote && (
-        <div className="fixed top-16 sm:top-20 inset-x-0 z-[59] flex justify-center px-3 pointer-events-none">
+        <div className="fixed top-4 inset-x-0 z-[59] flex justify-center px-3 pointer-events-none">
           <button
             type="button"
             onClick={() => setLocationNote(null)}
-            className="pointer-events-auto max-w-md w-full bg-slate-900 text-white text-xs font-semibold rounded-2xl shadow-2xl px-4 py-3 flex items-start gap-2 text-left animate-in slide-in-from-top duration-300 cursor-pointer"
+            className="pointer-events-auto max-w-md w-full bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-xl shadow-lg px-4 py-3 flex items-center gap-2 text-center animate-in slide-in-from-top duration-300 cursor-pointer"
           >
-            <span className="text-base leading-none">📍</span>
             <span>{locationNote}</span>
           </button>
         </div>
