@@ -25,6 +25,7 @@ import type { DayDealResult } from '../lib/deals';
 import { COUPONS, MENU_ITEMS } from '../data/mockData';
 import { VegNonVegIcon } from './VegNonVegIcon';
 import { InteractiveMapPicker } from './InteractiveMapPicker';
+import { isOfferActive } from '../utils/offerSchedule';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -200,6 +201,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   const couponList = availableCoupons && availableCoupons.length > 0 ? availableCoupons : COUPONS;
   const menuList = availableMenuItems && availableMenuItems.length > 0 ? availableMenuItems : MENU_ITEMS;
+
+  // Coupons that can actually give a discount: minOrder met AND offer is currently active.
+  const now = new Date();
+  const applicableCoupons = couponList.filter(
+    (cp) => subtotal >= cp.minOrder && isOfferActive(cp, now),
+  );
+  // Coupon can't stack with a running day deal (Tuesday / Friday).
+  const couponCanApply = !dayDeal && applicableCoupons.length > 0;
 
   // Pricing calculations
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
@@ -808,130 +817,136 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </div>
               )}
 
-              {/* 3. Apply Coupons Section (1 coupon shown + View All) */}
-              <div className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs">
-                <div className="flex items-center justify-between mb-2.5">
-                  <div className="flex items-center gap-1.5">
-                    <Tag className="w-4 h-4 text-[#ED1C24]" />
-                    <span className="text-xs font-black uppercase tracking-wider text-slate-800">
-                      Apply Coupon Code
-                    </span>
-                  </div>
-                  {!appliedCoupon && couponList.length > 1 && (
-                    <button
-                      type="button"
-                      id="btn-toggle-coupons-header"
-                      onClick={() => setShowAllCoupons(!showAllCoupons)}
-                      className="text-[11px] font-bold text-[#ED1C24] hover:text-[#c91430] flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-lg transition-colors"
-                    >
-                      <span>{showAllCoupons ? 'Show Less' : `View All (${couponList.length})`}</span>
-                      {showAllCoupons ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                    </button>
-                  )}
-                </div>
-
-                {appliedCoupon ? (
-                  <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-2.5 flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono font-black text-xs text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">
-                          {appliedCoupon.code}
-                        </span>
-                        <span className="text-xs font-bold text-emerald-700">Applied!</span>
-                      </div>
-                      <p className="text-[11px] text-emerald-600 font-medium mt-0.5">
-                        {couponApplied
-                          ? `You saved ₹${discount} with this coupon`
-                          : dealApplied
-                            ? `Not used — ${dealApplied.name} saves you more`
-                            : `Add ₹${Math.max(0, appliedCoupon.minOrder - subtotal)} more to use this coupon`}
-                      </p>
+              {/* 3. Apply Coupons Section — shows only when a coupon can actually give a discount */}
+              {appliedCoupon || couponCanApply ? (
+                <div className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="flex items-center gap-1.5">
+                      <Tag className="w-4 h-4 text-[#ED1C24]" />
+                      <span className="text-xs font-black uppercase tracking-wider text-slate-800">
+                        Apply Coupon Code
+                      </span>
                     </div>
-                    <button
-                      id="btn-remove-applied-coupon"
-                      onClick={onRemoveCoupon}
-                      className="text-xs font-bold text-red-600 hover:underline cursor-pointer"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <form onSubmit={handleCustomCouponSubmit} className="flex gap-2">
-                      <input
-                        id="input-cart-coupon"
-                        type="text"
-                        value={couponInput}
-                        onChange={(e) => {
-                          setCouponInput(e.target.value);
-                          setCouponError('');
-                        }}
-                        placeholder="Enter Promo Code"
-                        className="flex-1 bg-slate-100 text-xs px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24] font-mono font-bold uppercase"
-                      />
+                    {!appliedCoupon && applicableCoupons.length > 1 && (
                       <button
-                        type="submit"
-                        id="btn-apply-coupon"
-                        className="bg-[#ED1C24] text-white text-xs font-black px-4 py-2 rounded-xl hover:bg-[#c91430] transition-colors cursor-pointer"
+                        type="button"
+                        id="btn-toggle-coupons-header"
+                        onClick={() => setShowAllCoupons(!showAllCoupons)}
+                        className="text-[11px] font-bold text-[#ED1C24] hover:text-[#c91430] flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-lg transition-colors"
                       >
-                        Apply
+                        <span>
+                          {showAllCoupons ? 'Show Less' : `View All (${applicableCoupons.length})`}
+                        </span>
+                        {showAllCoupons ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                       </button>
-                    </form>
-                    {couponError && (
-                      <p className="text-[11px] text-red-600 font-semibold mt-1">
-                        {couponError}
-                      </p>
                     )}
+                  </div>
 
-                    {/* Quick Coupon Chips - 1 coupon default, all coupons when expanded */}
-                    <div className="mt-2.5 space-y-1.5">
-                      {(showAllCoupons ? couponList : couponList.slice(0, 1)).map((cp) => (
-                        <div
-                          key={cp.code}
-                          className="flex items-center justify-between p-2 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 hover:border-amber-400 transition-colors"
+                  {appliedCoupon ? (
+                    <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-2.5 flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono font-black text-xs text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">
+                            {appliedCoupon.code}
+                          </span>
+                          <span className="text-xs font-bold text-emerald-700">Applied!</span>
+                        </div>
+                        <p className="text-[11px] text-emerald-600 font-medium mt-0.5">
+                          {couponApplied
+                            ? `You saved ₹${discount} with this coupon`
+                            : dealApplied
+                              ? `Not used — ${dealApplied.name} saves you more`
+                              : `Add ₹${Math.max(0, appliedCoupon.minOrder - subtotal)} more to use this coupon`}
+                        </p>
+                      </div>
+                      <button
+                        id="btn-remove-applied-coupon"
+                        onClick={onRemoveCoupon}
+                        className="text-xs font-bold text-red-600 hover:underline cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <form onSubmit={handleCustomCouponSubmit} className="flex gap-2">
+                        <input
+                          id="input-cart-coupon"
+                          type="text"
+                          value={couponInput}
+                          onChange={(e) => {
+                            setCouponInput(e.target.value);
+                            setCouponError('');
+                          }}
+                          placeholder="Enter Promo Code"
+                          className="flex-1 bg-slate-100 text-xs px-3 py-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#ED1C24] font-mono font-bold uppercase"
+                        />
+                        <button
+                          type="submit"
+                          id="btn-apply-coupon"
+                          className="bg-[#ED1C24] text-white text-xs font-black px-4 py-2 rounded-xl hover:bg-[#c91430] transition-colors cursor-pointer"
                         >
-                          <div className="min-w-0 pr-2">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[11px] font-mono font-black text-slate-800">
-                                {cp.code}
-                              </span>
-                              {cp.tag && (
-                                <span className="bg-amber-100 text-amber-900 text-[9px] font-bold px-1 rounded">
-                                  {cp.tag}
+                          Apply
+                        </button>
+                      </form>
+                      {couponError && (
+                        <p className="text-[11px] text-red-600 font-semibold mt-1">
+                          {couponError}
+                        </p>
+                      )}
+
+                      {/* Quick Coupon Chips - only coupons that can actually apply */}
+                      <div className="mt-2.5 space-y-1.5">
+                        {(showAllCoupons ? applicableCoupons : applicableCoupons.slice(0, 1)).map(
+                          (cp) => (
+                            <div
+                              key={cp.code}
+                              className="flex items-center justify-between p-2 rounded-lg border border-dashed border-slate-300 bg-slate-50/70 hover:border-amber-400 transition-colors"
+                            >
+                              <div className="min-w-0 pr-2">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[11px] font-mono font-black text-slate-800">
+                                    {cp.code}
+                                  </span>
+                                  {cp.tag && (
+                                    <span className="bg-amber-100 text-amber-900 text-[9px] font-bold px-1 rounded">
+                                      {cp.tag}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[10px] text-slate-500 block truncate">
+                                  {cp.description}
                                 </span>
-                              )}
+                              </div>
+                              <button
+                                id={`btn-apply-quick-${cp.code}`}
+                                onClick={() => onApplyCoupon(cp)}
+                                className="text-xs font-black text-[#ED1C24] hover:underline shrink-0 cursor-pointer"
+                              >
+                                Apply
+                              </button>
                             </div>
-                            <span className="text-[10px] text-slate-500 block truncate">
-                              {cp.description}
-                            </span>
-                          </div>
+                          ),
+                        )}
+                      </div>
+
+                      {!showAllCoupons && applicableCoupons.length > 1 && (
+                        <div className="mt-2 flex justify-end">
                           <button
-                            id={`btn-apply-quick-${cp.code}`}
-                            onClick={() => onApplyCoupon(cp)}
-                            className="text-xs font-black text-[#ED1C24] hover:underline shrink-0 cursor-pointer"
+                            type="button"
+                            id="btn-view-all-coupons-link"
+                            onClick={() => setShowAllCoupons(true)}
+                            className="text-[11px] font-bold text-[#ED1C24] hover:text-[#c91430] flex items-center gap-1 hover:underline cursor-pointer"
                           >
-                            Apply
+                            <span>View all coupons ({applicableCoupons.length})</span>
+                            <ChevronDown className="w-3 h-3" />
                           </button>
                         </div>
-                      ))}
-                    </div>
-
-                    {!showAllCoupons && couponList.length > 1 && (
-                      <div className="mt-2 flex justify-end">
-                        <button
-                          type="button"
-                          id="btn-view-all-coupons-link"
-                          onClick={() => setShowAllCoupons(true)}
-                          className="text-[11px] font-bold text-[#ED1C24] hover:text-[#c91430] flex items-center gap-1 hover:underline cursor-pointer"
-                        >
-                          <span>View all coupons ({couponList.length})</span>
-                          <ChevronDown className="w-3 h-3" />
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ) : null}
 
               {/* 4. Payment Method Selection (UPI, Cash, Cards) */}
               <div className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs space-y-2.5">
