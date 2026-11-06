@@ -26,6 +26,8 @@ import { COUPONS, MENU_ITEMS } from '../data/mockData';
 import { needsCustomize } from '../lib/customize';
 import { VegNonVegIcon } from './VegNonVegIcon';
 import { InteractiveMapPicker } from './InteractiveMapPicker';
+import { isOfferActive } from '../utils/offerSchedule';
+import { isDayDealDay } from '../lib/deals';
 
 interface BillingPageProps {
   cartItems: CartItem[];
@@ -105,6 +107,11 @@ export const BillingPage: React.FC<BillingPageProps> = ({
   const couponList = availableCoupons || COUPONS;
   const menuList = availableMenuItems || MENU_ITEMS;
 
+  // Tuesday/Friday: only day deals work — no admin coupons.
+  const now = new Date();
+  const dayDealDay = isDayDealDay(now);
+  const effectiveCoupons = dayDealDay ? [] : couponList.filter((c) => isOfferActive(c, now));
+
   // Pricing calculations
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const freeDeliveryThreshold = 99;
@@ -113,7 +120,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
   const taxesAndCharges = taxesAndChargesFor(subtotal);
 
   let discount = 0;
-  if (appliedCoupon && subtotal >= appliedCoupon.minOrder) {
+  if (!dayDealDay && appliedCoupon && subtotal >= appliedCoupon.minOrder && isOfferActive(appliedCoupon, now)) {
     if (appliedCoupon.discountType === 'percentage') {
       const calculated = Math.round((subtotal * appliedCoupon.value) / 100);
       discount = appliedCoupon.maxDiscount ? Math.min(calculated, appliedCoupon.maxDiscount) : calculated;
@@ -129,8 +136,12 @@ export const BillingPage: React.FC<BillingPageProps> = ({
     setCouponError('');
     const code = couponInput.trim().toUpperCase();
     const found = couponList.find((c) => c.code === code);
-    if (!found) {
+    if (!found || !isOfferActive(found, now)) {
       setCouponError('Invalid coupon code. Try 7CHEESE50 or CHEESEFEST');
+      return;
+    }
+    if (dayDealDay) {
+      setCouponError('Coupons are not valid on Tuesday/Friday — day deal applies instead.');
       return;
     }
     if (subtotal < found.minOrder) {
@@ -473,14 +484,14 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                     Apply Coupon Code
                   </span>
                 </div>
-                {!appliedCoupon && couponList.length > 1 && (
+                {!appliedCoupon && effectiveCoupons.length > 1 && (
                   <button
                     type="button"
                     id="btn-billing-toggle-coupons"
                     onClick={() => setShowAllCoupons(!showAllCoupons)}
                     className="text-[11px] font-bold text-[#ED1C24] hover:text-[#c91430] flex items-center gap-1 cursor-pointer bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors"
                   >
-                    <span>{showAllCoupons ? 'Show Less' : `View All (${couponList.length})`}</span>
+                    <span>{showAllCoupons ? 'Show Less' : `View All (${effectiveCoupons.length})`}</span>
                     {showAllCoupons ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   </button>
                 )}
@@ -533,7 +544,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
 
                   {/* Quick Coupon Chips - 1 coupon default, all coupons when expanded */}
                   <div className="mt-3 space-y-2">
-                    {(showAllCoupons ? couponList : couponList.slice(0, 1)).map((cp) => (
+                    {(showAllCoupons ? effectiveCoupons : effectiveCoupons.slice(0, 1)).map((cp) => (
                       <div
                         key={cp.code}
                         className="flex items-center justify-between p-2.5 rounded-xl border border-dashed border-slate-300 bg-slate-50/70 hover:border-amber-400 hover:bg-amber-50/30 transition-colors"
@@ -563,14 +574,14 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                     ))}
                   </div>
 
-                  {!showAllCoupons && couponList.length > 1 && (
+                  {!showAllCoupons && effectiveCoupons.length > 1 && (
                     <div className="mt-2 flex justify-end">
                       <button
                         type="button"
                         onClick={() => setShowAllCoupons(true)}
                         className="text-[11px] font-bold text-[#ED1C24] hover:text-[#c91430] flex items-center gap-1 hover:underline cursor-pointer"
                       >
-                        <span>View all coupons ({couponList.length})</span>
+                        <span>View all coupons ({effectiveCoupons.length})</span>
                         <ChevronDown className="w-3 h-3" />
                       </button>
                     </div>
