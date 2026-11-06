@@ -24,10 +24,6 @@ interface NavbarProps {
   setVegOnly: (val: boolean) => void;
   nonVegOnly: boolean;
   setNonVegOnly: (val: boolean) => void;
-  /** Live outlet distance (computed from GPS / selected address). Falls back to the address's saved distanceKm. */
-  outletDistanceKm?: number;
-  gpsState?: 'idle' | 'locating' | 'locked' | 'denied';
-  onDetectLocation?: () => void;
   /** Amazon-style live suggestions for current searchQuery */
   suggestions?: MenuItem[];
   onSelectSuggestion?: (item: MenuItem) => void;
@@ -52,9 +48,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   setVegOnly,
   nonVegOnly,
   setNonVegOnly,
-  outletDistanceKm,
-  gpsState,
-  onDetectLocation,
   suggestions = [],
   onSelectSuggestion,
   isTableLocked = false,
@@ -65,15 +58,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [searchFocus, setSearchFocus] = React.useState(false);
   // Phones: search is an icon in the address row; tapping it swaps the row for the search box.
   const [mobileSearchOpen, setMobileSearchOpen] = React.useState(false);
-  const searchInputRef = React.useRef<HTMLInputElement>(null);
   const openMobileSearch = () => {
     setMobileSearchOpen(true);
     setTimeout(() => searchInputRef.current?.focus(), 0);
   };
-  const liveKm =
-    typeof outletDistanceKm === 'number' && Number.isFinite(outletDistanceKm)
-      ? outletDistanceKm.toFixed(1)
-      : (currentAddress.distanceKm?.toFixed(1) ?? '—');
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
   const showSuggestions = searchFocus && searchQuery.trim().length > 0 && suggestions.length > 0;
   const scrollToMenu = () => {
     const el = document.getElementById('menu-items-section');
@@ -236,19 +225,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={onOpenAddressModal}
               className="flex items-center gap-2 text-left max-w-[200px] sm:max-w-[260px] shrink min-w-0 cursor-pointer"
             >
-              <div
-                className="hidden sm:flex flex-col items-center justify-center bg-slate-900 px-1.5 py-1 rounded text-[11px] font-bold text-amber-400 shrink-0 cursor-pointer"
-                title={gpsState === 'locked' ? 'Distance to your nearest outlet' : 'Detect my location'}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (gpsState === 'locating') return;
-                  if (onDetectLocation) onDetectLocation();
-                  else onOpenAddressModal();
-                }}
-              >
-                <span>{gpsState === 'locating' ? '...' : `${liveKm} km`}</span>
-                <span className="text-[9px] text-slate-400 uppercase">OUTLET</span>
-              </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1 text-xs font-bold text-[#ED1C24]"><MapPin className="w-3.5 h-3.5 shrink-0" />
                   <span className="truncate">

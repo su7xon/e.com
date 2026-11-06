@@ -47,7 +47,6 @@ import { AddressModal } from './components/AddressModal';
 import { DealsModal } from './components/DealsModal';
 import { BottomNav } from './components/BottomNav';
 import { BillingPage } from './components/BillingPage';
-import { LocationPrompt } from './components/LocationPrompt';
 import { ChatAssistant } from './components/ChatAssistant';
 import { PwaInstallBanner, PwaOfflineBadge, PwaUpdatePrompt } from './components/PwaManager';
 import { AdminLayout } from './components/admin/AdminLayout';
@@ -783,8 +782,7 @@ export default function App() {
   });
   const [currentAddress, setCurrentAddress] = useState<UserAddress>(() => addresses[0] || NO_ADDRESS);
 
-  // ---- Live outlet distance: boot pe EK BAR GPS permission mango, outlet se kitni door ho pata chale ----
-  // Browser permission ek bar mangta hai, uske baad yaad rakhta hai. Fix localStorage me persist taaki reload pe prompt na doharaye.
+  // User's GPS fix (only set when they manually allow location — not on app open).
   const [userGps, setUserGps] = useState<{ lat: number; lng: number } | null>(() => {
     try {
       const saved = localStorage.getItem('seven_cheese_user_gps');
@@ -796,93 +794,6 @@ export default function App() {
     }
     return null;
   });
-  // Short confirmation after a location fix: "Delivering to … · nearest outlet …".
-  const [locationNote, setLocationNote] = useState<string | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  useEffect(() => {
-    if (!locationNote) return;
-    const id = window.setTimeout(() => setLocationNote(null), 5000);
-    return () => window.clearTimeout(id);
-  }, [locationNote]);
-  const [gpsState, setGpsState] = useState<'idle' | 'locating' | 'locked' | 'denied'>(() =>
-    userGps ? 'locked' : 'idle'
-  );
-
-  // Use this location as the delivery address and confirm the store it routes to.
-  const applyGpsFix = React.useCallback((fix: { lat: number; lng: number }) => {
-    void reverseGeocode(fix.lat, fix.lng).then((place) => {
-      const store = findDeliveryOutlet(fix.lat, fix.lng);
-      const addr: UserAddress = {
-        id: 'addr-current-location',
-        label: 'Current location',
-        address: place.address,
-        city: place.city,
-        pincode: place.pincode,
-        lat: fix.lat,
-        lng: fix.lng,
-        distanceKm: store.distanceKm,
-      };
-      setAddresses((prev) => [addr, ...prev.filter((a) => a.id !== addr.id)]);
-      setCurrentAddress(addr);
-      setLocationNote(
-        store.inZone
-          ? `Delivering to ${place.address}${place.city ? ', ' + place.city : ''} · from ${store.outlet.shortName} (${store.distanceKm} km)`
-          : `We don't deliver to ${place.city || 'this area'} yet · nearest store: ${store.outlet.shortName} (${store.distanceKm} km)`,
-      );
-    });
-  }, []);
-
-  const requestGps = React.useCallback(() => {
-    if (!('geolocation' in navigator)) {
-      setGpsState('denied');
-      setLocationError('Location not supported on this device.');
-      return;
-    }
-    setGpsState('locating');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const fix = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setUserGps(fix);
-        setGpsState('locked');
-        setLocationError(null);
-        try {
-          localStorage.setItem('seven_cheese_user_gps', JSON.stringify(fix));
-        } catch {
-          // ignore
-        }
-        applyGpsFix(fix);
-      },
-      (err) => {
-        setGpsState('denied');
-        setLocationError('Could not access location. You can enter your address manually instead.');
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-  }, [applyGpsFix]);
-
-  // A phone that saved a GPS fix but has no address any more gets its address back from the fix.
-  useEffect(() => {
-    if (userGps && currentAddress.id === NO_ADDRESS.id) applyGpsFix(userGps);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Location prompt dismissal — once per session, so it never nags.
-  // The prompt card itself calls requestGps on Allow (user gesture = reliable browser prompt).
-  const [locPromptDismissed, setLocPromptDismissed] = useState(() => {
-    try {
-      return sessionStorage.getItem('seven_cheese_loc_prompt') === 'off';
-    } catch {
-      return false;
-    }
-  });
-  const dismissLocPrompt = () => {
-    setLocPromptDismissed(true);
-    try {
-      sessionStorage.setItem('seven_cheese_loc_prompt', 'off');
-    } catch {
-      // ignore
-    }
-  };
 
   // Signed-out phones keep only their own orders (older versions saved every order on every phone).
   useEffect(() => {
@@ -1118,9 +1029,8 @@ export default function App() {
     const d = new Date();
     return `seven_cheese_deal_seen_${id}_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
   };
-  const locationGateOpen = !locPromptDismissed && !qrOutletId && !hasAddress && !userGps && gpsState !== 'locked';
   useEffect(() => {
-    if (dealPopupId || locationGateOpen) return;
+    if (dealPopupId) return;
     const next = timedDeals.find((d) => {
       try {
         return localStorage.getItem(dealSeenKey(d.id)) !== '1';
@@ -1138,7 +1048,7 @@ export default function App() {
       }
     }, 1500);
     return () => window.clearTimeout(id);
-  }, [timedDeals, locationGateOpen, dealPopupId]);
+  }, [timedDeals, dealPopupId]);
 
   // Modals Visibility
   const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
@@ -1909,9 +1819,6 @@ export default function App() {
         setVegOnly={setVegOnly}
         nonVegOnly={nonVegOnly}
         setNonVegOnly={setNonVegOnly}
-        outletDistanceKm={outletInfo?.distanceKm}
-        gpsState={gpsState}
-        onDetectLocation={requestGps}
         suggestions={searchSuggestions}
         onSelectSuggestion={handleSelectSuggestion}
         isTableLocked={!!qrTable}
@@ -2538,22 +2445,6 @@ export default function App() {
         }}
       />
 
-      {/* First-visit location permission — Allow = GPS fix for outlet distance + routing */}
-      {!locPromptDismissed && !qrOutletId && !hasAddress && (
-        <LocationPrompt
-          gpsState={gpsState}
-          hasFix={!!userGps}
-          hasCart={cartItemCount > 0}
-          onAllow={requestGps}
-          onDismiss={dismissLocPrompt}
-          onEnterAddress={() => {
-            dismissLocPrompt();
-            setIsAddressModalOpen(true);
-          }}
-          locationError={locationError}
-        />
-      )}
-
       <StorePicker
         isOpen={isStorePickerOpen}
         from={addressPinned ? { lat: currentAddress.lat as number, lng: currentAddress.lng as number } : userGps}
@@ -2612,17 +2503,6 @@ export default function App() {
           document.getElementById('menu-items-section')?.scrollIntoView({ behavior: 'smooth' });
         }}
       />
-      {locationNote && (
-        <div className="fixed top-4 inset-x-0 z-[59] flex justify-center px-3 pointer-events-none">
-          <button
-            type="button"
-            onClick={() => setLocationNote(null)}
-            className="pointer-events-auto max-w-md w-full bg-white border border-slate-200 text-slate-700 text-xs font-medium rounded-xl shadow-lg px-4 py-3 flex items-center gap-2 text-center animate-in slide-in-from-top duration-300 cursor-pointer"
-          >
-            <span>{locationNote}</span>
-          </button>
-        </div>
-      )}
       <DealPopup
         deal={timedDeals.find((d) => d.id === dealPopupId) ?? null}
         onClose={() => setDealPopupId(null)}
