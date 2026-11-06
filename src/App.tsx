@@ -967,6 +967,8 @@ export default function App() {
   const activeCoupons = useMemo(() => coupons.filter((c) => isOfferActive(c, now)), [coupons, now]);
   // Tuesday / Friday are day-deal days: the lunch offer takes a back seat all day.
   const dayDealDay = isDayDealDay(now);
+  // Tuesday/Friday: only day deals work — no admin coupons.
+  const effectiveCoupons = dayDealDay ? [] : activeCoupons;
   const activeMenuItems = useMemo(
     () =>
       menuItems.filter(
@@ -999,9 +1001,10 @@ export default function App() {
     return generic.length > 0 ? generic : heroSlides;
   }, [heroSlides, now, dayDealDay]);
   // An applied coupon that goes out of its window is dropped automatically.
+  // On Tuesday/Friday, only the day deal works — coupons are dropped.
   useEffect(() => {
-    if (appliedCoupon && !isOfferActive(appliedCoupon, now)) setAppliedCoupon(null);
-  }, [appliedCoupon, now]);
+    if (appliedCoupon && (!isOfferActive(appliedCoupon, now) || dayDealDay)) setAppliedCoupon(null);
+  }, [appliedCoupon, now, dayDealDay]);
 
   // Past Orders & Active Order
   const [pastOrders, setPastOrders] = useState<ActiveOrder[]>(() => {
@@ -1368,7 +1371,7 @@ export default function App() {
   const handlePlaceOrder = (notes: string, paymentMethod?: string, delivery?: DeliveryDetails) => {
     if (storeClosedNote || deliveryBlock) return;
     const subtotal = cartTotal;
-    const couponValid = appliedCoupon && isOfferActive(appliedCoupon, new Date()) ? appliedCoupon : null;
+    const couponValid = dayDealDay ? null : (appliedCoupon && isOfferActive(appliedCoupon, new Date()) ? appliedCoupon : null);
     const isFreeDel = subtotal >= 99;
     const deliveryFee = orderType === 'DELIVERY' ? (isFreeDel ? 0 : 40) : 0;
     const taxesAndCharges = taxesAndChargesFor(subtotal, customerOutlet.gstRate);
@@ -1662,7 +1665,7 @@ export default function App() {
           onAddToCart={handleSimpleAddToCart}
           onOpenCustomize={handleOpenCustomize}
           onOpenQuickView={handleOpenQuickView}
-          availableCoupons={coupons}
+          availableCoupons={effectiveCoupons}
           availableMenuItems={menuItems}
         />
 
@@ -2486,7 +2489,7 @@ export default function App() {
           else handleSimpleAddToCart(it);
         }}
         onUpgradeItem={handleUpgradeCartItem}
-        availableCoupons={activeCoupons}
+        availableCoupons={effectiveCoupons}
         availableMenuItems={activeMenuItems}
       />
 
