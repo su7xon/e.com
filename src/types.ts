@@ -1,0 +1,148 @@
+export type PizzaSize = 'Regular' | 'Medium' | 'Large';
+export type PizzaCrust = 'New Hand Tossed' | 'Cheese Burst' | 'Fresh Pan Pizza' | 'Thin Crust';
+
+export interface ExtraTopping {
+  id: string;
+  name: string;
+  price: number;
+  isVeg: boolean;
+}
+
+export type MenuCategoryType = 
+  | 'all' 
+  | 'signature-7-cheese' 
+  | 'veg-pizza'
+  | 'non-veg-pizza'
+  | 'chicken-pizza'
+  | 'pan-pizza'
+  | 'cheese-burst'
+  | 'burgers' 
+  | 'wraps' 
+  | 'starters-sides'
+  | 'sides'
+  | 'pasta' 
+  | 'chicken-corner' 
+  | 'drinks'
+  | 'desserts' 
+  | 'dips'
+  | 'sauce-pizzas'
+  | 'combos'
+  | 'veg' 
+  | 'non-veg'
+  | 'pan-pizza-mania'
+  | 'desserts-drinks';
+
+export interface MenuItem {
+  id: string;
+  name: string;
+  category: MenuCategoryType;
+  subCategoryTitle?: string;
+  isVeg: boolean;
+  price: number;
+  originalPrice?: number;
+  description: string;
+  toppings?: string[];
+  image: string;
+  badge?: 'NEW' | 'BESTSELLER' | 'CHEF SPECIAL' | '7 CHEESE' | 'MUST TRY' | 'POPULAR';
+  rating?: number;
+  reviewsCount?: number;
+  isCustomizable: boolean;
+  defaultSize?: PizzaSize;
+  defaultCrust?: PizzaCrust;
+  sizePrices?: { Regular?: number; Medium?: number; Large?: number };
+  /** Outlet scope: which outlet created the item. Empty = shared (visible in all outlets). */
+  outletId?: string;
+  /** A shared item hidden by an outlet (delete = hide from own outlet only). */
+  hiddenInOutlets?: string[];
+  /** false = sold out / switched off in admin; hidden from customers. Missing = available. */
+  isAvailable?: boolean;
+  /** Optional schedule for offer combos. */
+  days?: number[];
+  startTime?: string;
+  endTime?: string;
+}
+
+export interface CartItem {
+  cartItemId: string;
+  productId: string;
+  name: string;
+  isVeg: boolean;
+  image: string;
+  price: number; // base price + selected customization
+  basePrice: number;
+  size?: PizzaSize;
+  crust?: PizzaCrust;
+  extraCheese: boolean;
+  extraToppings: ExtraTopping[];
+  /** Make Your Own: chosen sauce name. */
+  sauce?: string;
+  quantity: number;
+}
+
+export interface CategoryItem {
+  id: string;
+  name: string;
+  tag?: string;
+  image: string;
+  /** Browse Our Category card photo (marquee). Falls back to image when empty. */
+  bannerImage?: string;
+  startingPrice?: number;
+  filterKey: MenuItem['category'] | 'all';
+}
+
+export interface Coupon {
+  code: string;
+  discountType: 'percentage' | 'flat';
+  value: number;
+  maxDiscount?: number;
+  minOrder: number;
+  title: string;
+  description: string;
+  tag?: string;
+  /** Optional schedule; omitted = always active (see utils/offerSchedule.ts). */
+  days?: number[];
+  startTime?: string;
+  endTime?: string;
+}
+
+export type OrderType = 'DELIVERY' | 'TAKEAWAY' | 'DINE_IN';
+
+export interface UserAddress {
+  id: string;
+  label: 'Home' | 'Work' | 'Other' | 'Current location';
+  address: string;
+  city: string;
+  pincode: string;
+  landmark?: string;
+  distanceKm?: number;
+  isDefault?: boolean;
+  lat?: number;
+  lng?: number;
+}
+
+export interface DeliveryDetails {
+  name: string;
+  phone: string;
+  landmark: string;
+}
+
+export interface ActiveOrder {
+  orderId: string;
+  items: CartItem[];
+  orderType: OrderType;
+  address: string;
+  subtotal: number;
+  deliveryFee: number;
+  tax: number;
+  discount: number;
+  total: number;
+  status: 'CONFIRMED' | 'PREPARING' | 'BAKING' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED';
+  /** The restaurant's copy of this order (admin "orders" id) — the tracker follows its status. */
+  adminOrderId?: string;
+  timestamp: string;
+  estimatedMinutes: number;
+  /** Expected delivery time (epoch ms) — the tracker counts down to it. */
+  deliverBy?: number;
+  riderName: string;
+  riderPhone: string;
+}

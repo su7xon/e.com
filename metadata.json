@@ -1,0 +1,6 @@
+{
+  "name": "7 Cheese Pizza - Online Ordering & Delivery",
+  "description": "7 Cheese Pizza official ordering platform featuring signature pizzas crafted with 7 artisanal cheeses, pan pizzas, burgers, wraps, and express delivery.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

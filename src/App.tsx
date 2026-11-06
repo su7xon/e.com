@@ -1,0 +1,2434 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  MenuItem,
+  CartItem,
+  Coupon,
+  UserAddress,
+  DeliveryDetails,
+  OrderType,
+  ActiveOrder,
+  CategoryItem
+} from './types';
+import {
+  MENU_ITEMS,
+  MAKE_YOUR_OWN_BASE,
+  MENU_VERSION,
+  REMOVED_MENU_IDS,
+  OLD_LUNCH_PRICES,
+  CRAVING_CATEGORIES,
+  DEFAULT_ADDRESSES,
+  COUPONS,
+  SIZE_PRICE_MODIFIERS,
+  CRUST_PRICE_MODIFIERS
+} from './data/mockData';
+import { reverseGeocode } from './lib/reverseGeocode';
+import { taxesAndChargesFor, bestDiscount, freeGiftEligible, FREE_GIFT_PRODUCT_ID, FREE_GIFT_NAME } from './lib/billing';
+import { computeDayDeal, offerByKey, isDayDealDay } from './lib/deals';
+import { isOfferActive, isScheduleActive, SLIDE_SCHEDULES, LUNCH, OFFER_SCHEDULES, describeSchedule } from './utils/offerSchedule';
+import { Navbar } from './components/Navbar';
+import { DealPopup, TimedDeal } from './components/DealPopup';
+import { ProfileDrawer, CustomerProfile } from './components/ProfileDrawer';
+import { FilterSheet } from './components/FilterSheet';
+import { BuildYourOwnWizard } from './components/BuildYourOwnWizard';
+import { OfferDetailSheet } from './components/OfferDetailSheet';
+import { OffersPage } from './components/OffersPage';
+import { HeroBanner, DEFAULT_SLIDES, BannerSlide } from './components/HeroBanner';
+import { CravingCategories } from './components/CravingCategories';
+import { CategoryMarquee } from './components/CategoryMarquee';
+import { ProductCard } from './components/ProductCard';
+import { CustomizeModal } from './components/CustomizeModal';
+import { QuickViewModal } from './components/QuickViewModal';
+import { CartDrawer } from './components/CartDrawer';
+import { OrderTrackerModal } from './components/OrderTrackerModal';
+import { AddressModal } from './components/AddressModal';
+import { DealsModal } from './components/DealsModal';
+import { BottomNav } from './components/BottomNav';
+import { BillingPage } from './components/BillingPage';
+import { LocationPrompt } from './components/LocationPrompt';
+import { ChatAssistant } from './components/ChatAssistant';
+import { PwaInstallBanner, PwaOfflineBadge, PwaUpdatePrompt } from './components/PwaManager';
+import { AdminLayout } from './components/admin/AdminLayout';
+import { AdminLogin } from './components/admin/AdminLogin';
+import { AdminDelivery } from './components/admin/AdminDelivery';
+import { AdminOrder, SEED_ADMIN_ORDERS } from './components/admin/adminData';
+import { Outlet, getOutletById, findNearestOutlet, geoDistanceKm, resolveOutletForOrder, parseOutletQrParam, parseTableQrParam, getTableById } from './components/admin/outlets';
+import {
+  saveMenuItemToFirestore,
+  deleteMenuItemFromFirestore,
+  fetchMenuItemsFromFirestore,
+  subscribeToFirestoreMenu,
+  FIREBASE_PROJECT_ID,
+  FIREBASE_API_KEY,
+  saveOrderToFirestore,
+  updateOrderStatusInFirestore,
+  deleteOrderFromFirestore,
+  subscribeToFirestoreOrders,
+} from './lib/firebase';
+import { needsCustomize } from './lib/customize';
+import { 
+  Filter, 
+  Flame, 
+  Sparkles, 
+  Search, 
+  RotateCcw, 
+  CheckCircle, 
+  Pizza, 
+  Clock, 
+  Layers, 
+  ShieldCheck,
+  Ruler,
+  ArrowRight,
+  Bike,
+  LogOut
+} from 'lucide-react';
+
+// Error Boundary to catch React render crashes (white screen fix)
+class AdminErrorBoundary extends React.Component<
+  { children: React.ReactNode; onReset?: () => void },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode; onReset?: () => void }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[AdminErrorBoundary] Crash:', error, info.componentStack);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', padding: 24 }}>
+          <div style={{ maxWidth: 500, background: '#fff', borderRadius: 16, padding: 32, boxShadow: '0 4px 24px rgba(0,0,0,0.1)', textAlign: 'center' }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
+            <h2 style={{ fontWeight: 900, fontSize: 18, color: '#0f172a', marginBottom: 8 }}>Admin Panel Crash</h2>
+            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+              {this.state.error?.message || 'Unknown error'}
+            </p>
+            <pre style={{ textAlign: 'left', fontSize: 11, background: '#f1f5f9', padding: 12, borderRadius: 8, overflow: 'auto', maxHeight: 200, color: '#ef4444', marginBottom: 16 }}>
+              {this.state.error?.stack || 'No stack trace'}
+            </pre>
+            <button
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                this.props.onReset?.();
+              }}
+              style={{ background: '#ED1C24', color: '#fff', border: 'none', padding: '10px 24px', borderRadius: 12, fontWeight: 800, fontSize: 13, cursor: 'pointer' }}
+            >
+              Retry / Go Back
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function App() {
+  // Migration: old cached image URLs pointed at /src/assets (never served in dist).
+  // Rewrite them to /images (public folder) so blank images never show.
+  const fixImg = (url: string | undefined): string | undefined =>
+    url ? url.replace('/src/assets/images/', '/images/') : url;
+  const migrateItems = <T extends { image?: string }>(items: T[]): T[] =>
+    items
+      .map((it) => (it.image?.includes('/src/assets/') ? { ...it, image: fixImg(it.image) as string } : it))
+      .map((it) => ((it as { crust?: string }).crust === 'Wheat Thin Crust' ? { ...it, crust: 'Thin Crust' } : it));
+  // URL routes: /admin = POS panel, /delivery (ya /rider) = rider queue. Baki sab = store.
+  type AppView = 'home' | 'billing' | 'admin' | 'delivery';
+  const VIEW_PATHS: Record<AppView, string> = { home: '/', billing: '/', admin: '/admin', delivery: '/delivery' };
+  const getRouteView = (): 'admin' | 'delivery' | null => {
+    try {
+      const p = window.location.pathname.replace(/\/+$/, '') || '/';
+      // Legacy printed QRs point at /admin?outlet=.. — those are customers, open the store.
+      // Real admin entry is plain /admin (no QR params).
+      if (p === '/admin') {
+        const q = new URLSearchParams(window.location.search);
+        if (q.has('outlet') || q.has('table')) return null;
+        return 'admin';
+      }
+      if (p === '/delivery' || p === '/rider') return 'delivery';
+    } catch {
+      // ignore
+    }
+    return null;
+  };
+  // Navigation & Mode (reload pe bhi wahi view — admin me the to admin me hi raho)
+  const [orderType, setOrderType] = useState<OrderType>('DELIVERY');
+  const [activeTab, setActiveTab] = useState<'menu' | 'reorder' | 'makeyourown' | 'combos' | 'profile' | 'offers'>('menu');
+  const [currentView, setCurrentView] = useState<AppView>(() => {
+    // URL route first — a link always wins over the saved view.
+    const routed = getRouteView();
+    if (routed) return routed;
+    // QR scan (/?outlet=.. or legacy /admin?outlet=..) always opens the store,
+    // even if this browser last showed the admin panel.
+    try {
+      const q = new URLSearchParams(window.location.search);
+      if (q.has('outlet') || q.has('table')) return 'home';
+    } catch {
+      // ignore
+    }
+    try {
+      const saved = sessionStorage.getItem('seven_cheese_current_view');
+      if (saved === 'admin' || saved === 'billing' || saved === 'delivery') return saved;
+    } catch {
+      // ignore
+    }
+    return 'home';
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('seven_cheese_current_view', currentView);
+    } catch {
+      // ignore
+    }
+  }, [currentView]);
+
+  // View badlo + URL bhi sync rakho (back/forward button kaam kare).
+  const goView = (v: AppView) => {
+    setCurrentView(v);
+    try {
+      const path = VIEW_PATHS[v];
+      if (window.location.pathname !== path) window.history.pushState({}, '', path);
+    } catch {
+      // ignore
+    }
+  };
+  // Browser back/forward: URL se view wapas nikalo.
+  useEffect(() => {
+    const sync = () => {
+      const r = getRouteView();
+      setCurrentView((prev) => {
+        if (r) return r;
+        return prev === 'admin' || prev === 'delivery' ? 'home' : prev;
+      });
+    };
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
+
+  // Logged-in outlet (admin POS). Kept in sessionStorage so login survives refresh.
+  const [adminOutlet, setAdminOutlet] = useState<Outlet | null>(() => {
+    const saved = sessionStorage.getItem('seven_cheese_admin_outlet');
+    return saved ? getOutletById(saved) || null : null;
+  });
+
+  const handleAdminLogin = (outlet: Outlet) => {
+    sessionStorage.setItem('seven_cheese_admin_outlet', outlet.id);
+    setAdminOutlet(outlet);
+  };
+  const handleAdminLogout = () => {
+    sessionStorage.removeItem('seven_cheese_admin_outlet');
+    setAdminOutlet(null);
+    goView('home'); // logout ke baad reload pe login gate pe nahi, store pe aao
+  };
+
+  // QR-locked outlet: customer ne outlet QR scan kiya to order hamesha usi outlet ka.
+  // URL ?outlet=xxx aate hi lock + persist, taaki refresh pe bhi lock rahe.
+  const [qrOutletId, setQrOutletId] = useState<string | null>(() => {
+    const parsed = parseOutletQrParam();
+    try {
+      if (parsed) localStorage.setItem('seven_cheese_qr_outlet', parsed);
+    } catch {
+      // ignore
+    }
+    return parsed;
+  });
+  const qrOutlet = qrOutletId ? getOutletById(qrOutletId) || null : null;
+
+  // Table lock = fresh QR scan only (URL param). No localStorage persistence,
+  // so a normal visit always shows the Deliver-to pill and DELIVERY mode.
+  const [qrTableId, setQrTableId] = useState<string | null>(() => {
+    const oid = parseOutletQrParam();
+    return oid ? parseTableQrParam(oid) : null;
+  });
+  const qrTable = qrOutletId && qrTableId ? getTableById(qrOutletId, qrTableId) || null : null;
+
+  // QR link same-tab me khule / back-forward ho to lock bhi update ho.
+  useEffect(() => {
+    const reparse = () => {
+      const oid = parseOutletQrParam();
+      setQrOutletId(oid);
+      setQrTableId(oid ? parseTableQrParam(oid) : null);
+    };
+    window.addEventListener('popstate', reparse);
+    return () => window.removeEventListener('popstate', reparse);
+  }, []);
+
+  // Table QR se aaya customer = Dine-in, ussi table pe locked.
+  useEffect(() => {
+    if (qrTable) setOrderType('DINE_IN');
+  }, [qrTable]);
+  
+  // Store Images State (hero slides + categories, editable from Admin → Store Images)
+  const [heroSlides, setHeroSlides] = useState<BannerSlide[]>(() => {
+    const saved = localStorage.getItem('seven_cheese_hero_slides');
+    if (!saved) return DEFAULT_SLIDES;
+    try {
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_SLIDES;
+      // Merge: new default slides (e.g. lunch special) auto-appear,
+      // admin-customised images for existing ids stay preserved.
+      const savedById = new Map(parsed.map((s: BannerSlide) => [s.id, s]));
+      return DEFAULT_SLIDES.map((d) => {
+        const s = savedById.get(d.id) as BannerSlide | undefined;
+        return s ? { ...d, image: s.image || d.image, schedule: s.schedule ?? d.schedule } : d;
+      });
+    } catch {
+      return DEFAULT_SLIDES;
+    }
+  });
+
+  const [storeCategories, setStoreCategories] = useState<CategoryItem[]>(() => {
+    // Brochure menu upgrade: stale cached categories (drinks/combos/7cheese) drop karo
+    if (localStorage.getItem('seven_cheese_menu_version') !== MENU_VERSION) return CRAVING_CATEGORIES;
+    const saved = localStorage.getItem('seven_cheese_categories');
+    if (!saved) return CRAVING_CATEGORIES;
+    try {
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed) || parsed.length === 0) return CRAVING_CATEGORIES;
+      // Merge: purane cached items me naya bannerImage backfill karo,
+      // admin-customised image/bannerImage preserve rahe.
+      const defaultsById = new Map(CRAVING_CATEGORIES.map((c) => [c.id, c]));
+      return parsed
+        .map((c: CategoryItem) => {
+          const d = defaultsById.get(c.id);
+          if (!d) return c;
+          return { ...d, ...c, name: c.name === 'Desserts & Dips' ? d.name : c.name, image: (c.image === '/images/menu/p-dip-cheese.jpg' || c.image === '/images/dips.svg' || c.image === '/images/desert.png' ? d.image : c.image) || d.image, bannerImage: (c as CategoryItem).bannerImage || d.bannerImage || d.image };
+        })
+        .concat(CRAVING_CATEGORIES.filter((d) => !parsed.some((c: CategoryItem) => c.id === d.id)));
+    } catch {
+      return CRAVING_CATEGORIES;
+    }
+  });
+
+  useEffect(() => {
+    safeSet('seven_cheese_hero_slides', JSON.stringify(heroSlides));
+  }, [heroSlides]);
+
+  useEffect(() => {
+    safeSet('seven_cheese_categories', JSON.stringify(storeCategories));
+  }, [storeCategories]);
+
+  // Lunch combos still at their old default price / stock photo get the ones from the lunch banner.
+  const withLunchPrice = (m: MenuItem): MenuItem => {
+    if (!m.id.startsWith('p-offer-lunch-')) return m;
+    const fresh = MENU_ITEMS.find((x) => x.id === m.id);
+    if (!fresh) return m;
+    return {
+      ...m,
+      price: OLD_LUNCH_PRICES[m.id] === m.price ? fresh.price : m.price,
+      image: !m.image || m.image.startsWith('https://images.unsplash.com/') ? fresh.image : m.image,
+    };
+  };
+
+  // Live Menu Items State (Syncs with Admin)
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(() => {
+    // Brochure menu upgrade: purana cached menu (drinks/combos/7cheese) poora replace
+    if (localStorage.getItem('seven_cheese_menu_version') !== MENU_VERSION) return MENU_ITEMS;
+    const saved = localStorage.getItem('seven_cheese_menu_items');
+    if (!saved) return MENU_ITEMS;
+    try {
+      // Lunch combos: replace the old "Mon, Wed–Sun · Dine-in" text with what's included.
+      return migrateItems(JSON.parse(saved) as MenuItem[])
+        .filter((m) => !REMOVED_MENU_IDS.includes(m.id))
+        .map((m) => {
+          if (!m.id.startsWith('p-offer-lunch-') || !/Mon, Wed–Sun/.test(m.description || '')) return m;
+          const fresh = MENU_ITEMS.find((x) => x.id === m.id);
+          return fresh ? { ...m, description: fresh.description } : m;
+        })
+        .map(withLunchPrice);
+    } catch {
+      return MENU_ITEMS;
+    }
+  });
+
+  // Quota-safe save: device photos can be large, so never let a full browser crash the app
+  const safeSet = (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // Quota full — run in memory, fall back to defaults on reload.
+    }
+  };
+
+  useEffect(() => {
+    safeSet('seven_cheese_menu_items', JSON.stringify(menuItems));
+  }, [menuItems]);
+
+  // Boot: load Firestore menu (same on all devices). Fall back to local menu on failure.
+  // Live subscription: kisi bhi outlet ka add/edit/delete sab devices pe turant dikhe
+  // (visibility filter alag se lagta hai — data global, display outlet-wise).
+  useEffect(() => {
+    let cancelled = false;
+    // One-time brochure upgrade: version stamp set karo + stale Firestore docs delete karo
+    // taaki removed items (drinks/combos/7cheese/extra desserts) kisi device pe wapas na aaye.
+    if (localStorage.getItem('seven_cheese_menu_version') !== MENU_VERSION) {
+      try {
+        localStorage.setItem('seven_cheese_menu_version', MENU_VERSION);
+      } catch { /* ignore */ }
+      setMenuItems(MENU_ITEMS);
+      setStoreCategories(CRAVING_CATEGORIES);
+      REMOVED_MENU_IDS.forEach((id) => {
+        deleteMenuItemFromFirestore(id).catch(() => {});
+      });
+    }
+    const mergeRemote = (remote: MenuItem[]) => {
+      setMenuItems((prev) => {
+        const byId = new Map<string, MenuItem>(prev.map((m) => [m.id, m]));
+        remote.forEach((m) => {
+          if (REMOVED_MENU_IDS.includes(m.id)) {
+            byId.delete(m.id);
+            return;
+          }
+          byId.set(m.id, withLunchPrice({ ...m, image: fixImg(m.image) }));
+        });
+        // Safety: local me bachi hui stale ids bhi nikalo
+        REMOVED_MENU_IDS.forEach((id) => byId.delete(id));
+        // Remote se gayab docs = dusre outlet ne hard-delete kiye (apne outlet ke).
+        // Local stale copy mat rakho — warna delete wapas aa jayega.
+        const remoteIds = new Set(remote.map((m) => m.id));
+        for (const id of Array.from(byId.keys())) {
+          const local = byId.get(id)!;
+          if (id.startsWith('custom-') && !remoteIds.has(id) && !local.outletId) {
+            byId.delete(id);
+          }
+        }
+        return Array.from(byId.values());
+      });
+    };
+    fetchMenuItemsFromFirestore()
+      .then((remote) => {
+        if (cancelled || !remote) return;
+        mergeRemote(remote);
+      })
+      .catch(() => {});
+    const unsub = subscribeToFirestoreMenu(
+      (remote) => {
+        if (cancelled) return;
+        mergeRemote(remote);
+      },
+      () => {}
+    );
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, []);
+
+  // Live: admin screen subscribes to Firestore orders (all devices, all outlets).
+  // Merged by id — Firestore wins on conflicts, local-only orders are kept.
+  // NOTE: subscription runs always (not only in admin view) so customer-side
+  // pending retries can clear as soon as Firestore confirms the write.
+  const [orderSyncStatus, setOrderSyncStatus] = useState<'connecting' | 'live' | 'error'>('connecting');
+  const [orderSyncError, setOrderSyncError] = useState<string>('');
+  const [pendingOrderIds, setPendingOrderIds] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('seven_cheese_pending_orders') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  // Manual reconnect counter — Refresh dabane pe subscription dobara lagti hai.
+  const [syncRetry, setSyncRetry] = useState(0);
+  useEffect(() => {
+    setOrderSyncStatus('connecting');
+    let gotFirstSnapshot = false;
+    const timer = window.setTimeout(() => {
+      if (!gotFirstSnapshot) {
+        setOrderSyncStatus((s) => (s === 'connecting' ? 'error' : s));
+        setOrderSyncError((e) => e || 'timeout-no-snapshot: no response from Firestore (check internet, ad blocker, VPN or Firestore Rules)');
+        console.error('[orders] Firestore snapshot timeout — check internet, adblock, or Firestore Rules.');
+        // Auto-diagnose: tap ka wait mat karo, turant asli wajah nikalo
+        diagnoseFirestoreNet().then((info) => {
+          if (syncStatusRef.current === 'live') return;
+          setOrderSyncError((e) => {
+            if (!e) return `net:${info}`;
+            if (e.includes('| net:')) return e.replace(/\| net:.*$/, `| net:${info}`);
+            return `${e} | net:${info}`;
+          });
+        });
+      }
+    }, 10000);
+    const unsub = subscribeToFirestoreOrders(
+      (remote) => {
+        gotFirstSnapshot = true;
+        window.clearTimeout(timer);
+        setOrderSyncStatus('live');
+        setOrderSyncError('');
+        // Pending queue clear: jo order Firestore me dikha, wo synced.
+        if (remote.length) {
+          const remoteIds = new Set(remote.map((o) => o.id));
+          setPendingOrderIds((prev) => {
+            if (!prev.length) return prev;
+            const next = prev.filter((id) => !remoteIds.has(id));
+            if (next.length !== prev.length) safeSet('seven_cheese_pending_orders', JSON.stringify(next));
+            return next;
+          });
+        }
+        // Tombstoned ids Firestore me abhi bhi dikhe to dobara delete (dusre device / fail retry se bache).
+        const stillThere = remote.filter((r) => deletedIdsRef.current.includes(r.id));
+        stillThere.forEach((r) => deleteOrderFromFirestore(r.id).catch(() => {}));
+        if (!remote.length) return;
+        setAdminOrders((prev) => {
+          const tombs = new Set(deletedIdsRef.current);
+          const liveRemote = remote.filter((r) => !tombs.has(r.id));
+          if (!liveRemote.length && prev.every((o) => !tombs.has(o.id))) {
+            const cleaned = prev.filter((o) => !tombs.has(o.id));
+            return cleaned.length === prev.length ? prev : cleaned;
+          }
+          const remoteById = new Map(liveRemote.map((o) => [o.id, o]));
+          const cleanPrev = prev.filter((o) => !tombs.has(o.id));
+          const prevIds = new Set(cleanPrev.map((o) => o.id));
+          const mergedPrev = cleanPrev.map((o) =>
+            remoteById.has(o.id) ? ({ ...o, ...remoteById.get(o.id) } as AdminOrder) : o
+          );
+          const fresh = liveRemote.filter((r) => !prevIds.has(r.id));
+          if (!fresh.length && mergedPrev.every((o, i) => o === cleanPrev[i]) && cleanPrev.length === prev.length) return prev;
+          return [...fresh, ...mergedPrev];
+        });
+      },
+      (msg) => {
+        gotFirstSnapshot = true;
+        window.clearTimeout(timer);
+        setOrderSyncStatus('error');
+        setOrderSyncError(msg || 'permission-denied: allow read access in your Firestore Rules');
+        console.error('[orders] Firestore subscribe error:', msg);
+      }
+    );
+    return () => {
+      window.clearTimeout(timer);
+      unsub();
+    };
+  }, [syncRetry]);
+
+  // Live Coupons State (Syncs with Admin)
+  const [coupons, setCoupons] = useState<Coupon[]>(() => {
+    const saved = localStorage.getItem('seven_cheese_coupons');
+    if (!saved) return COUPONS;
+    try {
+      const parsed = JSON.parse(saved);
+      // Free delivery above ₹99 is automatic, and Tuesday / Friday deals are worked out in the cart,
+      // so the old FREEDEL / TUESDAYTREAT / FUNDAYFRIDAY coupons are retired.
+      const retired = ['FREEDEL', 'TUESDAYTREAT', 'FUNDAYFRIDAY'];
+      return Array.isArray(parsed) ? parsed.filter((c: Coupon) => !retired.includes(c.code)) : COUPONS;
+    } catch {
+      return COUPONS;
+    }
+  });
+
+  useEffect(() => {
+    safeSet('seven_cheese_coupons', JSON.stringify(coupons));
+  }, [coupons]);
+
+  // Delete tombstones: delete kiya order Firestore fail / dusre device retry se wapas na aaye.
+  // Permanent list — merge/subscription har jagah ise filter karta hai.
+  const readTombstones = (): string[] => {
+    try {
+      const p = JSON.parse(localStorage.getItem('seven_cheese_deleted_orders') || '[]');
+      return Array.isArray(p) ? p.filter((x) => typeof x === 'string') : [];
+    } catch {
+      return [];
+    }
+  };
+  const [deletedOrderIds, setDeletedOrderIds] = useState<string[]>(readTombstones);
+  const [pendingDeleteIds, setPendingDeleteIds] = useState<string[]>(() => {
+    try {
+      const p = JSON.parse(localStorage.getItem('seven_cheese_pending_deletes') || '[]');
+      return Array.isArray(p) ? p.filter((x) => typeof x === 'string') : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Admin Live Orders State (starts empty, only real orders placed by customers)
+  const [adminOrders, setAdminOrders] = useState<AdminOrder[]>(() => {
+    const tombs = new Set(readTombstones());
+    const saved = localStorage.getItem('seven_cheese_admin_orders');
+    if (!saved) return [];
+    try {
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed)
+        ? parsed.filter((o: AdminOrder) => !o.id.startsWith('ord-70') && !tombs.has(o.id))
+        : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    safeSet('seven_cheese_admin_orders', JSON.stringify(adminOrders));
+  }, [adminOrders]);
+
+  // Manual reconnect (admin Refresh button): subscription dobara + pending orders turant push.
+  const adminOrdersRef = React.useRef(adminOrders);
+  adminOrdersRef.current = adminOrders;
+  const syncStatusRef = React.useRef(orderSyncStatus);
+  syncStatusRef.current = orderSyncStatus;
+  const deletedIdsRef = React.useRef(deletedOrderIds);
+  deletedIdsRef.current = deletedOrderIds;
+
+  // Shared delete: local + tombstone + Firestore. Fail ho to retry queue me,
+  // taaki refresh / dusre device se order wapas na aaye.
+  const handleDeleteAdminOrder = (id: string) => {
+    setDeletedOrderIds((prev) => {
+      const next = prev.includes(id) ? prev : [...prev, id].slice(-500);
+      safeSet('seven_cheese_deleted_orders', JSON.stringify(next));
+      return next;
+    });
+    setPendingDeleteIds((prev) => {
+      const next = prev.includes(id) ? prev : [...prev, id];
+      safeSet('seven_cheese_pending_deletes', JSON.stringify(next));
+      return next;
+    });
+    setAdminOrders((prev) => prev.filter((o) => o.id !== id));
+    setPendingOrderIds((prev) => {
+      if (!prev.includes(id)) return prev;
+      const next = prev.filter((x) => x !== id);
+      safeSet('seven_cheese_pending_orders', JSON.stringify(next));
+      return next;
+    });
+    deleteOrderFromFirestore(id)
+      .then(() => {
+        setPendingDeleteIds((prev) => {
+          const next = prev.filter((x) => x !== id);
+          safeSet('seven_cheese_pending_deletes', JSON.stringify(next));
+          return next;
+        });
+      })
+      .catch((err) => {
+        console.error('[orders] delete failed, will retry:', err);
+        setOrderSyncStatus('error');
+        setOrderSyncError(err?.code || err?.message || 'delete-failed');
+      });
+  };
+
+  // Retry pending Firestore deletes every 10s (offline / rules fail case).
+  useEffect(() => {
+    if (!pendingDeleteIds.length) return;
+    const t = window.setInterval(() => {
+      pendingDeleteIds.forEach((id) => {
+        deleteOrderFromFirestore(id)
+          .then(() => {
+            setPendingDeleteIds((prev) => {
+              const next = prev.filter((x) => x !== id);
+              safeSet('seven_cheese_pending_deletes', JSON.stringify(next));
+              return next;
+            });
+          })
+          .catch(() => {});
+      });
+    }, 10000);
+    return () => window.clearInterval(t);
+  }, [pendingDeleteIds.length]);
+
+  // Browser se direct REST ping — SDK timeout ka asli karan badge me likh deta hai:
+  // http-200 = net+rules OK | http-403 = Rules locked | http-404 = Firestore DB bani hi nahi | net-blocked = adblock/firewall/ISP
+  const diagnoseFirestoreNet = async (): Promise<string> => {
+    try {
+      const ctrl = new AbortController();
+      const t = window.setTimeout(() => ctrl.abort(), 8000);
+      try {
+        const res = await fetch(
+          `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/orders?pageSize=1&key=${FIREBASE_API_KEY}`,
+          { signal: ctrl.signal }
+        );
+        let hint = '';
+        try {
+          const body = await res.text();
+          const m = body.match(/"message"\s*:\s*"([^"]{0,60})/);
+          if (m) hint = ':' + m[1];
+        } catch { /* ignore */ }
+        return `http-${res.status}${hint}`;
+      } finally {
+        window.clearTimeout(t);
+      }
+    } catch (e: unknown) {
+      return e instanceof Error && e.name === 'AbortError' ? 'net-timeout-8s' : 'net-blocked(fetch-fail)';
+    }
+  };
+
+  const handleRetrySync = () => {
+    setOrderSyncStatus('connecting');
+    setOrderSyncError('');
+    setSyncRetry((n) => n + 1);
+    diagnoseFirestoreNet().then((info) => {
+      if (syncStatusRef.current === 'live') return; // tab tak connect ho gaya to chhedo mat
+      setOrderSyncError((e) => {
+        if (e.includes('| net:')) return e.replace(/\| net:.*$/, `| net:${info}`);
+        return e ? `${e} | net:${info}` : `net:${info}`;
+      });
+    });
+    pendingOrderIds.forEach((id) => {
+      const order = adminOrdersRef.current.find((o) => o.id === id);
+      if (!order) return;
+      saveOrderToFirestore(order)
+        .then(() => {
+          setPendingOrderIds((prev) => {
+            const next = prev.filter((x) => x !== id);
+            safeSet('seven_cheese_pending_orders', JSON.stringify(next));
+            return next;
+          });
+          setOrderSyncStatus('live');
+          setOrderSyncError('');
+        })
+        .catch(() => {});
+    });
+  };
+
+  // Retry pending Firestore writes every 10s (offline / rules fail case).
+  useEffect(() => {
+    if (!pendingOrderIds.length) return;
+    const t = window.setInterval(() => {
+      pendingOrderIds.forEach((id) => {
+        const order = adminOrders.find((o) => o.id === id);
+        if (!order) return;
+        saveOrderToFirestore(order)
+          .then(() => {
+            setPendingOrderIds((prev) => {
+              const next = prev.filter((x) => x !== id);
+              safeSet('seven_cheese_pending_orders', JSON.stringify(next));
+              return next;
+            });
+            setOrderSyncStatus('live');
+            setOrderSyncError('');
+          })
+          .catch((err) => {
+            console.error('[orders] retry failed:', err);
+            setOrderSyncStatus('error');
+            setOrderSyncError(err?.code || err?.message || 'write-failed');
+          });
+      });
+    }, 10000);
+    return () => window.clearInterval(t);
+  }, [pendingOrderIds.length]);
+  
+  // Addresses (legacy 'Train' addresses are dropped — train delivery removed)
+  const dropTrainAddresses = (list: UserAddress[]): UserAddress[] =>
+    (Array.isArray(list) ? list : []).filter((a) => (a.label as string) !== 'Train');
+  const [addresses, setAddresses] = useState<UserAddress[]>(() => {
+    const saved = localStorage.getItem('seven_cheese_addresses') || localStorage.getItem('dominos_addresses');
+    if (!saved) return DEFAULT_ADDRESSES;
+    try {
+      const parsed = dropTrainAddresses(JSON.parse(saved));
+      return parsed.length > 0 ? parsed : DEFAULT_ADDRESSES;
+    } catch {
+      return DEFAULT_ADDRESSES;
+    }
+  });
+  const [currentAddress, setCurrentAddress] = useState<UserAddress>(() => addresses[0] || DEFAULT_ADDRESSES[0]);
+
+  // ---- Live outlet distance: boot pe EK BAR GPS permission mango, outlet se kitni door ho pata chale ----
+  // Browser permission ek bar mangta hai, uske baad yaad rakhta hai. Fix localStorage me persist taaki reload pe prompt na doharaye.
+  const [userGps, setUserGps] = useState<{ lat: number; lng: number } | null>(() => {
+    try {
+      const saved = localStorage.getItem('seven_cheese_user_gps');
+      if (!saved) return null;
+      const p = JSON.parse(saved);
+      if (typeof p?.lat === 'number' && typeof p?.lng === 'number') return p;
+    } catch {
+      // ignore
+    }
+    return null;
+  });
+  // Short confirmation after a location fix: "Delivering to … · nearest outlet …".
+  const [locationNote, setLocationNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!locationNote) return;
+    const id = window.setTimeout(() => setLocationNote(null), 5000);
+    return () => window.clearTimeout(id);
+  }, [locationNote]);
+  const [gpsState, setGpsState] = useState<'idle' | 'locating' | 'locked' | 'denied'>(() =>
+    userGps ? 'locked' : 'idle'
+  );
+
+  const requestGps = React.useCallback(() => {
+    if (!('geolocation' in navigator)) {
+      setGpsState('denied');
+      return;
+    }
+    setGpsState('locating');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const fix = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setUserGps(fix);
+        setGpsState('locked');
+        try {
+          localStorage.setItem('seven_cheese_user_gps', JSON.stringify(fix));
+        } catch {
+          // ignore
+        }
+        // Use this location as the delivery address and confirm the outlet it routes to.
+        void reverseGeocode(fix.lat, fix.lng).then((place) => {
+          const nearest = findNearestOutlet(fix.lat, fix.lng);
+          const addr: UserAddress = {
+            id: 'addr-current-location',
+            label: 'Current location',
+            address: place.address,
+            city: place.city,
+            pincode: place.pincode,
+            lat: fix.lat,
+            lng: fix.lng,
+            distanceKm: nearest.distanceKm,
+          };
+          setAddresses((prev) => [addr, ...prev.filter((a) => a.id !== addr.id)]);
+          setCurrentAddress(addr);
+          setLocationNote(
+            `Delivering to ${place.address}${place.city ? ', ' + place.city : ''} · nearest outlet: ${nearest.outlet.name} (${nearest.distanceKm} km)`,
+          );
+        });
+      },
+      () => setGpsState('denied'),
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 600000 }
+    );
+  }, []);
+
+  // Location prompt dismissal — once per session, so it never nags.
+  // The prompt card itself calls requestGps on Allow (user gesture = reliable browser prompt).
+  const [locPromptDismissed, setLocPromptDismissed] = useState(() => {
+    try {
+      return sessionStorage.getItem('seven_cheese_loc_prompt') === 'off';
+    } catch {
+      return false;
+    }
+  });
+  const dismissLocPrompt = () => {
+    setLocPromptDismissed(true);
+    try {
+      sessionStorage.setItem('seven_cheese_loc_prompt', 'off');
+    } catch {
+      // ignore
+    }
+  };
+
+  // Badge distance priority: real GPS fix > selected address ka GPS pin > purana hardcoded distanceKm
+  const outletInfo = useMemo(() => {
+    if (typeof currentAddress.lat === 'number' && typeof currentAddress.lng === 'number') {
+      return findNearestOutlet(currentAddress.lat, currentAddress.lng);
+    }
+    if (userGps) return findNearestOutlet(userGps.lat, userGps.lng);
+    return resolveOutletForOrder(currentAddress.lat, currentAddress.lng);
+  }, [userGps, currentAddress.lat, currentAddress.lng]);
+
+  // Cart & Customization State
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
+    const saved = localStorage.getItem('seven_cheese_cart') || localStorage.getItem('dominos_cart');
+    if (!saved) return [];
+    try {
+      return migrateItems(JSON.parse(saved));
+    } catch {
+      return [];
+    }
+  });
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+
+  // Clock for day/time scheduled offers (Tuesday, Friday, lunch 11am-2pm); ticks every minute.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  const activeCoupons = useMemo(() => coupons.filter((c) => isOfferActive(c, now)), [coupons, now]);
+  // Tuesday / Friday are day-deal days: the lunch offer takes a back seat all day.
+  const dayDealDay = isDayDealDay(now);
+  const activeMenuItems = useMemo(
+    () =>
+      menuItems.filter(
+        (m) =>
+          m.isAvailable !== false &&
+          isOfferActive(m, now) &&
+          !(dayDealDay && m.id.startsWith('p-offer-lunch-')),
+      ),
+    [menuItems, now, dayDealDay],
+  );
+  // While a deal runs (Tuesday / Friday / lunch) show just its banners;
+  // otherwise show the generic upsell banners (and any "Always" banners).
+  const activeSlides = useMemo(() => {
+    const isDeal = (s: BannerSlide) => s.schedule === 'tuesday' || s.schedule === 'friday' || s.schedule === 'lunch';
+    const liveDeals = heroSlides.filter(
+      (s) =>
+        isDeal(s) &&
+        !(dayDealDay && s.schedule === 'lunch') &&
+        isScheduleActive(SLIDE_SCHEDULES[s.schedule as string], now),
+    );
+    if (liveDeals.length > 0) return liveDeals;
+    const generic = heroSlides.filter((s) => !isDeal(s));
+    return generic.length > 0 ? generic : heroSlides;
+  }, [heroSlides, now, dayDealDay]);
+  // An applied coupon that goes out of its window is dropped automatically.
+  useEffect(() => {
+    if (appliedCoupon && !isOfferActive(appliedCoupon, now)) setAppliedCoupon(null);
+  }, [appliedCoupon, now]);
+
+  // Past Orders & Active Order
+  const [pastOrders, setPastOrders] = useState<ActiveOrder[]>(() => {
+    const saved = localStorage.getItem('seven_cheese_past_orders') || localStorage.getItem('dominos_past_orders');
+    if (saved) {
+      try {
+        return (JSON.parse(saved) as ActiveOrder[]).map((o) => ({
+          ...o,
+          items: migrateItems(o.items || []),
+        }));
+      } catch {
+        // fall through to sample order
+      }
+    }
+    // Initial sample order from 7 Cheese Pizza
+    return [
+      {
+        orderId: '7CP-9214',
+        items: [
+          {
+            cartItemId: 'sample-1',
+            productId: 'p-7cheese-signature',
+            name: 'Original 7 Cheese Pizza',
+            isVeg: true,
+            image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop&q=80',
+            price: 329,
+            basePrice: 329,
+            size: 'Regular',
+            crust: 'New Hand Tossed',
+            extraCheese: true,
+            extraToppings: [],
+            quantity: 1,
+          },
+          {
+            cartItemId: 'sample-2',
+            productId: 's-garlic-bread',
+            name: 'Garlic Bread Sticks',
+            isVeg: true,
+            image: 'https://images.unsplash.com/photo-1619860860774-1e2e17343432?w=800&auto=format&fit=crop&q=80',
+            price: 99,
+            basePrice: 99,
+            extraCheese: false,
+            extraToppings: [],
+            quantity: 1,
+          },
+        ],
+        orderType: 'DELIVERY',
+        address: 'Haldwani Main Market, Uttarakhand',
+        subtotal: 428,
+        deliveryFee: 0,
+        tax: 21,
+        discount: 50,
+        total: 399,
+        status: 'DELIVERED',
+        timestamp: 'Yesterday, 8:45 PM',
+        estimatedMinutes: 0,
+        riderName: 'Vikram Negi',
+        riderPhone: '+91 98765 43210',
+      },
+    ];
+  });
+  const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
+
+  // Search & Filtering
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [vegOnly, setVegOnly] = useState(false);
+  const [nonVegOnly, setNonVegOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<'popular' | 'price-low' | 'price-high' | 'rating'>('popular');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  // Offer tapped in "Offers for you" → its own detail sheet.
+  const [viewOffer, setViewOffer] = useState<Coupon | null>(null);
+
+  // Offers page, optionally scrolled to one offer (#offer-<key>).
+  const openOffers = (key?: string) => {
+    setActiveTab('offers');
+    setTimeout(() => {
+      const el = key ? document.getElementById(`offer-${key}`) : null;
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+      else window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 60);
+  };
+
+  // Timed deals (Tuesday, Friday, lunch 11am-2pm) pop up while running, once per deal per day.
+  // Everyday coupons live in Profile → Deals & Offers and at checkout.
+  const timedDeals = useMemo<TimedDeal[]>(() => {
+    const slideImage = (s: string) => heroSlides.find((x) => x.schedule === s)?.image;
+    const deals: TimedDeal[] = [];
+    const offerDeal = (key: 'tuesday' | 'friday' | 'lunch', id: string, when: string) => {
+      const o = offerByKey(key);
+      if (!o || !isScheduleActive(o.schedule, now)) return;
+      if (key === 'lunch' && dayDealDay) return;
+      if (key === 'lunch' && !activeMenuItems.some((m) => m.id.startsWith('p-offer-lunch-'))) return;
+      deals.push({
+        id,
+        title: o.name,
+        subtitle: o.summary,
+        when,
+        image: slideImage(key),
+        ctaLabel: 'See offer',
+        onCta: () => {
+          setDealPopupId(null);
+          openOffers(key);
+        },
+      });
+    };
+    offerDeal('tuesday', 'TUESDAYTREAT', 'Today only · Tuesday');
+    offerDeal('friday', 'FUNDAYFRIDAY', 'Today only · Friday');
+    offerDeal('lunch', 'LUNCH', 'Today · 11 AM – 2 PM');
+    return deals;
+  }, [activeMenuItems, heroSlides, now, dayDealDay]);
+
+  const [dealPopupId, setDealPopupId] = useState<string | null>(null);
+  const dealSeenKey = (id: string) => {
+    const d = new Date();
+    return `seven_cheese_deal_seen_${id}_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  };
+  const locationGateOpen = !locPromptDismissed && !qrOutletId && !userGps && gpsState !== 'locked';
+  useEffect(() => {
+    if (dealPopupId || locationGateOpen) return;
+    const next = timedDeals.find((d) => {
+      try {
+        return localStorage.getItem(dealSeenKey(d.id)) !== '1';
+      } catch {
+        return true;
+      }
+    });
+    if (!next) return;
+    const id = window.setTimeout(() => {
+      setDealPopupId(next.id);
+      try {
+        localStorage.setItem(dealSeenKey(next.id), '1');
+      } catch {
+        // ignore
+      }
+    }, 1500);
+    return () => window.clearTimeout(id);
+  }, [timedDeals, locationGateOpen, dealPopupId]);
+
+  // Modals Visibility
+  const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
+  const [customizingItem, setCustomizingItem] = useState<MenuItem | null>(null);
+  // Quick view (simple items: Add to Cart + Also Try)
+  const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
+  const [quickViewItem, setQuickViewItem] = useState<MenuItem | null>(null);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isOrderTrackerOpen, setIsOrderTrackerOpen] = useState(false);
+  // The tracker shows the restaurant's live status (orders sync to every device).
+  const ADMIN_TO_TRACKER: Record<AdminOrder['status'], ActiveOrder['status']> = {
+    NEW: 'CONFIRMED',
+    KITCHEN: 'PREPARING',
+    DISPATCHED: 'OUT_FOR_DELIVERY',
+    COMPLETED: 'DELIVERED',
+    CANCELLED: 'CANCELLED',
+  };
+
+  // Header profile icon → account drawer. Name/phone saved from checkout or edited in the drawer.
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(() => {
+    try {
+      const saved = localStorage.getItem('seven_cheese_customer');
+      return saved ? (JSON.parse(saved) as CustomerProfile) : null;
+    } catch {
+      return null;
+    }
+  });
+  const saveCustomerProfile = (p: CustomerProfile) => {
+    setCustomerProfile(p);
+    try {
+      localStorage.setItem('seven_cheese_customer', JSON.stringify(p));
+    } catch {
+      // ignore
+    }
+  };
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
+  const [isDealsModalOpen, setIsDealsModalOpen] = useState(false);
+
+  // Persist State
+  useEffect(() => {
+    safeSet('seven_cheese_cart', JSON.stringify(cartItems));
+  }, [cartItems]);
+
+  useEffect(() => {
+    safeSet('seven_cheese_addresses', JSON.stringify(addresses));
+  }, [addresses]);
+
+  useEffect(() => {
+    safeSet('seven_cheese_past_orders', JSON.stringify(pastOrders));
+  }, [pastOrders]);
+
+  // Cart Calculations
+  const cartItemCount = useMemo(() => cartItems.reduce((acc, it) => acc + it.quantity, 0), [cartItems]);
+  const cartTotal = useMemo(() => cartItems.reduce((acc, it) => acc + it.price * it.quantity, 0), [cartItems]);
+
+  // Handlers
+  const handleOpenCustomize = (item: MenuItem) => {
+    setEditingLine(null);
+    setCustomizingItem(item);
+    setIsCustomizeOpen(true);
+  };
+
+  // Cart "Edit >" on a pizza: reopen its sheet prefilled; "Update Item" replaces that line.
+  const [editingLine, setEditingLine] = useState<CartItem | null>(null);
+  const handleEditCartItem = (cartItemId: string) => {
+    const line = cartItems.find((c) => c.cartItemId === cartItemId);
+    if (!line) return;
+    const product =
+      menuItems.find((m) => m.id === line.productId) ||
+      MENU_ITEMS.find((m) => m.id === line.productId) ||
+      (MAKE_YOUR_OWN_BASE.id === line.productId ? MAKE_YOUR_OWN_BASE : undefined);
+    if (!product) return;
+    setEditingLine(line);
+    setCustomizingItem(product);
+    setIsCustomizeOpen(true);
+  };
+  const handleConfirmCustomize = (item: CartItem) => {
+    if (editingLine) {
+      setCartItems((prev) => prev.map((c) => (c.cartItemId === editingLine.cartItemId ? item : c)));
+      setEditingLine(null);
+    } else {
+      handleAddCustomizedToCart(item);
+    }
+  };
+
+  const handleOpenQuickView = (item: MenuItem) => {
+    setQuickViewItem(item);
+    setIsQuickViewOpen(true);
+  };
+
+  const handleSimpleAddToCart = (item: MenuItem) => {
+    const existingIndex = cartItems.findIndex(
+      (c) => c.productId === item.id && !c.size && !c.crust && !c.extraCheese && c.extraToppings.length === 0
+    );
+
+    if (existingIndex > -1) {
+      const updated = [...cartItems];
+      updated[existingIndex].quantity += 1;
+      setCartItems(updated);
+    } else {
+      const newCartItem: CartItem = {
+        cartItemId: `${item.id}-${Date.now()}`,
+        productId: item.id,
+        name: item.name,
+        isVeg: item.isVeg,
+        image: item.image,
+        price: item.price,
+        basePrice: item.price,
+        extraCheese: false,
+        extraToppings: [],
+        quantity: 1,
+      };
+      setCartItems([...cartItems, newCartItem]);
+    }
+  };
+
+  const handleAddCustomizedToCart = (item: CartItem) => {
+    setCartItems((prev) => [...prev, item]);
+  };
+
+  const handleUpdateCartQuantity = (cartItemId: string, delta: number) => {
+    setCartItems((prev) =>
+      prev
+        .map((it) => {
+          if (it.cartItemId === cartItemId) {
+            const nextQty = it.quantity + delta;
+            return nextQty > 0 ? { ...it, quantity: nextQty } : null;
+          }
+          return it;
+        })
+        .filter(Boolean) as CartItem[]
+    );
+  };
+
+  const handleUpdateProductQuantity = (productId: string, delta: number) => {
+    const itemInCart = cartItems.find((c) => c.productId === productId);
+    if (!itemInCart) {
+      if (delta > 0) {
+        const product = menuItems.find((m) => m.id === productId) || MENU_ITEMS.find((m) => m.id === productId);
+        if (product) {
+          // Pizza hamesha modal se — flag chhoota ho to bhi direct add nahi.
+          if (needsCustomize(product)) {
+            handleOpenCustomize(product);
+          } else {
+            handleSimpleAddToCart(product);
+          }
+        }
+      }
+      return;
+    }
+    handleUpdateCartQuantity(itemInCart.cartItemId, delta);
+  };
+
+  const handleRemoveCartItem = (cartItemId: string) => {
+    setCartItems((prev) => prev.filter((it) => it.cartItemId !== cartItemId));
+  };
+
+  // Domino's-style crust upsell: Cheese Burst +₹50 on that cart line
+  const handleUpgradeCartItem = (cartItemId: string) => {
+    setCartItems((prev) =>
+      prev.map((it) => {
+        if (it.cartItemId !== cartItemId || it.crust === 'Cheese Burst') return it;
+        return { ...it, crust: 'Cheese Burst' as const, price: it.price + 50 };
+      })
+    );
+  };
+
+  const handleClearCart = () => {
+    setCartItems([]);
+    setAppliedCoupon(null);
+  };
+
+  const handleUpdateAddress = (updated: UserAddress) => {
+    setAddresses((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+    setCurrentAddress((prev) => (prev.id === updated.id ? updated : prev));
+  };
+
+  const handleDeleteAddress = (id: string) => {
+    setAddresses((prev) => {
+      const next = prev.filter((a) => a.id !== id);
+      return next.length > 0 ? next : DEFAULT_ADDRESSES;
+    });
+    setCurrentAddress((prev) => {
+      if (prev.id !== id) return prev;
+      const remaining = addresses.filter((a) => a.id !== id);
+      return remaining[0] || DEFAULT_ADDRESSES[0];
+    });
+  };
+
+  const handlePlaceOrder = (notes: string, paymentMethod?: string, delivery?: DeliveryDetails) => {
+    const subtotal = cartTotal;
+    const couponValid = appliedCoupon && isOfferActive(appliedCoupon, new Date()) ? appliedCoupon : null;
+    const isFreeDel = subtotal >= 99;
+    const deliveryFee = orderType === 'DELIVERY' ? (isFreeDel ? 0 : 40) : 0;
+    const taxesAndCharges = taxesAndChargesFor(subtotal);
+    
+    const best = bestDiscount(subtotal, couponValid, dayDeal?.discount ?? 0);
+    const discount = best.discount;
+    const dealUsed = best.source === 'deal' ? dayDeal : null;
+    const finalTotal = Math.max(0, subtotal + deliveryFee + taxesAndCharges - discount);
+
+    const formattedPaymentMethod = paymentMethod
+      ? (paymentMethod === 'cash' ? 'Cash on Delivery' : paymentMethod === 'card' ? 'Credit/Debit Card' : 'UPI')
+      : 'UPI';
+
+    // Delivery estimate for this address: ~15 min to prepare + ~3 min per km (≈20 km/h),
+    // kept between 20 and 60 min. The tracker counts down to it.
+    const etaOutlet = qrOutlet ?? resolveOutletForOrder(currentAddress.lat, currentAddress.lng).outlet;
+    const etaKm =
+      typeof currentAddress.lat === 'number' && typeof currentAddress.lng === 'number'
+        ? geoDistanceKm(currentAddress.lat, currentAddress.lng, etaOutlet.lat, etaOutlet.lng)
+        : outletInfo.distanceKm || 3;
+    const etaMinutes = Math.min(60, Math.max(20, Math.round(15 + etaKm * 3)));
+
+    // One id + number shared by the customer's tracker and the restaurant's order.
+    const adminOrderId = `ord-${Date.now()}`;
+    const orderNumber = `#7C-${Math.floor(1000 + Math.random() * 9000)}`;
+    // Free Choco Lava Cake when the items reach the threshold — not with another offer.
+    const freeGiftLine: CartItem | null =
+      freeGiftEligible(subtotal, best.discount)
+        ? {
+            cartItemId: `free-gift-${Date.now()}`,
+            productId: FREE_GIFT_PRODUCT_ID,
+            name: `${FREE_GIFT_NAME} (FREE)`,
+            isVeg: true,
+            image: '/images/menu/p-dessert-choco-lava.jpg',
+            price: 0,
+            basePrice: 0,
+            extraCheese: false,
+            extraToppings: [],
+            quantity: 1,
+          }
+        : null;
+    const newOrder: ActiveOrder = {
+      orderId: orderNumber.replace('#', ''),
+      adminOrderId,
+      items: [...cartItems, ...(freeGiftLine ? [freeGiftLine] : [])],
+      orderType,
+      address: `${currentAddress.address}, ${currentAddress.city}`,
+      subtotal,
+      deliveryFee,
+      tax: taxesAndCharges,
+      discount,
+      total: finalTotal,
+      status: 'CONFIRMED',
+      timestamp: 'Just now',
+      estimatedMinutes: etaMinutes,
+      deliverBy: Date.now() + etaMinutes * 60_000,
+      riderName: 'Vikram Singh',
+      riderPhone: '+91 98912 34567',
+    };
+
+    // Assign outlet: QR scan lock wins, else nearest from GPS, else Outlet 1.
+    const orderOutlet =
+      qrOutlet ??
+      resolveOutletForOrder(currentAddress.lat, currentAddress.lng).outlet;
+
+    // Real receiver details from checkout (Domino's-style form) — no more dummy data.
+    const receiverName = delivery?.name?.trim() || 'Walk-in Customer';
+    const receiverPhone = delivery?.phone?.trim() || '';
+    if (delivery?.name?.trim() && receiverPhone) {
+      saveCustomerProfile({ name: delivery.name.trim(), phone: receiverPhone });
+    }
+    const orderLandmark = delivery?.landmark?.trim() || '';
+    const fullDeliveryAddress =
+      `${currentAddress.address}, ${currentAddress.city} - ${currentAddress.pincode}` +
+      (orderLandmark ? `, Landmark: ${orderLandmark}` : '');
+    const hasGps = typeof currentAddress.lat === 'number' && typeof currentAddress.lng === 'number';
+    const orderMapsUrl = hasGps
+      ? `https://www.google.com/maps/search/?api=1&query=${currentAddress.lat},${currentAddress.lng}`
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fullDeliveryAddress)}`;
+
+    // Push into Admin live orders
+    const newAdminOrder: AdminOrder = {
+      id: adminOrderId,
+      orderNumber,
+      outletId: orderOutlet.id,
+      customerName: receiverName,
+      customerPhone: receiverPhone,
+      orderType: orderType === 'DINE_IN' ? 'DINE_IN' : 'DELIVERY',
+      // Dine-in orders are served at the table — no street address on them.
+      address: orderType === 'DINE_IN' ? undefined : fullDeliveryAddress,
+      landmark: orderType === 'DINE_IN' ? undefined : orderLandmark || undefined,
+      tableNumber: orderType === 'DINE_IN' ? (qrTable?.name ?? 'Table T-01') : undefined,
+      items: [...cartItems, ...(freeGiftLine ? [freeGiftLine] : [])].map((c) => ({
+        name: c.name,
+        quantity: c.quantity,
+        price: c.price,
+        isVeg: c.isVeg,
+        size: c.size,
+        crust: c.crust,
+        extraCheese: c.extraCheese,
+        sauce: c.sauce,
+        toppings: c.extraToppings?.length ? c.extraToppings.map((tp) => tp.name) : undefined,
+        offer: dealUsed?.free[c.cartItemId]
+          ? `FREE ×${dealUsed.free[c.cartItemId].qty} · ${dealUsed.name}`
+          : undefined,
+        notes: notes || undefined,
+      })),
+      subtotal,
+      deliveryFee,
+      tax: taxesAndCharges,
+      discount,
+      discountLabel: dealUsed ? dealUsed.name : best.source === 'coupon' ? couponValid?.code : undefined,
+      total: finalTotal,
+      paymentMethod: (paymentMethod?.toUpperCase() as any) || 'UPI',
+      paymentStatus: paymentMethod === 'cash' ? 'PENDING' : 'PAID',
+      status: 'NEW',
+      createdAt: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+      createdAtMs: Date.now(),
+      timeAgo: 'Just now',
+      cookingNotes: notes || undefined,
+      deliveryLat: hasGps ? currentAddress.lat : undefined,
+      deliveryLng: hasGps ? currentAddress.lng : undefined,
+      mapsUrl: orderMapsUrl,
+    };
+
+    setAdminOrders((prev) => [newAdminOrder, ...prev]);
+    // Mirror to Firestore so the admin screen rings live on any device.
+    // Fail = other phone ka order admin tak kabhi nahi pahunchega, isliye
+    // pending queue me dalo + retry karo, silent swallow nahi.
+    saveOrderToFirestore(newAdminOrder)
+      .then(() => {
+        setPendingOrderIds((prev) => prev.filter((id) => id !== newAdminOrder.id));
+      })
+      .catch((err) => {
+        console.error('[orders] Firestore write failed:', err);
+        setOrderSyncStatus('error');
+        setOrderSyncError(err?.code || err?.message || 'write-failed');
+        setPendingOrderIds((prev) => {
+          const next = prev.includes(newAdminOrder.id) ? prev : [...prev, newAdminOrder.id];
+          safeSet('seven_cheese_pending_orders', JSON.stringify(next));
+          return next;
+        });
+      });
+    setActiveOrder(newOrder);
+    setPastOrders((prev) => [newOrder, ...prev]);
+    setCartItems([]);
+    setAppliedCoupon(null);
+    setIsCartOpen(false);
+    goView('home');
+    setIsOrderTrackerOpen(true);
+  };
+
+  const unavailableLines = useMemo(() => {
+    const out: Record<string, string> = {};
+    cartItems.forEach((line) => {
+      const p = menuItems.find((m) => m.id === line.productId) || MENU_ITEMS.find((m) => m.id === line.productId);
+      if (!p) return;
+      if (p.isAvailable === false) out[line.cartItemId] = 'Sold out right now — remove to order';
+      else if (!isOfferActive(p, now)) {
+        const when = describeSchedule(p.days || p.startTime ? p : OFFER_SCHEDULES[p.id]);
+        out[line.cartItemId] = `Available ${when || 'at set times'} only — remove to order`;
+      }
+    });
+    return out;
+  }, [cartItems, menuItems, now]);
+
+  // Tuesday Treat / Funday Friday worked out on the cart.
+  const dayDeal = useMemo(() => computeDayDeal(cartItems, menuItems, now), [cartItems, menuItems, now]);
+
+  const trackedOrder = useMemo(() => {
+    if (!activeOrder) return null;
+    const remote = activeOrder.adminOrderId ? adminOrders.find((o) => o.id === activeOrder.adminOrderId) : undefined;
+    return remote ? { ...activeOrder, status: ADMIN_TO_TRACKER[remote.status] } : activeOrder;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOrder, adminOrders]);
+
+  // Filtered Products (menu dono outlets me same — shared catalog)
+  const filteredProducts = useMemo(() => {
+    return activeMenuItems.filter((item) => {
+      // Search
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesName = item.name.toLowerCase().includes(q);
+        const matchesDesc = item.description.toLowerCase().includes(q);
+        const matchesToppings = item.toppings?.some((t) => t.toLowerCase().includes(q));
+        if (!matchesName && !matchesDesc && !matchesToppings) return false;
+      }
+
+      // Veg / Non-veg
+      if (vegOnly && !item.isVeg) return false;
+      if (nonVegOnly && item.isVeg) return false;
+
+      // Category filter
+      if (selectedCategory !== 'all') {
+        // Dips are their own category; older cached/Firestore menus still tag them starters-sides.
+        const cat = item.id.startsWith('p-dip-') || item.subCategoryTitle === 'Signature Dips' ? 'dips' : item.category;
+        if (selectedCategory === 'signature-7-cheese' && cat !== 'signature-7-cheese') return false;
+        if (selectedCategory === 'veg-pizza' && cat !== 'veg-pizza' && cat !== 'signature-7-cheese') return false;
+        if (selectedCategory === 'chicken-pizza' && cat !== 'chicken-pizza' && cat !== 'non-veg-pizza') return false;
+        if (selectedCategory === 'non-veg-pizza' && cat !== 'non-veg-pizza' && cat !== 'chicken-pizza') return false;
+        if (selectedCategory === 'pan-pizza' && cat !== 'pan-pizza') return false;
+        if (selectedCategory === 'burgers' && cat !== 'burgers') return false;
+        if (selectedCategory === 'wraps' && cat !== 'wraps') return false;
+        if (selectedCategory === 'starters-sides' && cat !== 'starters-sides' && cat !== 'sides') return false;
+        if (selectedCategory === 'sides' && cat !== 'sides' && cat !== 'starters-sides') return false;
+        if (selectedCategory === 'pasta' && cat !== 'pasta') return false;
+        if (selectedCategory === 'chicken-corner' && cat !== 'chicken-corner') return false;
+        if (selectedCategory === 'drinks' && cat !== 'drinks') return false;
+        if (selectedCategory === 'desserts' && cat !== 'desserts') return false;
+        if (selectedCategory === 'combos' && cat !== 'combos') return false;
+        if (selectedCategory === 'dips' && cat !== 'dips') return false;
+        if (selectedCategory === 'sauce-pizzas' && !/Different Sauces/.test(item.subCategoryTitle || '')) return false;
+      }
+
+      return true;
+    }).sort((a, b) => {
+      if (sortBy === 'price-low') return a.price - b.price;
+      if (sortBy === 'price-high') return b.price - a.price;
+      if (sortBy === 'rating') return (b.rating || 0) - (a.rating || 0);
+      return 0; // popular/default
+    });
+  }, [activeMenuItems, searchQuery, vegOnly, nonVegOnly, selectedCategory, sortBy]);
+
+  // Amazon-style live suggestions: naam + description + toppings me match, top 6
+  const searchSuggestions = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return activeMenuItems
+      .filter((m) => {
+        if (m.name.toLowerCase().includes(q)) return true;
+        if (m.description.toLowerCase().includes(q)) return true;
+        return m.toppings?.some((t) => t.toLowerCase().includes(q)) ?? false;
+      })
+      .slice(0, 6);
+  }, [activeMenuItems, searchQuery]);
+
+  const handleSelectSuggestion = (item: MenuItem) => {
+    // Product card tap jaisa behavior: pizza = customize modal, baaki = quick view
+    if (needsCustomize(item)) handleOpenCustomize(item);
+    else handleOpenQuickView(item);
+  };
+  // Featured Hero banner selection
+  // Banner tap: "category:<key>" jumps to that menu section; otherwise open the item.
+  const handleSelectFeatured = (productId: string) => {
+    if (productId.startsWith('offer:')) {
+      openOffers(productId.slice('offer:'.length));
+      return;
+    }
+    if (productId.startsWith('category:')) {
+      setSelectedCategory(productId.slice('category:'.length));
+      setTimeout(() => document.getElementById('menu-items-section')?.scrollIntoView({ behavior: 'smooth' }), 50);
+      return;
+    }
+    const item = menuItems.find((m) => m.id === productId) || MENU_ITEMS.find((m) => m.id === productId);
+    if (!item) return;
+    if (needsCustomize(item)) handleOpenCustomize(item);
+    else handleOpenQuickView(item);
+  };
+
+  // Reorder last item
+  const lastOrdered = pastOrders[0]?.items[0]?.name;
+
+  // If we're on the billing page, render that instead
+  if (currentView === 'billing') {
+    return (
+      <>
+        <BillingPage
+          cartItems={cartItems}
+          onUpdateQuantity={handleUpdateCartQuantity}
+          onRemoveItem={handleRemoveCartItem}
+          appliedCoupon={appliedCoupon}
+          onApplyCoupon={(c) => setAppliedCoupon(c)}
+          onRemoveCoupon={() => setAppliedCoupon(null)}
+          orderType={orderType}
+          currentAddress={currentAddress}
+          onOpenAddressModal={() => setIsAddressModalOpen(true)}
+          onSelectAddress={(addr) => {
+            setCurrentAddress(addr);
+            setAddresses((prev) => [addr, ...prev.filter((a) => a.id !== addr.id)]);
+          }}
+          onPlaceOrder={(notes, method, delivery) => {
+            handlePlaceOrder(notes, method, delivery);
+            goView('home');
+          }}
+          onGoBack={() => goView('home')}
+          onAddToCart={handleSimpleAddToCart}
+          onOpenCustomize={handleOpenCustomize}
+          onOpenQuickView={handleOpenQuickView}
+          availableCoupons={coupons}
+          availableMenuItems={menuItems}
+        />
+
+        <AddressModal
+          isOpen={isAddressModalOpen}
+          onClose={() => setIsAddressModalOpen(false)}
+          addresses={addresses}
+          currentAddress={currentAddress}
+          onSelectAddress={(addr) => setCurrentAddress(addr)}
+          onAddNewAddress={(newAddr) => setAddresses((prev) => [newAddr, ...prev])}
+          onUpdateAddress={handleUpdateAddress}
+          onDeleteAddress={handleDeleteAddress}
+        />
+
+        <OrderTrackerModal
+          order={trackedOrder}
+          isOpen={isOrderTrackerOpen}
+          onClose={() => setIsOrderTrackerOpen(false)}
+          onAdvanceStatus={(nextStatus) => {
+            if (activeOrder) {
+              setActiveOrder({ ...activeOrder, status: nextStatus });
+            }
+          }}
+        />
+
+        <PwaOfflineBadge />
+        <PwaUpdatePrompt />
+        <PwaInstallBanner hasCart={cartItemCount > 0} />
+        <CustomizeModal
+          item={customizingItem}
+          isOpen={isCustomizeOpen}
+          onClose={() => {
+            setIsCustomizeOpen(false);
+            setEditingLine(null);
+          }}
+          onConfirmAddToCart={handleConfirmCustomize}
+          editingLine={editingLine}
+        />
+        <QuickViewModal
+          item={quickViewItem}
+          isOpen={isQuickViewOpen}
+          onClose={() => setIsQuickViewOpen(false)}
+          menuItems={menuItems}
+          onAddToCart={handleSimpleAddToCart}
+          cartItems={cartItems}
+          onUpdateQuantity={handleUpdateCartQuantity}
+          onOpenCustomize={handleOpenCustomize}
+        />
+        <ChatAssistant
+          menuItems={menuItems}
+          coupons={coupons}
+          hasCart={cartItemCount > 0}
+        suppressed={isCartOpen || isCustomizeOpen || isQuickViewOpen}
+          onAddToCart={handleSimpleAddToCart}
+          onOpenCustomize={handleOpenCustomize}
+          onOpenCart={() => setIsCartOpen(true)}
+        />
+      </>
+    );
+  }
+
+  // If we're on the Admin POS page, render login gate first, then AdminLayout
+  if (currentView === 'admin' && !adminOutlet) {
+    return (
+      <>
+        <AdminLogin
+          onLogin={handleAdminLogin}
+          onBackToStore={() => goView('home')}
+        />
+        <PwaOfflineBadge />
+        <PwaUpdatePrompt />
+      </>
+    );
+  }
+
+  // If we're on the Admin POS page, render AdminLayout
+  // All orders are passed; AdminLayout offers an outlet scope toggle (default: all).
+  if (currentView === 'admin' && adminOutlet) {
+    return (
+      <>
+      <AdminErrorBoundary onReset={() => goView('home')}>
+      <AdminLayout
+        outlet={adminOutlet}
+        orders={adminOrders}
+        syncStatus={orderSyncStatus}
+        syncError={orderSyncError}
+        onRetrySync={handleRetrySync}
+        menuItems={menuItems}
+        coupons={coupons}
+        onUpdateOrderStatus={(id, status) => {
+          setAdminOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+          updateOrderStatusInFirestore(id, status).catch(() => {});
+        }}
+        onDeleteOrder={handleDeleteAdminOrder}
+        onAddItem={(item) => {
+          // Shared catalog: yahan add hoga to dono outlets + customer store me dikhega.
+          setMenuItems((prev) => [item, ...prev]);
+          saveMenuItemToFirestore(item).catch(() => {});
+        }}
+        onUpdateItem={(updated) => {
+          setMenuItems((prev) => prev.map((it) => (it.id === updated.id ? updated : it)));
+          saveMenuItemToFirestore(updated).catch(() => {});
+        }}
+        onDeleteItem={(id) => {
+          setMenuItems((prev) => prev.filter((it) => it.id !== id));
+          deleteMenuItemFromFirestore(id).catch(() => {});
+        }}
+        onRestoreMenu={() => {
+          // Pura default brochure menu wapas — local + Firestore dono me.
+          setMenuItems(MENU_ITEMS);
+          safeSet('seven_cheese_menu_items', JSON.stringify(MENU_ITEMS));
+          MENU_ITEMS.forEach((m) => saveMenuItemToFirestore(m).catch(() => {}));
+        }}
+        onCreateOrder={(order) => {
+          setAdminOrders((prev) => [order, ...prev]);
+          saveOrderToFirestore(order).catch(() => {});
+        }}
+        onAddCoupon={(coupon) => {
+          setCoupons((prev) => [coupon, ...prev]);
+        }}
+        onDeleteCoupon={(code) => {
+          setCoupons((prev) => prev.filter((c) => c.code !== code));
+        }}
+        onBackToStore={() => goView('home')}
+        onLogout={handleAdminLogout}
+        slides={heroSlides}
+        onUpdateSlideImage={(id, image) => {
+          setHeroSlides((prev) => prev.map((s) => (s.id === id ? { ...s, image } : s)));
+        }}
+        onUpdateSlideSchedule={(id, schedule) => {
+          setHeroSlides((prev) => prev.map((s) => (s.id === id ? { ...s, schedule } : s)));
+        }}
+        categories={storeCategories}
+        onUpdateCategoryImage={(id, image, field = 'image') => {
+          setStoreCategories((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: image } : c)));
+        }}
+      />
+      </AdminErrorBoundary>
+        <PwaOfflineBadge />
+        <PwaUpdatePrompt />
+      </>
+    );
+  }
+
+  // Rider view (/delivery ya /rider): login gate, phir sirf delivery queue — menu/POS access nahi.
+  if (currentView === 'delivery' && !adminOutlet) {
+    return (
+      <>
+        <AdminLogin
+          mode="rider"
+          onLogin={handleAdminLogin}
+          onBackToStore={() => goView('home')}
+        />
+        <PwaOfflineBadge />
+        <PwaUpdatePrompt />
+      </>
+    );
+  }
+
+  if (currentView === 'delivery' && adminOutlet) {
+    const riderOrders = adminOrders.filter((o) => !o.outletId || o.outletId === adminOutlet.id);
+    return (
+      <div className="min-h-screen bg-slate-100 text-slate-900 font-sans pb-10">
+        {/* Rider header */}
+        <header className="sticky top-0 z-40 bg-slate-900 text-white shadow-md">
+          <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-[#ED1C24] flex items-center justify-center shrink-0">
+                <Bike className="w-5 h-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-sm font-black tracking-tight leading-tight truncate">
+                  Rider • {adminOutlet.shortName}
+                </h1>
+                <span className={`text-[10px] font-bold ${orderSyncStatus === 'live' ? 'text-emerald-400' : orderSyncStatus === 'connecting' ? 'text-amber-400' : 'text-red-400'}`}>
+                  {orderSyncStatus === 'live' ? '● Live orders' : orderSyncStatus === 'connecting' ? '● Connecting…' : '● Offline — retry'}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {orderSyncStatus === 'error' && (
+                <button
+                  onClick={handleRetrySync}
+                  className="text-[11px] font-bold bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-xl cursor-pointer"
+                >
+                  Retry
+                </button>
+              )}
+              <button
+                onClick={() => goView('home')}
+                className="text-[11px] font-bold bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-xl cursor-pointer"
+              >
+                Store
+              </button>
+              <button
+                onClick={handleAdminLogout}
+                className="flex items-center gap-1 text-[11px] font-bold bg-[#ED1C24] hover:bg-[#c91430] px-2.5 py-1.5 rounded-xl cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-3xl mx-auto px-3 sm:px-4 py-4">
+          <AdminDelivery
+            orders={riderOrders}
+            onUpdateOrderStatus={(id, status) => {
+              setAdminOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
+              updateOrderStatusInFirestore(id, status).catch(() => {});
+            }}
+            onDeleteOrder={handleDeleteAdminOrder}
+          />
+        </main>
+
+        <PwaOfflineBadge />
+        <PwaUpdatePrompt />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`min-h-screen bg-slate-100 text-slate-900 font-sans selection:bg-red-500 selection:text-white ${cartItemCount > 0 ? 'pb-[190px]' : 'pb-[120px]'}`}>
+      
+      {/* Top Navbar */}
+      <Navbar
+        orderType={orderType}
+        currentAddress={currentAddress}
+        onOpenAddressModal={() => setIsAddressModalOpen(true)}
+        onOpenCart={() => setIsCartOpen(true)}
+        cartItemCount={cartItemCount}
+        cartTotal={cartTotal}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        vegOnly={vegOnly}
+        setVegOnly={setVegOnly}
+        nonVegOnly={nonVegOnly}
+        setNonVegOnly={setNonVegOnly}
+        outletDistanceKm={outletInfo.distanceKm}
+        gpsState={gpsState}
+        onDetectLocation={requestGps}
+        suggestions={searchSuggestions}
+        onSelectSuggestion={handleSelectSuggestion}
+        isTableLocked={!!qrTable}
+        onOpenProfile={() => setIsProfileOpen(true)}
+      />
+      <ProfileDrawer
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        profile={customerProfile}
+        onSaveProfile={saveCustomerProfile}
+        hasActiveOrder={!!activeOrder}
+        onOpenDeals={() => openOffers()}
+        onTrackOrder={() => setIsOrderTrackerOpen(true)}
+        onOrderHistory={() => {
+          setActiveTab('reorder');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onManageAddresses={() => setIsAddressModalOpen(true)}
+        onOpenChat={() => window.dispatchEvent(new Event('seven-cheese:open-chat'))}
+      />
+
+      {/* Main Content Areas based on active tab */}
+      {activeTab === 'menu' && (
+        <main className="w-full">
+          {/* Hero Banner with 7 Cheese Pizza carousel promotions */}
+          <HeroBanner
+            slides={activeSlides}
+            onSelectFeatured={handleSelectFeatured}
+            onOpenDeals={() => setIsDealsModalOpen(true)}
+          />
+
+          {/* Browse Our Category - Moving Marquee */}
+          <CategoryMarquee
+            categories={storeCategories}
+            onSelectCategory={(key) => {
+              setSelectedCategory(key);
+              const el = document.getElementById('menu-items-section');
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+            }}
+          />
+
+          {/* Craving Categories Grid */}
+          <CravingCategories
+            selectedCategory={selectedCategory}
+            categories={storeCategories}
+            onSelectCategory={(key) => {
+              setSelectedCategory(key);
+              const el = document.getElementById('menu-items-section');
+              if (el) el.scrollIntoView({ behavior: 'smooth' });
+            }}
+          />
+
+          {/* Active Section & Controls Bar (non-sticky) */}
+          <div id="menu-items-section" className="bg-white/95 backdrop-blur-md border-b border-slate-200 py-3 px-3 sm:px-6 shadow-2xs">
+            <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+              
+              {/* Active Category Display & Reset */}
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#ED1C24] animate-pulse" />
+                  <span className="text-sm sm:text-base font-black text-slate-900 capitalize">
+                    {selectedCategory === 'all'
+                      ? 'Full Menu'
+                      : storeCategories.find((c) => c.filterKey === selectedCategory)?.name || selectedCategory}
+                  </span>
+                  <span className="text-xs font-bold text-slate-500 font-mono">
+                    ({filteredProducts.length})
+                  </span>
+                </div>
+
+                {selectedCategory !== 'all' && (
+                  <button
+                    id="btn-clear-category-filter"
+                    onClick={() => setSelectedCategory('all')}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-red-50 text-slate-700 hover:text-[#ED1C24] text-[11px] font-bold transition-colors cursor-pointer"
+                  >
+                    <span>✕</span>
+                    <span>Show All Menu</span>
+                  </button>
+                )}
+              </div>
+
+
+            </div>
+          </div>
+
+          {/* Product Cards Grid */}
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 py-6">
+            
+            {/* Header with Title and count matching Screenshot 4 ("Veg Pizzas (18)") */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🍕</span>
+                <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
+                  {selectedCategory === 'signature-7-cheese'
+                    ? '7 Cheese House Signatures'
+                    : selectedCategory === 'veg-pizza'
+                    ? 'Fresh Veg Pizzas'
+                    : selectedCategory === 'chicken-pizza'
+                    ? 'Hot & Spicy Chicken Pizzas'
+                    : selectedCategory === 'non-veg-pizza'
+                    ? 'Hot & Spicy Non-Veg Pizzas'
+                    : selectedCategory === 'pan-pizza'
+                    ? 'Crispy Pan Pizzas'
+                    : selectedCategory === 'burgers'
+                    ? 'Gourmet Burgers'
+                    : selectedCategory === 'wraps'
+                    ? 'Signature Wraps'
+                    : selectedCategory === 'starters-sides'
+                    ? 'Garlic Breads & Starters'
+                    : selectedCategory === 'pasta'
+                    ? 'Italian Pastas'
+                    : selectedCategory === 'chicken-corner'
+                    ? 'Crispy Chicken Corner'
+                    : selectedCategory === 'drinks'
+                    ? 'Popping Boba Drinks, Shakes & Mocktails'
+                    : selectedCategory === 'desserts'
+                    ? 'Molten Desserts'
+                    : selectedCategory === 'sauce-pizzas'
+                    ? 'Sauce Pizzas — Veg & Non-Veg'
+                    : selectedCategory === 'dips'
+                    ? 'Signature Dips'
+                    : selectedCategory === 'combos'
+                    ? 'Party Combos & Value Meals'
+                    : 'Our Special Pizzas & Bestsellers'}
+                </h2>
+                <span className="text-sm font-bold text-slate-500 font-mono">
+                  ({filteredProducts.length})
+                </span>
+              </div>
+
+              {/* Quick Coupon banner pill */}
+              <button
+                id="btn-quick-view-deals"
+                onClick={() => openOffers()}
+                className="hidden sm:flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-[#e31837] border border-red-200 px-3 py-1 rounded-full text-xs font-extrabold transition-colors cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Offers Available</span>
+              </button>
+            </div>
+
+            {filteredProducts.length === 0 ? (
+              <div className="py-16 text-center bg-white rounded-3xl border border-slate-200 p-8 shadow-xs">
+                <span className="text-4xl block mb-2">🔍</span>
+                <h3 className="text-lg font-black text-slate-800">No items match your filters</h3>
+                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                  Try clearing your search query or switching from Veg Only to explore our full menu.
+                </p>
+                <button
+                  id="btn-reset-filters"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setVegOnly(false);
+                    setNonVegOnly(false);
+                    setSelectedCategory('all');
+                  }}
+                  className="mt-4 bg-[#ED1C24] text-white text-xs font-black px-4 py-2 rounded-xl hover:bg-[#c91430] transition-colors"
+                >
+                  Reset All Filters
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+                {filteredProducts.map((item) => {
+                  const qty = cartItems
+                    .filter((c) => c.productId === item.id)
+                    .reduce((acc, c) => acc + c.quantity, 0);
+
+                  return (
+                    <ProductCard
+                      key={item.id}
+                      item={item}
+                      onAddToCart={handleSimpleAddToCart}
+                      onOpenCustomize={handleOpenCustomize}
+                      onOpenQuickView={handleOpenQuickView}
+                      quantityInCart={qty}
+                      onUpdateQuantity={(pid, delta) => handleUpdateProductQuantity(pid, delta)}
+                    />
+                  );
+                })}
+              </div>
+            )}
+
+          </div>
+
+        </main>
+      )}
+
+      {/* Reorder View Tab */}
+      {activeTab === 'reorder' && (
+        <div className="max-w-4xl mx-auto px-4 py-8">
+          <div className="flex items-center gap-2 mb-6">
+            <RotateCcw className="w-6 h-6 text-[#ED1C24]" />
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+              Past Orders & 1-Click Reorder
+            </h1>
+          </div>
+
+          <div className="space-y-4">
+            {pastOrders.map((order) => (
+              <div
+                key={order.orderId}
+                className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs space-y-4"
+              >
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <span className="font-mono font-black text-sm text-slate-900">
+                      Order #{order.orderId}
+                    </span>
+                    <span className="text-xs text-slate-500 block mt-0.5">
+                      {order.timestamp} • {order.orderType}
+                    </span>
+                  </div>
+                  <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1">
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    <span>{order.status}</span>
+                  </span>
+                </div>
+
+                {/* Items in order */}
+                <div className="space-y-2">
+                  {order.items.map((it) => (
+                    <div key={it.cartItemId} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-bold text-slate-900">{it.quantity}x</span>
+                        <span className="font-medium text-slate-700 truncate">{it.name}</span>
+                        {it.size && (
+                          <span className="text-slate-400">({it.size}, {it.crust})</span>
+                        )}
+                      </div>
+                      <span className="font-mono font-bold text-slate-900">
+                        ₹{it.price * it.quantity}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                  <div>
+                    <span className="text-xs text-slate-500 block">Total Amount Paid</span>
+                    <span className="text-base font-black text-slate-900 font-mono">
+                      ₹{order.total}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      id={`btn-track-order-${order.orderId}`}
+                      onClick={() => {
+                        setActiveOrder(order);
+                        setIsOrderTrackerOpen(true);
+                      }}
+                      className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer"
+                    >
+                      Track Order
+                    </button>
+                    <button
+                      id={`btn-reorder-${order.orderId}`}
+                      onClick={() => {
+                        setCartItems(order.items);
+                        setIsCartOpen(true);
+                      }}
+                      className="bg-[#ED1C24] hover:bg-[#c91430] text-white font-black px-4 py-2 rounded-xl text-xs shadow-md transition-colors cursor-pointer"
+                    >
+                      Reorder All
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Make Your Own Pizza Tab — GenZ builder hype */}
+      {activeTab === 'makeyourown' && (
+        <div className="w-full bg-[#FAF7F0] text-stone-900 relative overflow-hidden">
+          {/* soft warm glow */}
+          <div className="pointer-events-none absolute -top-32 right-0 w-96 h-96 rounded-full bg-amber-200/40 blur-3xl" />
+
+          <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 pt-10 sm:pt-14 pb-10">
+              {/* eyebrow */}
+              <div className="flex items-center gap-2">
+                <span className="h-px w-8 bg-[#C2410C]" />
+                <span className="text-[11px] font-black uppercase tracking-[0.2em] text-[#C2410C]">
+                  Handcrafted, your way
+                </span>
+              </div>
+
+              <h1 className="mt-3 font-display leading-[1.05] tracking-tight">
+                <span className="block text-4xl sm:text-6xl font-bold text-stone-900">
+                  Craft your
+                </span>
+                <span className="block text-4xl sm:text-6xl font-bold italic text-[#C2410C]">
+                  own pizza
+                </span>
+              </h1>
+              <p className="mt-4 max-w-lg text-sm sm:text-base text-stone-600 leading-relaxed">
+                Some days, only your own creation hits the spot. Start with our
+                fresh, hand-tossed base, then layer on the cheese and toppings
+                you love — baked fresh, exactly how you imagined.
+              </p>
+
+              {/* trust row */}
+              <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-bold text-stone-700">
+                <span className="flex items-center gap-1.5">
+                  <span className="text-amber-500 text-sm">★</span>
+                  <span>4.9 · 2,100+ reviews</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-stone-500" />
+                  <span>Ready in about 30 mins</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Baked fresh on order</span>
+                </span>
+              </div>
+
+              {/* steps */}
+              <div className="mt-8 grid grid-cols-3 gap-3 sm:gap-4">
+                {[
+                  { n: '01', icon: Ruler, t: 'Size', d: 'Regular to Large' },
+                  { n: '02', icon: Layers, t: 'Crust', d: 'Hand-tossed to Cheese Burst' },
+                  { n: '03', icon: Sparkles, t: 'Toppings', d: 'Unlimited add-ons' },
+                ].map((s) => {
+                  const Icon = s.icon;
+                  return (
+                    <div key={s.n} className="bg-white rounded-2xl border border-stone-200/80 p-5 shadow-xs hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between">
+                        <span className="font-display text-2xl font-bold text-stone-300">{s.n}</span>
+                        <span className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center">
+                          <Icon className="w-4 h-4 text-[#C2410C]" />
+                        </span>
+                      </div>
+                      <div className="mt-3 text-base font-black text-stone-900">{s.t}</div>
+                      <div className="text-xs text-stone-500 mt-0.5">{s.d}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* price + CTA */}
+              <div className="mt-8 flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-stone-400 line-through text-lg font-mono">₹199</span>
+                  <span className="font-display text-4xl font-bold text-stone-900">₹149</span>
+                  <span className="text-xs text-stone-500 font-medium">onwards</span>
+                </div>
+                <button
+                  id="btn-start-make-your-own"
+                  onClick={() => handleOpenCustomize(MAKE_YOUR_OWN_BASE)}
+                  className="group sm:ml-auto inline-flex items-center justify-center gap-2 bg-[#ED1C24] hover:bg-[#c91430] text-white font-black px-8 py-4 rounded-full text-base shadow-md shadow-red-500/20 transition-all cursor-pointer active:scale-95"
+                >
+                  <span>Start Building</span>
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+              <p className="mt-3 text-[11px] text-stone-500 font-medium">
+                No preservatives • Real mozzarella • Made fresh when you order
+              </p>
+          </div>
+
+          {/* promise strip */}
+          <div className="relative z-10 border-y border-stone-200 bg-[#F3EDE2] text-stone-600 overflow-hidden">
+            <div className="flex w-max whitespace-nowrap py-2.5 animate-myo-ticker">
+              <span className="text-[11px] font-bold uppercase tracking-[0.18em]">
+                Fresh dough daily ✦ Real mozzarella ✦ No preservatives ✦ Baked on order ✦ Fresh dough daily ✦ Real mozzarella ✦ No preservatives ✦ Baked on order ✦&nbsp;
+              </span>
+              <span aria-hidden="true" className="text-[11px] font-bold uppercase tracking-[0.18em]">
+                Fresh dough daily ✦ Real mozzarella ✦ No preservatives ✦ Baked on order ✦ Fresh dough daily ✦ Real mozzarella ✦ No preservatives ✦ Baked on order ✦&nbsp;
+              </span>
+            </div>
+          </div>
+
+          <style>{`
+            @keyframes myoTicker {
+              from { transform: translateX(0); }
+              to { transform: translateX(-50%); }
+            }
+            .animate-myo-ticker {
+              animation: myoTicker 18s linear infinite;
+            }
+          `}</style>
+        </div>
+      )}
+
+      {/* Combos Tab */}
+      {activeTab === 'combos' && (() => {
+        const combos = activeMenuItems.filter((m) => m.category === 'combos');
+        const lunch = combos.filter((m) => m.id.startsWith('p-offer-lunch-'));
+        const others = combos.filter((m) => !m.id.startsWith('p-offer-lunch-'));
+        const comboCard = (combo: MenuItem) => {
+          const savePct =
+            combo.originalPrice && combo.originalPrice > combo.price
+              ? Math.round(((combo.originalPrice - combo.price) / combo.originalPrice) * 100)
+              : 0;
+          return (
+            <div key={combo.id} className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="aspect-16/9 rounded-2xl overflow-hidden mb-4 bg-slate-100">
+                  <img src={combo.image} alt={combo.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="font-extrabold text-base text-slate-900">{combo.name}</h3>
+                  {savePct > 0 && (
+                    <span className="shrink-0 bg-emerald-100 text-emerald-800 text-[11px] font-black px-2 py-0.5 rounded-full">SAVE {savePct}%</span>
+                  )}
+                </div>
+                <p className="text-sm text-slate-600 mt-2">{combo.description}</p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                <div className="flex items-baseline gap-2">
+                  <span className="font-mono font-black text-lg text-slate-900">₹{combo.price}</span>
+                  {combo.originalPrice && combo.originalPrice > combo.price && (
+                    <span className="font-mono text-xs text-slate-400 line-through">₹{combo.originalPrice}</span>
+                  )}
+                </div>
+                <button
+                  id={`btn-add-combo-${combo.id}`}
+                  onClick={() => handleSimpleAddToCart(combo)}
+                  className="bg-[#ED1C24] hover:bg-[#c91430] text-white font-black px-4 py-2 rounded-xl text-xs shadow-md transition-colors cursor-pointer"
+                >
+                  Add Combo +
+                </button>
+              </div>
+            </div>
+          );
+        };
+        return (
+          <div className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+            {lunch.length > 0 && !dayDealDay && (
+              <section id="lunch-combos">
+                <div className="mb-4 rounded-2xl bg-amber-50 border border-amber-200 px-4 py-3">
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight">🕚 Lunch combos</h2>
+                  <p className="text-xs font-semibold text-amber-800 mt-0.5">Available every day, 11 AM – 2 PM only · Pizza + cold drink + fries</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">{lunch.map(comboCard)}</div>
+              </section>
+            )}
+            <section>
+              <div className="mb-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h1 className="text-2xl font-black text-slate-900 tracking-tight">Combos & Value Meals</h1>
+                  <button
+                    onClick={() => openOffers()}
+                    className="shrink-0 text-xs font-black text-[#ED1C24] hover:underline cursor-pointer"
+                  >
+                    See all offers ›
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">Super-saver bundles pairing pizzas with garlic breads, dips, fries and drinks.</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">{others.map(comboCard)}</div>
+            </section>
+          </div>
+        );
+      })()}
+
+      {activeTab === 'offers' && (
+        <OffersPage
+          now={now}
+          slides={heroSlides}
+          lunchCombos={menuItems.filter((m) => m.id.startsWith('p-offer-lunch-') && m.isAvailable !== false)}
+          coupons={activeCoupons}
+          appliedCode={appliedCoupon?.code}
+          cartQty={(pid) => cartItems.filter((c) => c.productId === pid).reduce((s, c) => s + c.quantity, 0)}
+          onAddCombo={handleSimpleAddToCart}
+          onRemoveCombo={(pid) => {
+            const line = [...cartItems].reverse().find((c) => c.productId === pid);
+            if (line) handleUpdateCartQuantity(line.cartItemId, -1);
+          }}
+          onApplyCoupon={(c) => {
+            setAppliedCoupon(c);
+            if (cartItems.length > 0) setIsCartOpen(true);
+          }}
+          onBrowse={(key) => {
+            setActiveTab('menu');
+            setSelectedCategory(key);
+            setTimeout(() => document.getElementById('menu-items-section')?.scrollIntoView({ behavior: 'smooth' }), 80);
+          }}
+          onBack={() => {
+            setActiveTab('menu');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        />
+      )}
+
+      {/* Profile Tab view */}
+      {/* Modals and Drawers */}
+      {customizingItem?.id === MAKE_YOUR_OWN_BASE.id ? (
+        <BuildYourOwnWizard
+          item={customizingItem}
+          isOpen={isCustomizeOpen}
+          onClose={() => {
+            setIsCustomizeOpen(false);
+            setEditingLine(null);
+          }}
+          onConfirm={handleConfirmCustomize}
+          editingLine={editingLine}
+        />
+      ) : (
+        <CustomizeModal
+          item={customizingItem}
+          isOpen={isCustomizeOpen}
+          onClose={() => {
+            setIsCustomizeOpen(false);
+            setEditingLine(null);
+          }}
+          onConfirmAddToCart={handleConfirmCustomize}
+          editingLine={editingLine}
+        />
+      )}
+
+      <QuickViewModal
+        item={quickViewItem}
+        isOpen={isQuickViewOpen}
+        onClose={() => setIsQuickViewOpen(false)}
+        menuItems={activeMenuItems}
+        onAddToCart={handleSimpleAddToCart}
+        cartItems={cartItems}
+        onUpdateQuantity={handleUpdateCartQuantity}
+        onOpenCustomize={handleOpenCustomize}
+      />
+
+      <CartDrawer
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        cartItems={cartItems}
+        onUpdateQuantity={handleUpdateCartQuantity}
+        onRemoveItem={handleRemoveCartItem}
+        onClearCart={handleClearCart}
+        appliedCoupon={appliedCoupon}
+        onApplyCoupon={(c) => setAppliedCoupon(c)}
+        onRemoveCoupon={() => setAppliedCoupon(null)}
+        orderType={orderType}
+        currentAddress={currentAddress}
+        onOpenAddressModal={() => setIsAddressModalOpen(true)}
+        onSelectAddress={(addr) => {
+          setCurrentAddress(addr);
+          setAddresses((prev) => [addr, ...prev.filter((a) => a.id !== addr.id)]);
+        }}
+        onPlaceOrder={(notes, method, delivery) => handlePlaceOrder(notes, method, delivery)}
+        onEditItem={handleEditCartItem}
+        unavailableLines={unavailableLines}
+        dayDeal={dayDeal}
+        onProceedToCheckout={() => {
+          setIsCartOpen(false);
+          goView('billing');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onQuickAdd={(pid) => {
+          const it = menuItems.find((m) => m.id === pid) || MENU_ITEMS.find((m) => m.id === pid);
+          if (!it) return;
+          // Customizable items (pizza) kabhi direct add nahi — modal kholo taaki size/crust select ho.
+          if (needsCustomize(it)) handleOpenCustomize(it);
+          else handleSimpleAddToCart(it);
+        }}
+        onUpgradeItem={handleUpgradeCartItem}
+        availableCoupons={activeCoupons}
+        availableMenuItems={activeMenuItems}
+      />
+
+      <OrderTrackerModal
+        order={trackedOrder}
+        isOpen={isOrderTrackerOpen}
+        onClose={() => setIsOrderTrackerOpen(false)}
+        onAdvanceStatus={(nextStatus) => {
+          if (activeOrder) {
+            setActiveOrder({ ...activeOrder, status: nextStatus });
+          }
+        }}
+      />
+
+      <AddressModal
+        isOpen={isAddressModalOpen}
+        onClose={() => setIsAddressModalOpen(false)}
+        addresses={addresses}
+        currentAddress={currentAddress}
+        onSelectAddress={(addr) => setCurrentAddress(addr)}
+        onAddNewAddress={(newAddr) => setAddresses((prev) => [newAddr, ...prev])}
+        onUpdateAddress={handleUpdateAddress}
+        onDeleteAddress={handleDeleteAddress}
+      />
+
+      <DealsModal
+        isOpen={isDealsModalOpen}
+        onClose={() => setIsDealsModalOpen(false)}
+        onApplyCoupon={(c) => {
+          setAppliedCoupon(c);
+          setIsCartOpen(true);
+        }}
+        appliedCouponCode={appliedCoupon?.code}
+        coupons={activeCoupons}
+      />
+
+      {/* Floating pizza assistant (Groq) */}
+      <ChatAssistant
+        menuItems={activeMenuItems}
+        coupons={activeCoupons}
+        hasCart={cartItemCount > 0}
+        suppressed={isCartOpen || isCustomizeOpen || isQuickViewOpen}
+        onAddToCart={handleSimpleAddToCart}
+        onOpenCustomize={handleOpenCustomize}
+        onOpenCart={() => setIsCartOpen(true)}
+        onSelectCategory={(key) => {
+          setSelectedCategory(key);
+          const el = document.getElementById('menu-items-section');
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }}
+      />
+
+      {/* First-visit location permission — Allow = GPS fix for outlet distance + routing */}
+      {!locPromptDismissed && !qrOutletId && (
+        <LocationPrompt
+          gpsState={gpsState}
+          hasFix={!!userGps}
+          hasCart={cartItemCount > 0}
+          onAllow={requestGps}
+          onDismiss={dismissLocPrompt}
+        />
+      )}
+
+      {/* Bottom Sticky Navigation */}
+      <BottomNav
+        activeTab={activeTab}
+        setActiveTab={(tab) => {
+          setActiveTab(tab);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        cartCount={cartItemCount}
+        cartThumbs={cartItems.map((c) => c.image)}
+        cartTotal={cartTotal}
+        onOpenCart={() => setIsCartOpen(true)}
+        onOpenFilters={() => {
+          setActiveTab('menu');
+          setIsFilterOpen(true);
+        }}
+        filtersActive={vegOnly || nonVegOnly || sortBy !== 'popular' || selectedCategory !== 'all' || !!searchQuery.trim()}
+      />
+      <FilterSheet
+        isOpen={isFilterOpen}
+        onClose={() => {
+          setIsFilterOpen(false);
+          document.getElementById('menu-items-section')?.scrollIntoView({ behavior: 'smooth' });
+        }}
+        vegOnly={vegOnly}
+        setVegOnly={setVegOnly}
+        nonVegOnly={nonVegOnly}
+        setNonVegOnly={setNonVegOnly}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
+        activeCategoryName={
+          selectedCategory === 'all'
+            ? undefined
+            : storeCategories.find((c) => c.filterKey === selectedCategory)?.name || selectedCategory
+        }
+        onClearCategory={() => setSelectedCategory('all')}
+        onClearAll={() => {
+          setVegOnly(false);
+          setNonVegOnly(false);
+          setSortBy('popular');
+          setSelectedCategory('all');
+          setSearchQuery('');
+          setIsFilterOpen(false);
+          document.getElementById('menu-items-section')?.scrollIntoView({ behavior: 'smooth' });
+        }}
+      />
+      {locationNote && (
+        <div className="fixed top-16 sm:top-20 inset-x-0 z-[59] flex justify-center px-3 pointer-events-none">
+          <button
+            type="button"
+            onClick={() => setLocationNote(null)}
+            className="pointer-events-auto max-w-md w-full bg-slate-900 text-white text-xs font-semibold rounded-2xl shadow-2xl px-4 py-3 flex items-start gap-2 text-left animate-in slide-in-from-top duration-300 cursor-pointer"
+          >
+            <span className="text-base leading-none">📍</span>
+            <span>{locationNote}</span>
+          </button>
+        </div>
+      )}
+      <DealPopup
+        deal={timedDeals.find((d) => d.id === dealPopupId) ?? null}
+        onClose={() => setDealPopupId(null)}
+      />
+      <OfferDetailSheet
+        coupon={viewOffer}
+        cartTotal={cartTotal}
+        appliedCode={appliedCoupon?.code}
+        onApply={(c) => {
+          setAppliedCoupon(c);
+          setViewOffer(null);
+          if (cartItems.length > 0) setIsCartOpen(true);
+        }}
+        onSeeAll={() => {
+          setViewOffer(null);
+          openOffers();
+        }}
+        onClose={() => setViewOffer(null)}
+      />
+
+      {/* PWA: install prompt, update prompt, offline badge */}
+      <PwaOfflineBadge />
+      <PwaUpdatePrompt />
+      <PwaInstallBanner hasCart={cartItemCount > 0} />
+
+    </div>
+  );
+}

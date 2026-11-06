@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 110" width="100%" height="100%">
+  <!-- Black Background Bar -->
+  <rect x="2" y="5" width="456" height="100" rx="8" fill="#111111" stroke="#222222" stroke-width="1.5"/>
+  
+  <!-- Red 7 Glyph with embedded Pizza Slice -->
+  <g id="seven-symbol" transform="translate(18, 12)">
+    <!-- Top red bar of 7 -->
+    <path d="M 0 0 L 82 0 L 80 22 L 28 22 L 20 22 Z" fill="#ED1C24" />
+    
+    <!-- Diagonal right leg of 7 with angle -->
+    <path d="M 82 0 L 48 86 L 24 86 L 56 22 L 80 22 Z" fill="#ED1C24" />
+    
+    <!-- Pizza Slice tucked in the angle of 7 -->
+    <!-- Crust -->
+    <path d="M 6 18 C 12 10, 34 8, 44 14 L 38 23 C 32 18, 14 18, 10 24 Z" fill="#D97706" />
+    <!-- Slice body: Triangle with melted cheese edge -->
+    <path d="M 10 24 Q 28 20 38 23 L 38 52 Q 22 42 10 24 Z" fill="#FBBF24" />
+    <path d="M 12 26 Q 26 22 36 25 L 36 50 Q 22 40 12 26 Z" fill="#F59E0B" />
+    
+    <!-- Pizza Toppings -->
+    <!-- Pepperoni / Red Pepper -->
+    <circle cx="24" cy="30" r="4" fill="#DC2626" />
+    <circle cx="30" cy="42" r="3.5" fill="#DC2626" />
+    
+    <!-- Black Olives -->
+    <circle cx="18" cy="27" r="3" fill="#18181B" stroke="#FBBF24" stroke-width="1" />
+    <circle cx="28" cy="34" r="2.8" fill="#18181B" stroke="#FBBF24" stroke-width="1" />
+    
+    <!-- Green Capsicum slivers -->
+    <path d="M 17 35 Q 21 37 19 41" stroke="#16A34A" stroke-width="2.2" stroke-linecap="round" fill="none" />
+    <path d="M 27 26 Q 31 28 32 25" stroke="#16A34A" stroke-width="2" stroke-linecap="round" fill="none" />
+    
+    <!-- Mushroom slices -->
+    <path d="M 23 44 Q 25 42 27 44 L 26 47 Q 24 47 23 44 Z" fill="#E2E8F0" />
+    
+    <!-- Melted cheese drip at tip -->
+    <path d="M 36 50 Q 38 55 37 57 Q 35 55 34 51 Z" fill="#FBBF24" />
+  </g>
+
+  <!-- Typography: 7 CHEESE PIZZA -->
+  <text x="122" y="71" fill="#FFFFFF" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="44" letter-spacing="1.5">
+    7 CHEESE PIZZA
+  </text>
+</svg>
