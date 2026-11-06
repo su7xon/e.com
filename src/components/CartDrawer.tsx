@@ -202,6 +202,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const couponList = availableCoupons && availableCoupons.length > 0 ? availableCoupons : COUPONS;
   const menuList = availableMenuItems && availableMenuItems.length > 0 ? availableMenuItems : MENU_ITEMS;
 
+  // Pricing calculations — must come before applicableCoupons (uses subtotal).
+  const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+
   // Coupons that can actually give a discount: minOrder met AND offer is currently active.
   const now = new Date();
   const applicableCoupons = couponList.filter(
@@ -209,9 +212,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   );
   // Coupon can't stack with a running day deal (Tuesday / Friday).
   const couponCanApply = !dayDeal && applicableCoupons.length > 0;
-
-  // Pricing calculations
-  const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const freeDeliveryThreshold = 99;
   const isFreeDeliveryEligible = subtotal >= freeDeliveryThreshold;
   const isPickup = orderType === 'TAKEAWAY';
