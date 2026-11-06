@@ -86,6 +86,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
             <button
               id="btn-bottom-view-cart"
+              onClick={onOpenCart}
               className="flex items-center gap-1.5 bg-white hover:bg-red-50 text-[#ED1C24] font-extrabold text-xs px-4 py-2 rounded-xl shadow-md transition-colors cursor-pointer"
             >
               <span>View Cart</span>
