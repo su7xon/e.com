@@ -8,71 +8,103 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 const INSTALL_DISMISSED_KEY = 'seven_cheese_pwa_install_dismissed';
+const INSTALLED_KEY = 'seven_cheese_app_installed';
+const DISMISS_DAYS = 30;
 const APK_URL = '/7cheese-pizza.apk';
 
+/** Opened from the home-screen app (PWA) or inside the Android app. */
+function runningAsApp(): boolean {
+  const w = window as Window & { Capacitor?: { isNativePlatform?: () => boolean } };
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true ||
+    !!w.Capacitor?.isNativePlatform?.()
+  );
+}
 
+function readFlag(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeFlag(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // ignore
+  }
+}
+
+const dismissedRecently = () => Date.now() - Number(readFlag(INSTALL_DISMISSED_KEY) || 0) < DISMISS_DAYS * 86_400_000;
 
 export function usePwaInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isInstalled, setIsInstalled] = useState(false);
-  const [isDismissed, setIsDismissed] = useState(
-    () => sessionStorage.getItem(INSTALL_DISMISSED_KEY) === '1',
-  );
+  const [isInstalled, setIsInstalled] = useState(() => runningAsApp() || readFlag(INSTALLED_KEY) === '1');
+  const [isDismissed, setIsDismissed] = useState(dismissedRecently);
+
+  const markInstalled = useCallback(() => {
+    writeFlag(INSTALLED_KEY, '1');
+    setIsInstalled(true);
+    setDeferredPrompt(null);
+  }, []);
 
   useEffect(() => {
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-      setIsInstalled(true);
+    if (runningAsApp()) {
+      markInstalled();
       return;
     }
+    // Chrome can tell a normal browser tab that the home-screen app is already installed.
+    const nav = navigator as Navigator & { getInstalledRelatedApps?: () => Promise<unknown[]> };
+    nav.getInstalledRelatedApps?.()
+      .then((apps) => {
+        if (apps.length) markInstalled();
+      })
+      .catch(() => {});
     const onPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
-    const onInstalled = () => {
-      setIsInstalled(true);
-      setDeferredPrompt(null);
-    };
     window.addEventListener('beforeinstallprompt', onPrompt);
-    window.addEventListener('appinstalled', onInstalled);
+    window.addEventListener('appinstalled', markInstalled);
     return () => {
       window.removeEventListener('beforeinstallprompt', onPrompt);
-      window.removeEventListener('appinstalled', onInstalled);
+      window.removeEventListener('appinstalled', markInstalled);
     };
-  }, []);
+  }, [markInstalled]);
 
   const promptInstall = useCallback(async () => {
     if (!deferredPrompt) return false;
     await deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') setDeferredPrompt(null);
+    if (outcome === 'accepted') markInstalled();
     return outcome === 'accepted';
-  }, [deferredPrompt]);
+  }, [deferredPrompt, markInstalled]);
 
   const dismiss = useCallback(() => {
-    sessionStorage.setItem(INSTALL_DISMISSED_KEY, '1');
+    writeFlag(INSTALL_DISMISSED_KEY, String(Date.now()));
     setIsDismissed(true);
   }, []);
 
   return {
     canInstall: !!deferredPrompt && !isInstalled && !isDismissed,
+    isInstalled,
+    isDismissed,
+    markInstalled,
     promptInstall,
     dismiss,
   };
 }
 
 export const PwaInstallBanner: React.FC<{ hasCart?: boolean }> = ({ hasCart = false }) => {
-  const { canInstall, promptInstall, dismiss } = usePwaInstall();
+  const { canInstall, isInstalled, isDismissed, markInstalled, promptInstall, dismiss } = usePwaInstall();
   const [apkAvailable, setApkAvailable] = useState(false);
-  const [dismissed, setDismissed] = useState(
-    () => sessionStorage.getItem(INSTALL_DISMISSED_KEY) === '1',
-  );
-
-  const handleDismiss = () => {
-    setDismissed(true);
-    dismiss();
-  };
 
   useEffect(() => {
+    // The APK is only for Android phones that haven't got the app.
+    if (isInstalled || isDismissed || !/android/i.test(navigator.userAgent)) return;
     let cancelled = false;
     fetch(APK_URL, { method: 'HEAD' })
       .then((r) => {
@@ -82,10 +114,10 @@ export const PwaInstallBanner: React.FC<{ hasCart?: boolean }> = ({ hasCart = fa
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isInstalled, isDismissed]);
 
   // Single Install button — seedha APK download (no alag APK button)
-  if (dismissed || (!canInstall && !apkAvailable)) return null;
+  if (isInstalled || isDismissed || (!canInstall && !apkAvailable)) return null;
   return (
     <div className={`fixed left-3 right-3 sm:left-auto sm:right-6 sm:max-w-sm z-[55] animate-in slide-in-from-bottom-2 duration-200 ${hasCart ? 'bottom-[228px] sm:bottom-[210px]' : 'bottom-[152px] sm:bottom-[150px]'}`}>
       <div className="bg-slate-950 text-white rounded-2xl shadow-2xl border border-white/10 p-2.5 sm:p-4 flex items-center gap-2.5 sm:gap-3">
@@ -113,6 +145,7 @@ export const PwaInstallBanner: React.FC<{ hasCart?: boolean }> = ({ hasCart = fa
               id="btn-pwa-install"
               href={APK_URL}
               download
+              onClick={markInstalled}
               className="flex items-center justify-center gap-1.5 bg-[#ED1C24] hover:bg-[#c91430] text-white text-xs font-black px-3.5 py-2 rounded-xl shadow-md transition-colors cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
@@ -122,7 +155,7 @@ export const PwaInstallBanner: React.FC<{ hasCart?: boolean }> = ({ hasCart = fa
         </div>
         <button
           id="btn-pwa-install-dismiss"
-          onClick={handleDismiss}
+          onClick={dismiss}
           className="text-zinc-500 hover:text-white transition-colors cursor-pointer shrink-0"
           aria-label="Dismiss install prompt"
         >

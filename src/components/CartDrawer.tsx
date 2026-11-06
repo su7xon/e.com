@@ -47,6 +47,18 @@ interface CartDrawerProps {
   unavailableLines?: Record<string, string>;
   /** Tuesday Treat / Funday Friday result for this cart. */
   dayDeal?: DayDealResult | null;
+  /** GST rate of the store this order goes to (0.05 or 0). */
+  gstRate?: number;
+  /** Set when the store is closed / not taking orders: shown on top and blocks checkout. */
+  storeClosedNote?: string;
+  /** Delivery can't go ahead yet: shown on top with what to do, and blocks checkout. */
+  deliveryBlock?: { message: string; canPin?: boolean } | null;
+  /** The store this order goes to. */
+  storeName?: string;
+  /** Opens the store list to collect the order. */
+  onPickupInstead?: () => void;
+  /** Back from pick-up to delivery. */
+  onDeliverInstead?: () => void;
   onPlaceOrder?: (notes: string, paymentMethod: string, delivery?: DeliveryDetails) => void;
   onQuickAdd: (productId: string) => void;
   onUpgradeItem?: (cartItemId: string) => void;
@@ -142,6 +154,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onEditItem,
   unavailableLines = {},
   dayDeal = null,
+  gstRate = 0,
+  storeClosedNote = '',
+  deliveryBlock = null,
+  storeName = '',
+  onPickupInstead,
+  onDeliverInstead,
   onPlaceOrder,
   onQuickAdd,
   onUpgradeItem,
@@ -187,8 +205,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
   const freeDeliveryThreshold = 99;
   const isFreeDeliveryEligible = subtotal >= freeDeliveryThreshold;
+  const isPickup = orderType === 'TAKEAWAY';
   const deliveryFee = orderType === 'DELIVERY' ? (isFreeDeliveryEligible ? 0 : 40) : 0;
-  const taxesAndCharges = taxesAndChargesFor(subtotal);
+  const taxesAndCharges = taxesAndChargesFor(subtotal, gstRate);
 
   // Day deal and coupon don't stack — the bigger saving applies.
   const best = bestDiscount(subtotal, appliedCoupon, dayDeal?.discount ?? 0);
@@ -218,11 +237,19 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const handleCompleteOrder = () => {
     setFormError('');
     setFieldError({});
+    if (deliveryBlock) {
+      setFormError(deliveryBlock.message);
+      return;
+    }
+    if (storeClosedNote) {
+      setFormError(storeClosedNote);
+      return;
+    }
     if (Object.keys(unavailableLines).length) {
       setFormError('Some items in your cart are not available right now. Remove them to place the order.');
       return;
     }
-    if (orderType === 'DELIVERY') {
+    if (orderType !== 'DINE_IN') {
       const digits = receiverPhone.replace(/\D/g, '').replace(/^91/, '');
       const nameBad = !receiverName.trim();
       const phoneBad = !/^[6-9]\d{9}$/.test(digits);
@@ -360,12 +387,16 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           className="bg-white px-[max(0.875rem,calc((100%_-_48rem)/2))] py-1.5 flex items-center gap-3 border-b border-slate-200 text-left w-full cursor-pointer hover:bg-slate-50 transition-colors"
         >
           <div className="shrink-0">
-            <div className="text-[11px] font-black text-slate-900 leading-tight">Deliver · 30 min</div>
+            <div className="text-[11px] font-black text-slate-900 leading-tight">{isPickup ? 'Pick up' : 'Deliver · 30 min'}</div>
           </div>
           <div className="w-px h-5 bg-slate-200" />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-slate-800 truncate">
-              {currentAddress.address}, {currentAddress.city} - {currentAddress.pincode}
+              {isPickup
+                ? storeName
+                : currentAddress.pincode
+                  ? `${currentAddress.address}, ${currentAddress.city} - ${currentAddress.pincode}`
+                  : currentAddress.address}
             </p>
           </div>
           <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
@@ -388,6 +419,49 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Delivery needs a location / not delivered here */}
+        {cartItems.length > 0 && deliveryBlock && (
+          <div role="alert" id="cart-delivery-block" className="px-[max(0.875rem,calc((100%_-_48rem)/2))] py-2.5 text-xs border-b bg-amber-50 border-amber-300 text-amber-900">
+            <p className="font-bold">📍 {deliveryBlock.message}</p>
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                id="btn-cart-block-address"
+                onClick={deliveryBlock.canPin ? () => setIsMapPickerOpen(true) : onOpenAddressModal}
+                className="px-3 py-1.5 rounded-lg bg-[#ED1C24] text-white font-bold cursor-pointer"
+              >
+                {deliveryBlock.canPin ? 'Pin on map' : 'Choose location'}
+              </button>
+              {onPickupInstead && (
+                <button type="button" id="btn-cart-pickup" onClick={onPickupInstead} className="px-3 py-1.5 rounded-lg bg-white border border-amber-400 font-bold cursor-pointer">
+                  Pick up from a store
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Store the order goes to */}
+        {cartItems.length > 0 && !deliveryBlock && storeName && orderType !== 'DINE_IN' && (
+          <div id="cart-store-line" className="px-[max(0.875rem,calc((100%_-_48rem)/2))] py-1.5 text-xs border-b bg-slate-50 border-slate-200 text-slate-700 flex items-center justify-between gap-2">
+            <span className="min-w-0 truncate">
+              {isPickup ? 'Pick up from' : 'Delivering from'}: <b>{storeName}</b>
+            </span>
+            {isPickup && onDeliverInstead ? (
+              <button type="button" onClick={onDeliverInstead} className="shrink-0 font-bold text-[#ED1C24] cursor-pointer">Deliver instead</button>
+            ) : onPickupInstead ? (
+              <button type="button" onClick={onPickupInstead} className="shrink-0 font-bold text-[#ED1C24] cursor-pointer">Pick up instead</button>
+            ) : null}
+          </div>
+        )}
+
+        {/* Store closed */}
+        {cartItems.length > 0 && storeClosedNote && (
+          <div role="alert" className="px-[max(0.875rem,calc((100%_-_48rem)/2))] py-2 text-xs font-bold border-b bg-red-50 border-red-200 text-red-800">
+            🕙 {storeClosedNote}. You can keep your cart and order when it opens.
           </div>
         )}
 
@@ -970,7 +1044,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
               {/* 5. Delivery Address Pill & Cooking Notes */}
               <div className="bg-white rounded-2xl p-3.5 border border-slate-200 shadow-2xs space-y-2.5">
-                <div className="bg-gradient-to-r from-red-50/90 via-amber-50/40 to-amber-50/30 border border-red-200/80 rounded-xl p-2.5 flex items-center justify-between gap-2">
+                {orderType === 'DELIVERY' && <div className="bg-gradient-to-r from-red-50/90 via-amber-50/40 to-amber-50/30 border border-red-200/80 rounded-xl p-2.5 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="w-8 h-8 rounded-xl bg-[#ED1C24] text-white flex items-center justify-center shrink-0 shadow-2xs">
                       <MapPin className="w-4 h-4 text-amber-300" />
@@ -978,7 +1052,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] font-black uppercase tracking-wider text-red-900 block">
-                          Delivering To: {currentAddress.label}
+                          {currentAddress.id === 'addr-none' ? 'Delivery location' : `Delivering To: ${currentAddress.label}`}
                         </span>
                         {currentAddress.lat && (
                           <span className="bg-emerald-100 text-emerald-800 text-[8px] font-black px-1 rounded-sm uppercase">
@@ -987,7 +1061,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                         )}
                       </div>
                       <p className="text-xs text-slate-700 truncate font-medium">
-                        {currentAddress.address}, {currentAddress.city}
+                        {currentAddress.city ? `${currentAddress.address}, ${currentAddress.city}` : currentAddress.address}
                       </p>
                     </div>
                   </div>
@@ -1011,11 +1085,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       Change
                     </button>
                   </div>
-                </div>
+                </div>}
 
                 <div>
                   <span className="text-[11px] font-bold text-slate-700 block mb-1">
-                    Delivery / Cooking Instructions
+                    {isPickup ? 'Cooking Instructions' : 'Delivery / Cooking Instructions'}
                   </span>
                   <input
                     id="input-cart-notes"
@@ -1028,10 +1102,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 </div>
 
                 {/* Receiver details — rider isi name/number/landmark par pahunchega */}
-                {orderType === 'DELIVERY' && (
+                {orderType !== 'DINE_IN' && (
                   <div ref={receiverBoxRef} className="border-t border-slate-100 pt-2.5 space-y-2 scroll-mt-24">
                     <span className="text-[11px] font-black uppercase tracking-wider text-slate-800 block">
-                      Receiver Details (for Rider)
+                      {isPickup ? 'Your Details' : 'Receiver Details (for Rider)'}
                     </span>
                     <div className="grid grid-cols-2 gap-2">
                       <input
@@ -1093,7 +1167,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
                 {taxesAndCharges > 0 && (
                   <div className="flex justify-between text-slate-600">
-                    <span>Taxes & Restaurant Packaging</span>
+                    <span>GST ({Math.round(gstRate * 100)}%)</span>
                     <span className="font-mono font-semibold">₹{taxesAndCharges}</span>
                   </div>
                 )}

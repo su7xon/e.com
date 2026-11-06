@@ -7,12 +7,14 @@ interface LocationPromptProps {
   hasCart?: boolean;
   onAllow: () => void;
   onDismiss: () => void;
+  /** Type or pin an address instead of sharing location. */
+  onEnterAddress: () => void;
 }
 
 /**
  * First-screen location gate (Domino's style): centered dialog over a dimmed page.
  * Allow -> browser location prompt -> coords saved for outlet distance + order routing.
- * Ask Later -> menu loads with the default outlet; the header badge can still detect location.
+ * Enter address -> address sheet. Browse first -> menu loads; the cart asks for a location before checkout.
  * NOTE: hasCart kept for compat — centered dialog needs no bottom offset, so no overlap.
  */
 export const LocationPrompt: React.FC<LocationPromptProps> = ({
@@ -20,6 +22,7 @@ export const LocationPrompt: React.FC<LocationPromptProps> = ({
   hasFix,
   onAllow,
   onDismiss,
+  onEnterAddress,
 }) => {
   if (hasFix || gpsState === 'locked') return null;
 
@@ -46,27 +49,36 @@ export const LocationPrompt: React.FC<LocationPromptProps> = ({
             <>Finding your location…</>
           ) : (
             <>
-              Allow <b>7 Cheese</b> to access this device&apos;s location?
+              Where should we deliver your <b>7 Cheese</b> order?
             </>
           )}
         </h3>
         <p className="mt-1 text-[11px] text-slate-400">
-          Used for your nearest outlet, delivery distance and order tracking.
+          We use it to find your nearest store and delivery distance.
         </p>
 
-        <div className="mt-5 flex items-center justify-between">
+        <div className="mt-5 space-y-2">
           <button
-            onClick={onDismiss}
-            className="text-xs italic text-slate-600 underline underline-offset-4 cursor-pointer"
-          >
-            {denied ? 'Continue without' : 'Ask Later'}
-          </button>
-          <button
+            id="btn-loc-use-gps"
             onClick={onAllow}
             disabled={locating}
-            className="bg-[#ED1C24] hover:bg-[#c91430] disabled:opacity-70 text-white text-sm font-bold px-6 py-2.5 rounded-md cursor-pointer"
+            className="w-full bg-[#ED1C24] hover:bg-[#c91430] disabled:opacity-70 text-white text-sm font-bold px-6 py-2.5 rounded-md cursor-pointer"
           >
-            {denied ? 'Retry' : locating ? 'Detecting…' : 'Allow'}
+            {denied ? 'Try again' : locating ? 'Detecting…' : 'Use my location'}
+          </button>
+          <button
+            id="btn-loc-enter-address"
+            onClick={onEnterAddress}
+            className="w-full bg-white border border-slate-300 hover:bg-slate-50 text-slate-800 text-sm font-bold px-6 py-2.5 rounded-md cursor-pointer"
+          >
+            Enter address
+          </button>
+          <button
+            id="btn-loc-browse"
+            onClick={onDismiss}
+            className="text-xs text-slate-600 underline underline-offset-4 cursor-pointer"
+          >
+            Browse the menu first
           </button>
         </div>
       </div>

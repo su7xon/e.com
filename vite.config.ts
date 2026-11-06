@@ -24,6 +24,7 @@ export default defineConfig(() => {
           scope: '/',
           start_url: '/',
           id: '/',
+          related_applications: [{ platform: 'webapp', url: '/manifest.webmanifest' }],
           categories: ['food', 'shopping', 'business'],
           icons: [
             {

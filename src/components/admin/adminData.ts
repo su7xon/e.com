@@ -39,6 +39,8 @@ export interface AdminOrder {
   createdAtMs?: number;
   timeAgo: string;
   cookingNotes?: string;
+  /** Staff member who billed it (counter) — printed as "Sold by". */
+  soldBy?: string;
   outletId?: string; // which outlet owns the order (outlet-1 / outlet-2). Legacy orders without it are visible to all outlets.
   // Rushda counter-billing extensions (optional so old orders keep working)
   billDateIso?: string; // YYYY-MM-DD, defaults to today when missing
@@ -237,6 +239,15 @@ export function normalizeOrder(o: AdminOrder): AdminOrder {
     customerName: o.customerName || '',
     customerPhone: o.customerPhone || '',
   };
+}
+
+/** Order id that can't be guessed (the customer's tracker reads its order by id). */
+export function newOrderId(): string {
+  const rand =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID().replace(/-/g, '').slice(0, 20)
+      : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  return `ord-${Date.now().toString(36)}-${rand}`;
 }
 
 /** "Medium • Thin Crust • Schezwan Sauce • Paneer, Corn • Extra cheese" — what the kitchen needs to make it. */

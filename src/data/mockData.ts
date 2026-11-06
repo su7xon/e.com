@@ -2113,31 +2113,22 @@ export const COUPONS: Coupon[] = [
   },
 ];
 
-export const DEFAULT_ADDRESSES: UserAddress[] = [
-  {
-    id: 'addr-1',
-    label: 'Home',
-    address: 'Kaladhungi Road, Unchapul, Near TVS Showroom',
-    city: 'Haldwani',
-    pincode: '263139',
-    landmark: 'Near TVS Showroom / 7 Cheese Flagship',
-    distanceKm: 0.8,
-    isDefault: true,
-    lat: 29.2145,
-    lng: 79.5285,
-  },
-  {
-    id: 'addr-2',
-    label: 'Work',
-    address: 'Main Market, Kusumkhera / Kaladhungi Road',
-    city: 'Haldwani',
-    pincode: '263139',
-    landmark: 'Opposite State Bank ATM',
-    distanceKm: 2.1,
-    lat: 29.199,
-    lng: 79.518,
-  },
-];
+/** New customers start with no saved address. */
+export const DEFAULT_ADDRESSES: UserAddress[] = [];
+
+/** Placeholder until the customer chooses a location. Never an order's address. */
+export const NO_ADDRESS: UserAddress = {
+  id: 'addr-none',
+  label: 'Other',
+  address: 'Choose your delivery location',
+  city: '',
+  pincode: '',
+};
+
+/** Demo addresses older versions saved on every phone; removed on load unless the customer edited them. */
+export const isDemoAddress = (a: UserAddress) =>
+  (a.id === 'addr-1' && a.address === 'Kaladhungi Road, Unchapul, Near TVS Showroom') ||
+  (a.id === 'addr-2' && a.address === 'Main Market, Kusumkhera / Kaladhungi Road');
 
 export const SIZE_PRICE_MODIFIERS: Record<string, number> = {
   Regular: 0,

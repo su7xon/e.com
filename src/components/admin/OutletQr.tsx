@@ -8,6 +8,7 @@ import {
   getOutletTables,
   addOutletTable,
   deleteOutletTable,
+  useOutlets,
   getTableQrUrl,
   type OutletTable,
 } from './outlets';
@@ -122,18 +123,21 @@ export const OutletQr: React.FC<OutletQrProps> = ({ outlet }) => {
   const [newTableName, setNewTableName] = useState('');
   const [storageWarning, setStorageWarning] = useState('');
 
-  // Outlet change pe token + tables reload
+  // Store change, or tables / QR saved from another device: reload
+  const liveOutlets = useOutlets();
   React.useEffect(() => {
     setToken(getOutletQrToken(outlet.id));
     setTables(getOutletTables(outlet.id));
-  }, [outlet.id]);
+  }, [outlet.id, liveOutlets]);
 
   const url = getOutletQrUrl(outlet.id, token);
   const qrImg = qrImgFor(url);
 
   const handleRegenerate = () => {
     if (!window.confirm(`Generate a new QR code for ${outlet.shortName}? Old printed QR codes will stop working, so you will need to print and display new ones.`)) return;
-    setToken(regenerateOutletQrToken(outlet.id));
+    regenerateOutletQrToken(outlet.id)
+      .then(setToken)
+      .catch(() => window.alert('The new QR code could not be saved for other devices. Check the internet and try again.'));
     setCopied(false);
   };
 
@@ -161,7 +165,7 @@ export const OutletQr: React.FC<OutletQrProps> = ({ outlet }) => {
     }
   };
 
-  const handleAddTable = () => {
+  const handleAddTable = async () => {
     const name = newTableName.trim();
     if (!name) {
       window.alert('Type a table name first, for example "Table T-03", then press Add Table.');
@@ -173,7 +177,7 @@ export const OutletQr: React.FC<OutletQrProps> = ({ outlet }) => {
       return;
     }
 
-    const { table, saved } = addOutletTable(outlet.id, name);
+    const { table, saved } = await addOutletTable(outlet.id, name);
     setNewTableName('');
 
     if (saved) {
@@ -183,8 +187,8 @@ export const OutletQr: React.FC<OutletQrProps> = ({ outlet }) => {
       // Browser refused the write (storage full / private mode). Keep it visible this session
       // instead of silently doing nothing.
       setStorageWarning(
-        `"${name}" could not be saved on this device — the browser blocked storage (full or private mode). ` +
-          'Free some space (or open the panel in a normal window) and add the table again. It shows below until you close this page.'
+        `"${name}" could not be saved for the other phones and tablets — check the internet and add the table again. ` +
+          'It shows below until you close this page.'
       );
       setTables((prev) => [...prev, table]);
     }
@@ -325,13 +329,10 @@ export const OutletQr: React.FC<OutletQrProps> = ({ outlet }) => {
               <TableQrCard
                 outlet={outlet}
                 table={t}
-                onDelete={() => {
-                  const removed = deleteOutletTable(outlet.id, t.id);
+                onDelete={async () => {
+                  const removed = await deleteOutletTable(outlet.id, t.id);
                   if (!removed) {
-                    window.alert(
-                      `"${t.name}" could not be deleted — this browser is blocking storage (full or private mode). ` +
-                        'Free some space and try again.'
-                    );
+                    window.alert(`"${t.name}" could not be deleted for the other devices — check the internet and try again.`);
                   }
                   setTables(getOutletTables(outlet.id));
                 }}

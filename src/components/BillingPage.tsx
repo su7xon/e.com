@@ -73,8 +73,30 @@ export const BillingPage: React.FC<BillingPageProps> = ({
   const [cookingNotes, setCookingNotes] = useState('');
   const [isPlacing, setIsPlacing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'upi' | 'card' | 'cod'>('upi');
-  const [receiverName, setReceiverName] = useState('');
-  const [receiverPhone, setReceiverPhone] = useState('');
+  const [receiverName, setReceiverName] = useState(() => {
+    try {
+      const saved = localStorage.getItem('seven_cheese_customer');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.name || '';
+      }
+    } catch {
+      // ignore
+    }
+    return '';
+  });
+  const [receiverPhone, setReceiverPhone] = useState(() => {
+    try {
+      const saved = localStorage.getItem('seven_cheese_customer');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.phone || '';
+      }
+    } catch {
+      // ignore
+    }
+    return '';
+  });
   // Landmark hamesha blank — user khud likhega (saved address se auto-fill nahi)
   const [receiverLandmark, setReceiverLandmark] = useState('');
   const [formError, setFormError] = useState('');

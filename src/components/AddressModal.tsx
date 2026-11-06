@@ -36,8 +36,8 @@ export const AddressModal: React.FC<AddressModalProps> = ({
   const [isMapPickerOpen, setIsMapPickerOpen] = useState(false);
   const [label, setLabel] = useState<'Home' | 'Work' | 'Other'>('Home');
   const [addressLine, setAddressLine] = useState('');
-  const [city, setCity] = useState('Haldwani');
-  const [pincode, setPincode] = useState('263139');
+  const [city, setCity] = useState('');
+  const [pincode, setPincode] = useState('');
   const [landmark, setLandmark] = useState('');
 
   if (!isOpen) return null;
@@ -45,8 +45,8 @@ export const AddressModal: React.FC<AddressModalProps> = ({
   const resetForm = () => {
     setLabel('Home');
     setAddressLine('');
-    setCity('Haldwani');
-    setPincode('263139');
+    setCity('');
+    setPincode('');
     setLandmark('');
     setEditingId(null);
     setShowAddForm(false);
@@ -169,6 +169,12 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                   <span className="text-[11px] font-black uppercase tracking-wider text-slate-500 block">
                     Saved Addresses
                   </span>
+
+                  {addresses.length === 0 && (
+                    <p className="text-xs text-slate-500 border border-dashed border-slate-300 rounded-2xl p-4 text-center">
+                      No saved addresses yet. Use the map or enter one below.
+                    </p>
+                  )}
 
                   {addresses.map((addr) => {
                     const isSelected = currentAddress.id === addr.id;

@@ -21,11 +21,17 @@ import {
   Image as ImageIcon,
   QrCode,
   Bike,
-  Printer
+  Printer,
+  Users,
 } from 'lucide-react';
 import { MenuItem, Coupon, CategoryItem } from '../../types';
 import { AdminOrder, normalizeOrder } from './adminData';
-import { Outlet } from './outlets';
+import { Outlet, getOutletById, useOutlets } from './outlets';
+import { ROLE_LABEL, type StaffProfile } from '../../lib/auth';
+import { can, tabsFor, NEEDS_ONE_STORE, type AdminTab } from './permissions';
+import { AdminStaff } from './AdminStaff';
+import { AdminStores } from './AdminStores';
+import { subscribeToOutletSoldOut, setOutletSoldOut } from '../../lib/firebase';
 import { OutletQr } from './OutletQr';
 import { BannerSlide, SlideSchedule } from '../HeroBanner';
 import { AdminDashboard } from './AdminDashboard';
@@ -49,7 +55,8 @@ import {
 } from './ThermalBills';
 
 interface AdminLayoutProps {
-  outlet: Outlet;
+  /** Who is signed in: their role decides the pages, their store the orders. */
+  staff: StaffProfile;
   orders: AdminOrder[];
   syncStatus: 'connecting' | 'live' | 'error';
   syncError?: string;
@@ -75,7 +82,7 @@ interface AdminLayoutProps {
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({
-  outlet,
+  staff,
   orders,
   syncStatus,
   syncError = '',
@@ -99,14 +106,16 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   categories,
   onUpdateCategoryImage
 }) => {
-  type AdminTab = 'dashboard' | 'live-orders' | 'delivery' | 'rushda' | 'menu' | 'offers' | 'coupons' | 'images' | 'qr';
-  const ADMIN_TABS: AdminTab[] = ['dashboard', 'live-orders', 'delivery', 'rushda', 'menu', 'offers', 'coupons', 'images', 'qr'];
+  // Pages this person's role may open.
+  const allowedTabs = tabsFor(staff);
+  const isOwner = staff.role === 'owner';
   // The open page is kept in the URL (#live-orders …) so a refresh stays on it.
   const [activeTab, setActiveTabState] = useState<AdminTab>(() => {
     const h = window.location.hash.replace('#', '') as AdminTab;
-    return ADMIN_TABS.includes(h) ? h : 'dashboard';
+    return allowedTabs.includes(h) ? h : allowedTabs[0];
   });
   const setActiveTab = (tab: AdminTab) => {
+    if (!allowedTabs.includes(tab)) return;
     setActiveTabState(tab);
     try {
       window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}#${tab}`);
@@ -144,9 +153,79 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const autoPrintTypeRef = useRef(autoPrintType);
   autoPrintTypeRef.current = autoPrintType;
 
-  // Strict per-outlet: har outlet ko SIRF apne order dikhenge.
-  // Legacy orders (bina outletId) dono me dikhenge taaki purana data kho na jaye.
-  const visibleOrders = orders.filter((o) => !o.outletId || o.outletId === outlet.id).map(normalizeOrder);
+  // Store scope: managers / staff are fixed to their store; the owner picks one store or "All stores".
+  const outlets = useOutlets();
+  const [scope, setScopeState] = useState<string>(() => {
+    if (!isOwner) return staff.outletId || 'outlet-1';
+    try {
+      const s = sessionStorage.getItem('seven_cheese_admin_scope');
+      if (s && (s === 'all' || getOutletById(s))) return s;
+    } catch {
+      // ignore
+    }
+    return 'all';
+  });
+  const setScope = (s: string) => {
+    setScopeState(s);
+    try {
+      sessionStorage.setItem('seven_cheese_admin_scope', s);
+    } catch {
+      // ignore
+    }
+  };
+  const outlet: Outlet | null = scope === 'all' ? null : getOutletById(scope) ?? null;
+  const scopeLabel = outlet ? outlet.shortName : 'All stores';
+  // Orders from before stores were tagged belong to Unchapul (outlet-1).
+  const inScope = (o: AdminOrder) => scope === 'all' || o.outletId === scope || (!o.outletId && scope === 'outlet-1');
+  const visibleOrders = orders.filter(inScope).map(normalizeOrder);
+
+  // Items sold out at the store in view.
+  const [soldOutIds, setSoldOutIds] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    if (!outlet) {
+      setSoldOutIds(new Set());
+      return;
+    }
+    return subscribeToOutletSoldOut(outlet.id, (ids) => setSoldOutIds(new Set(ids)));
+  }, [outlet?.id]);
+  const toggleSoldOut = (itemId: string, makeSoldOut: boolean) => {
+    if (!outlet) return;
+    setSoldOutIds((prev) => {
+      const next = new Set(prev);
+      if (makeSoldOut) next.add(itemId);
+      else next.delete(itemId);
+      return next;
+    });
+    setOutletSoldOut(outlet.id, itemId, makeSoldOut).catch(() =>
+      window.alert('Could not save. Check the internet and try again.')
+    );
+  };
+
+  const storeSwitcher = (className = '') =>
+    isOwner ? (
+      <select
+        aria-label="Store"
+        value={scope}
+        onChange={(e) => setScope(e.target.value)}
+        className={`bg-slate-100 border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 cursor-pointer max-w-full ${className}`}
+      >
+        <option value="all">All stores</option>
+        {outlets.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.shortName}
+          </option>
+        ))}
+      </select>
+    ) : (
+      <span className={`text-xs text-slate-500 truncate ${className}`}>{scopeLabel}</span>
+    );
+
+  const pickStore = (what: string) => (
+    <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center space-y-3">
+      <p className="text-sm font-bold text-slate-800">Choose a store to use {what}</p>
+      {storeSwitcher('mx-auto')}
+    </div>
+  );
 
   const activeOrdersCount = visibleOrders.filter(o => o.status === 'NEW' || o.status === 'KITCHEN').length;
   const activeDeliveryCount = visibleOrders.filter(o => o.orderType === 'DELIVERY' && (o.status === 'NEW' || o.status === 'KITCHEN' || o.status === 'DISPATCHED')).length;
@@ -278,6 +357,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     if (!fresh.length) return;
     // Khud counter se banaye orders nikalo — unpe no sound, no flash, no popup.
     const external = fresh.filter((o) => {
+      if (!inScope(o)) return false;
       if (selfCreatedIds.current.has(o.id)) {
         selfCreatedIds.current.delete(o.id);
         return false;
@@ -288,7 +368,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     const latest = external[0];
     const itemCount = (latest.items || []).reduce((n, it) => n + (it.quantity || 1), 0);
     // This outlet's new orders go into the popup queue; the alarm repeats until they're accepted.
-    const mine = external.filter((o) => o.status === 'NEW' && (!o.outletId || o.outletId === outlet.id)).map((o) => o.id);
+    const mine = external.filter((o) => o.status === 'NEW').map((o) => o.id);
     if (mine.length) {
       setAlertQueue((q) => [...q, ...mine.filter((id) => !q.includes(id))]);
       setAlarmMuted(false);
@@ -296,7 +376,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     flashTitle(`🔔 NEW ORDER ${latest.orderNumber} — ₹${latest.total}`);
 
     // Auto-Print incoming orders immediately to Thermal Printer
-    if (autoPrintOnRef.current) {
+    if (autoPrintOnRef.current && scope !== 'all') {
       external.forEach((ord) => {
         try {
           const tData = orderToThermal(ord);
@@ -407,7 +487,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
-  const NAV: { id: AdminTab; label: string; icon: typeof LayoutDashboard; badge?: number; badgeColor?: string }[] = [
+  const NAV: { id: AdminTab; label: string; icon: typeof LayoutDashboard; badge?: number; badgeColor?: string }[] = ([
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'live-orders', label: 'Live Orders', icon: ShoppingBag, badge: activeOrdersCount || undefined, badgeColor: 'bg-red-500 text-white' },
     { id: 'delivery', label: 'Delivery (Rider)', icon: Bike, badge: activeDeliveryCount || undefined, badgeColor: 'bg-blue-600 text-white' },
@@ -417,8 +497,20 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     { id: 'coupons', label: 'Promo Codes', icon: Tag, badge: coupons.length, badgeColor: 'bg-emerald-50 text-emerald-700' },
     { id: 'images', label: 'Store Images', icon: ImageIcon },
     { id: 'qr', label: 'Tables & QR Codes', icon: QrCode },
-  ];
-  const currentLabel = NAV.find((n) => n.id === activeTab)?.label ?? 'Dashboard';
+    { id: 'stores', label: 'Stores', icon: Store },
+    { id: 'staff', label: 'Staff Logins', icon: Users },
+  ] as { id: AdminTab; label: string; icon: typeof LayoutDashboard; badge?: number; badgeColor?: string }[]).filter((n) => allowedTabs.includes(n.id));
+  const currentLabel = NAV.find((n) => n.id === activeTab)?.label ?? 'Admin';
+
+  const phoneTabs = ([
+    { id: 'dashboard', label: 'Home', icon: LayoutDashboard, badge: 0 },
+    { id: 'live-orders', label: 'Orders', icon: ShoppingBag, badge: activeOrdersCount },
+    { id: 'delivery', label: 'Delivery', icon: Bike, badge: activeDeliveryCount },
+    { id: 'rushda', label: 'Billing', icon: Receipt, badge: 0 },
+    { id: 'menu', label: 'Menu', icon: UtensilsCrossed, badge: 0 },
+  ] as { id: AdminTab; label: string; icon: typeof LayoutDashboard; badge: number }[])
+    .filter((b) => allowedTabs.includes(b.id))
+    .slice(0, 4);
 
   // Alert / printing / test controls live in one Settings panel instead of the header.
   const SettingsPanel = () => (
@@ -521,7 +613,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         </button>
         <div className="min-w-0 flex-1">
           <div className="font-black text-sm text-slate-900 truncate">{currentLabel}</div>
-          <div className="text-[11px] text-slate-500 truncate">{outlet.name}</div>
+          {storeSwitcher('mt-0.5')}
         </div>
         <SyncBadge compact />
         <button onClick={handleRefresh} className="p-2 rounded-xl bg-slate-100 text-slate-700 shrink-0" aria-label="Refresh live data">
@@ -551,7 +643,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               </div>
               <div className="min-w-0">
                 <div className="font-black text-sm text-slate-900 tracking-tight leading-none">7 CHEESE PIZZA</div>
-                <div className="text-[11px] text-slate-500 font-medium mt-1 truncate">{outlet.area}</div>
+                <div className="text-[11px] text-slate-500 font-medium mt-1 truncate">{scopeLabel}</div>
               </div>
             </div>
             <button onClick={() => setIsMobileSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-slate-600" aria-label="Close menu">
@@ -584,7 +676,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
                 </button>
               );
             })}
-            <button
+            {can(staff, 'reports') && <button
               onClick={() => {
                 setIsShiftModalOpen(true);
                 setIsMobileSidebarOpen(false);
@@ -593,11 +685,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             >
               <FileText className="w-4 h-4 text-amber-500" />
               Day close report
-            </button>
+            </button>}
           </nav>
         </div>
 
         <div className="p-4 border-t border-slate-100 space-y-2 shrink-0">
+          <div className="text-[11px] text-slate-500 text-center truncate" id="admin-signed-in-as">
+            Signed in: <b className="text-slate-800">{staff.name}</b> · {ROLE_LABEL[staff.role]}
+          </div>
           <button
             id="btn-admin-back-store"
             onClick={onBackToStore}
@@ -623,9 +718,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         <header className="hidden md:flex bg-white border-b border-slate-200 px-6 py-3 items-center justify-between gap-4 sticky top-0 z-30 shadow-xs">
           <div className="min-w-0">
             <div className="font-black text-slate-900 text-base truncate">{currentLabel}</div>
-            <div className="text-xs text-slate-500 truncate">
-              {outlet.name} — {outlet.area}
-            </div>
+            <div className="mt-0.5">{storeSwitcher()}</div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {activeOrdersCount > 0 && (
@@ -655,13 +748,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         {isSettingsOpen && <SettingsPanel />}
 
         {/* Phone bottom tabs */}
-        <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-200 grid grid-cols-5">
-          {([
-            { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
-            { id: 'live-orders', label: 'Orders', icon: ShoppingBag, badge: activeOrdersCount },
-            { id: 'delivery', label: 'Delivery', icon: Bike, badge: activeDeliveryCount },
-            { id: 'rushda', label: 'Billing', icon: Receipt },
-          ] as const).map((b) => {
+        <nav
+          className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-200 grid"
+          style={{ gridTemplateColumns: `repeat(${phoneTabs.length + 1}, minmax(0, 1fr))` }}
+        >
+          {phoneTabs.map((b) => {
             const Icon = b.icon;
             const active = activeTab === b.id;
             return (
@@ -705,8 +796,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             <AdminLiveOrders
               orders={visibleOrders}
               onUpdateOrderStatus={onUpdateOrderStatus}
-              onDeleteOrder={onDeleteOrder}
-              headerActions={<OrderExport orders={visibleOrders} />}
+              onDeleteOrder={can(staff, 'delete-order') ? onDeleteOrder : undefined}
+              headerActions={can(staff, 'reports') ? <OrderExport orders={visibleOrders} /> : undefined}
             />
           )}
 
@@ -714,21 +805,26 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             <AdminDelivery
               orders={visibleOrders}
               onUpdateOrderStatus={onUpdateOrderStatus}
-              onDeleteOrder={onDeleteOrder}
+              onDeleteOrder={can(staff, 'delete-order') ? onDeleteOrder : undefined}
             />
           )}
 
-          {activeTab === 'rushda' && (
+          {activeTab === 'rushda' && (outlet ? (
             <RushdaBilling
               outlet={outlet}
               orders={visibleOrders}
-              menuItems={menuItems}
+              menuItems={menuItems.filter((m) => !soldOutIds.has(m.id))}
+              allMenuItems={menuItems}
               onCreateOrder={handleCounterCreateOrder}
-              onAddItem={onAddItem}
-              onUpdateItem={onUpdateItem}
-              onDeleteItem={onDeleteItem}
+              onAddItem={can(staff, 'edit-menu') ? onAddItem : undefined}
+              onUpdateItem={can(staff, 'edit-menu') ? onUpdateItem : undefined}
+              onDeleteItem={can(staff, 'edit-menu') ? onDeleteItem : undefined}
+              soldBy={staff.name}
+              canReport={can(staff, 'reports')}
             />
-          )}
+          ) : (
+            pickStore('Counter Billing')
+          ))}
 
           {activeTab === 'menu' && (
             <AdminMenuManager
@@ -737,6 +833,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               onUpdateItem={onUpdateItem}
               onDeleteItem={onDeleteItem}
               onRestoreMenu={onRestoreMenu}
+              canEdit={can(staff, 'edit-menu')}
+              storeSoldOut={outlet ? { storeName: outlet.shortName, ids: soldOutIds, onToggle: toggleSoldOut } : null}
             />
           )}
 
@@ -767,9 +865,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
             />
           )}
 
-          {activeTab === 'qr' && (
-            <OutletQr outlet={outlet} />
-          )}
+          {activeTab === 'qr' && (outlet ? <OutletQr outlet={outlet} /> : pickStore('Tables & QR Codes'))}
+
+          {activeTab === 'stores' && <AdminStores />}
+
+          {activeTab === 'staff' && <AdminStaff me={staff} scopeOutletId={scope} />}
         </div>
       </main>
 
@@ -778,7 +878,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         orders={visibleOrders}
         isOpen={isShiftModalOpen}
         onClose={() => setIsShiftModalOpen(false)}
-        outletName={`${outlet.name} — ${outlet.area}`}
+        outletName={outlet ? `${outlet.name} — ${outlet.shortName}` : '7 Cheese Pizza — All stores'}
       />
       <NewOrderAlert
         order={currentAlert}

@@ -35,6 +35,8 @@ interface NavbarProps {
   isTableLocked?: boolean;
   /** Opens the Profile tab (round icon at the right end of the header). */
   onOpenProfile?: () => void;
+  userPhoto?: string;
+  userName?: string;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -57,6 +59,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectSuggestion,
   isTableLocked = false,
   onOpenProfile,
+  userPhoto,
+  userName,
 }) => {
   const [searchFocus, setSearchFocus] = React.useState(false);
   // Phones: search is an icon in the address row; tapping it swaps the row for the search box.
@@ -248,7 +252,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <div className="min-w-0">
                 <div className="flex items-center gap-1 text-xs font-bold text-[#ED1C24]"><MapPin className="w-3.5 h-3.5 shrink-0" />
                   <span className="truncate">
-                    {currentAddress.label}
+                    {currentAddress.id === 'addr-none' ? 'Set location' : currentAddress.label}
                   </span>
                   <ChevronDown className="w-3.5 h-3.5 shrink-0 text-slate-400" />
                 </div>
@@ -276,9 +280,22 @@ export const Navbar: React.FC<NavbarProps> = ({
             id="btn-header-profile"
             onClick={onOpenProfile}
             aria-label="Profile"
-            className={`${mobileSearchOpen ? 'hidden' : 'flex'} sm:flex order-3 shrink-0 w-9 h-9 rounded-full border border-slate-200 bg-white hover:bg-slate-100 items-center justify-center text-slate-700 cursor-pointer`}
+            className={`${mobileSearchOpen ? 'hidden' : 'flex'} sm:flex order-3 shrink-0 w-9 h-9 rounded-full border border-slate-200 bg-white hover:bg-slate-100 items-center justify-center text-slate-700 cursor-pointer overflow-hidden p-0.5`}
           >
-            <User className="w-4.5 h-4.5" />
+            {userPhoto ? (
+              <img
+                src={userPhoto}
+                alt={userName || 'Profile'}
+                className="w-full h-full object-cover rounded-full"
+                referrerPolicy="no-referrer"
+              />
+            ) : userName ? (
+              <span className="w-full h-full rounded-full bg-amber-600 text-white flex items-center justify-center font-bold text-xs">
+                {userName.charAt(0).toUpperCase()}
+              </span>
+            ) : (
+              <User className="w-4.5 h-4.5" />
+            )}
           </button>
         </div>
 

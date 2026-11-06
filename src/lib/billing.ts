@@ -7,10 +7,10 @@ import { Coupon } from '../types';
 export const GST_RATE = 0;
 export const PACKAGING_FEE = 0;
 
-/** Taxes & charges added on top of the item subtotal. */
-export function taxesAndChargesFor(subtotal: number): number {
+/** Taxes & charges added on top of the item subtotal. `gstRate` = the store's rate (0.05 or 0). */
+export function taxesAndChargesFor(subtotal: number, gstRate: number = GST_RATE): number {
   if (subtotal <= 0) return 0;
-  return Math.round(subtotal * GST_RATE + PACKAGING_FEE);
+  return Math.round(subtotal * gstRate + PACKAGING_FEE);
 }
 
 /** Free Choco Lava Cake on orders with items worth at least this much. */

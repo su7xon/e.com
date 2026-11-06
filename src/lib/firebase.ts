@@ -1,5 +1,4 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL, type FirebaseStorage } from 'firebase/storage';
 import {
   getFirestore,
   collection,
@@ -8,11 +7,25 @@ import {
   deleteDoc,
   getDocs,
   onSnapshot,
+  query,
+  where,
+  arrayUnion,
+  arrayRemove,
   type Firestore,
 } from 'firebase/firestore';
+import {
+  getAuth,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  type Auth,
+  type User as FirebaseUser,
+} from 'firebase/auth';
 import { getAnalytics, isSupported as isAnalyticsSupported, type Analytics } from 'firebase/analytics';
 import type { MenuItem } from '../types';
 import type { AdminOrder } from '../components/admin/adminData';
+import type { Outlet } from '../components/admin/outlets';
 
 // Config: VITE_ env vars first, fallback to project defaults so upload works out of the box.
 const firebaseConfig = {
@@ -26,18 +39,38 @@ const firebaseConfig = {
 };
 
 
-let app: FirebaseApp;
-if (getApps().length === 0) {
-  app = initializeApp(firebaseConfig);
-} else {
-  app = getApp();
-}
+const app: FirebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 export const FIREBASE_PROJECT_ID: string = firebaseConfig.projectId;
 export const FIREBASE_API_KEY: string = firebaseConfig.apiKey;
 
-export const storage: FirebaseStorage = getStorage(app);
 export const db: Firestore = getFirestore(app);
+export const auth: Auth = getAuth(app);
+
+export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+/**
+ * Sign in using Google popup. Returns the authenticated Firebase User.
+ */
+export async function loginWithGoogle(): Promise<FirebaseUser> {
+  const result = await signInWithPopup(auth, googleProvider);
+  return result.user;
+}
+
+/**
+ * Sign out current Firebase user.
+ */
+export async function logoutUser(): Promise<void> {
+  await firebaseSignOut(auth);
+}
+
+/**
+ * Listen to auth state changes (persisted session).
+ */
+export function subscribeToAuth(callback: (user: FirebaseUser | null) => void): () => void {
+  return onAuthStateChanged(auth, callback);
+}
 
 // Analytics only in browser + supported env. Never blocks app boot.
 export let analytics: Analytics | null = null;
@@ -55,159 +88,6 @@ if (typeof window !== 'undefined') {
     .catch(() => {
       analytics = null;
     });
-}
-
-const MAX_IMAGE_MB = 5;
-const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-
-function sanitizeFileName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9.]+/g, '-').replace(/-+/g, '-').slice(0, 80);
-}
-
-/**
- * Upload menu item image to Firebase Storage.
- * Returns public download URL. Shows progress via callback (0-100).
- */
-export function uploadMenuImage(
-  file: File,
-  onProgress?: (pct: number) => void
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      reject(new Error('Only JPG / PNG / WebP / GIF images are allowed.'));
-      return;
-    }
-    if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
-      reject(new Error(`Image must be smaller than 5MB. (got ${(file.size / 1024 / 1024).toFixed(1)}MB)`));
-      return;
-    }
-
-    const path = `menu-items/${Date.now()}-${sanitizeFileName(file.name)}`;
-    const storageRef = ref(storage, path);
-    const task = uploadBytesResumable(storageRef, file, { contentType: file.type });
-
-    let settled = false;
-    const fail = (msg: string) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeoutId);
-      try {
-        task.cancel();
-      } catch {
-        // ignore
-      }
-      reject(new Error(msg));
-    };
-
-    // No progress/error within 60s → treat as stuck, explain the likely cause
-    const timeoutId = setTimeout(() => {
-      fail(
-        'Upload stuck at 0% for 60s. This usually means the Storage bucket does not exist yet or the network is blocked. ' +
-          'In Firebase console go to Build → Storage → Get Started, create the bucket, then retry.'
-      );
-    }, 60000);
-
-    task.on(
-      'state_changed',
-      (snap) => {
-        const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
-        onProgress?.(pct);
-      },
-      (err) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeoutId);
-        if (err.code === 'storage/unauthorized') {
-          reject(new Error('Storage permission denied. In Console → Storage → Security, allow read + write to publish.'));
-        } else if (err.code === 'storage/canceled') {
-          reject(new Error('Upload was cancelled.'));
-        } else if (err.code === 'storage/bucket-not-found' || err.code === 'storage/project-not-found') {
-          reject(new Error('Storage bucket not found. In Console go to Build → Storage → Get Started to create the bucket, then retry.'));
-        } else if (err.code === 'storage/retry-limit-exceeded' || err.code === 'storage/unknown') {
-          reject(new Error('Network/bucket issue. First confirm the Storage bucket exists (Get Started), then retry with a smaller image.'));
-        } else {
-          reject(new Error(`Upload fail: ${err.code || err.message}`));
-        }
-      },
-      async () => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeoutId);
-        try {
-          const url = await getDownloadURL(task.snapshot.ref);
-          resolve(url);
-        } catch (e) {
-          reject(e instanceof Error ? e : new Error('Download URL not received.'));
-        }
-      }
-    );
-  });
-}
-
-/**
- * Upload an already-optimized Blob (200-300KB) to Storage.
- * The bucket must exist (Console → Build → Storage → Get Started).
- */
-export function uploadImageBlob(
-  blob: Blob,
-  fileName: string,
-  contentType: string,
-  onProgress?: (pct: number) => void
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const safe = fileName.toLowerCase().replace(/[^a-z0-9.]+/g, '-').slice(0, 80);
-    const storageRef = ref(storage, `menu-items/${Date.now()}-${safe}`);
-    const task = uploadBytesResumable(storageRef, blob, { contentType });
-
-    let settled = false;
-    const timeoutId = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      try {
-        task.cancel();
-      } catch {
-        // ignore
-      }
-      reject(
-        new Error(
-          'Upload stuck for 60s. In Console go to Build → Storage → Get Started to create the bucket, then retry.'
-        )
-      );
-    }, 60000);
-
-    task.on(
-      'state_changed',
-      (snap) => {
-        onProgress?.(Math.round((snap.bytesTransferred / snap.totalBytes) * 100));
-      },
-      (err) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeoutId);
-        if (err.code === 'storage/unauthorized') {
-          reject(new Error('Storage permission denied. In Console → Storage → Security, allow read + write to publish.'));
-        } else if (err.code === 'storage/canceled') {
-          reject(new Error('Upload was cancelled.'));
-        } else if (err.code === 'storage/bucket-not-found' || err.code === 'storage/project-not-found') {
-          reject(new Error('Storage bucket not found. In Console go to Build → Storage → Get Started to create the bucket.'));
-        } else if (err.code === 'storage/retry-limit-exceeded' || err.code === 'storage/unknown') {
-          reject(new Error('Network/bucket issue. Confirm the Storage bucket exists, then retry.'));
-        } else {
-          reject(new Error(`Upload fail: ${err.code || err.message}`));
-        }
-      },
-      async () => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeoutId);
-        try {
-          resolve(await getDownloadURL(task.snapshot.ref));
-        } catch (e) {
-          reject(e instanceof Error ? e : new Error('Download URL not received.'));
-        }
-      }
-    );
-  });
 }
 
 // ---------- Firestore: menuItems collection (same menu on all devices) ----------
@@ -286,14 +166,28 @@ export async function deleteOrderFromFirestore(orderId: string): Promise<void> {
   await deleteDoc(doc(db, ORDERS_COLLECTION, orderId));
 }
 
-/** Live subscription for the admin screen. Returns unsubscribe. Never throws. */
+/** Set a field on an order (e.g. backfill outletId on old orders). */
+export async function patchOrderInFirestore(orderId: string, patch: Partial<AdminOrder>): Promise<void> {
+  await setDoc(doc(db, ORDERS_COLLECTION, orderId), toPlain(patch), { merge: true });
+}
+
+/**
+ * Live orders for staff. `'all'` (owner only) = every store; otherwise just that store's orders,
+ * which is what the security rules let managers / staff / riders read.
+ * Returns unsubscribe. Never throws.
+ */
 export function subscribeToFirestoreOrders(
+  scope: string | 'all',
   onOrders: (orders: AdminOrder[]) => void,
   onError?: (message: string) => void
 ): () => void {
   try {
+    const source =
+      scope === 'all'
+        ? collection(db, ORDERS_COLLECTION)
+        : query(collection(db, ORDERS_COLLECTION), where('outletId', '==', scope));
     return onSnapshot(
-      collection(db, ORDERS_COLLECTION),
+      source,
       (snap) => {
         const list: AdminOrder[] = [];
         snap.forEach((d) => {
@@ -311,4 +205,107 @@ export function subscribeToFirestoreOrders(
   }
 }
 
-export { app };
+/**
+ * Customer side: watch only this phone's own orders (by id) for the tracker —
+ * never the whole collection, which holds other customers' names and addresses.
+ */
+export function subscribeToMyOrders(
+  orderIds: string[],
+  onOrders: (orders: AdminOrder[]) => void,
+  onError?: (message: string) => void
+): () => void {
+  const latest = new Map<string, AdminOrder>();
+  const unsubs = orderIds.map((id) => {
+    try {
+      return onSnapshot(
+        doc(db, ORDERS_COLLECTION, id),
+        (snap) => {
+          if (snap.exists()) latest.set(id, { ...(snap.data() as AdminOrder), id });
+          else latest.delete(id);
+          onOrders(Array.from(latest.values()));
+        },
+        (err) => onError?.(err.code || err.message)
+      );
+    } catch {
+      return () => {};
+    }
+  });
+  return () => unsubs.forEach((u) => u());
+}
+
+// ---------- Firestore: stores (outlets) and per-store sold-out ----------
+
+const OUTLETS_COLLECTION = 'outlets';
+const OUTLET_MENU_COLLECTION = 'outletMenu';
+
+export async function saveOutletToFirestore(outlet: Outlet): Promise<void> {
+  await setDoc(doc(db, OUTLETS_COLLECTION, outlet.id), toPlain(outlet));
+}
+
+/** Only the given fields (managers may change just `tables` / `qrToken` of their own store). */
+export async function patchOutletInFirestore(outletId: string, patch: Partial<Outlet>): Promise<void> {
+  await setDoc(doc(db, OUTLETS_COLLECTION, outletId), toPlain(patch), { merge: true });
+}
+
+export function subscribeToOutlets(onOutlets: (outlets: Outlet[]) => void, onError?: (message: string) => void): () => void {
+  try {
+    return onSnapshot(
+      collection(db, OUTLETS_COLLECTION),
+      (snap) => {
+        const list: Outlet[] = [];
+        snap.forEach((d) => list.push({ ...(d.data() as Outlet), id: d.id }));
+        onOutlets(list);
+      },
+      (err) => onError?.(err.code || err.message)
+    );
+  } catch {
+    return () => {};
+  }
+}
+
+/** Item ids sold out at one store. */
+export function subscribeToOutletSoldOut(outletId: string, onIds: (ids: string[]) => void): () => void {
+  try {
+    return onSnapshot(
+      doc(db, OUTLET_MENU_COLLECTION, outletId),
+      (snap) => {
+        const ids = (snap.exists() ? (snap.data() as { soldOut?: unknown }).soldOut : []) as unknown;
+        onIds(Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : []);
+      },
+      () => onIds([])
+    );
+  } catch {
+    return () => {};
+  }
+}
+
+export async function setOutletSoldOut(outletId: string, itemId: string, soldOut: boolean): Promise<void> {
+  await setDoc(
+    doc(db, OUTLET_MENU_COLLECTION, outletId),
+    { soldOut: soldOut ? arrayUnion(itemId) : arrayRemove(itemId) },
+    { merge: true }
+  );
+}
+
+// ---------- Firestore: counter item codes (one list for all stores) ----------
+
+const POS_CODES_DOC = ['posCodes', 'items'] as const;
+
+/** Saved codes (item id → code). Falls back to none, so the built-in codes keep working. */
+export function subscribeToPosCodes(onCodes: (codes: Record<string, string>) => void): () => void {
+  try {
+    return onSnapshot(
+      doc(db, ...POS_CODES_DOC),
+      (snap) => onCodes(((snap.exists() ? (snap.data() as { codes?: Record<string, string> }).codes : null) ?? {})),
+      () => onCodes({})
+    );
+  } catch {
+    return () => {};
+  }
+}
+
+export async function savePosCode(id: string, code: string): Promise<void> {
+  await setDoc(doc(db, ...POS_CODES_DOC), { codes: { [id]: code } }, { merge: true });
+}
+
+export { app, firebaseConfig };

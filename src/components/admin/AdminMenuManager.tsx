@@ -18,14 +18,13 @@ import { optimizeImage, blobToDataURL } from '../../lib/imageOptimize';
 import { isLocalPhoto } from '../../lib/imageUpload';
 
 /** Available / Sold out switch — sold-out items disappear from the customer menu. */
-const AvailabilitySwitch: React.FC<{ item: MenuItem; onUpdateItem: (item: MenuItem) => void }> = ({ item, onUpdateItem }) => {
-  const on = item.isAvailable !== false;
+const AvailabilitySwitch: React.FC<{ on: boolean; onToggle: () => void; where?: string }> = ({ on, onToggle, where }) => {
   return (
     <button
       role="switch"
       aria-checked={on}
-      onClick={() => onUpdateItem({ ...item, isAvailable: !on })}
-      title={on ? 'Available — tap to mark sold out' : 'Sold out — tap to make available'}
+      onClick={onToggle}
+      title={on ? `Available${where ? ' at ' + where : ''} — tap to mark sold out` : `Sold out${where ? ' at ' + where : ''} — tap to make available`}
       className={`px-2 py-1 rounded-lg text-[11px] font-black border cursor-pointer whitespace-nowrap ${
         on ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'
       }`}
@@ -41,6 +40,10 @@ interface AdminMenuManagerProps {
   onUpdateItem: (item: MenuItem) => void;
   onDeleteItem: (itemId: string) => void;
   onRestoreMenu: () => void;
+  /** Owner only: add / edit / delete items and prices. Others just switch items sold out. */
+  canEdit?: boolean;
+  /** Sold out at one store (managers / staff, or the owner with a store picked). Absent = the owner's switch for every store. */
+  storeSoldOut?: { storeName: string; ids: Set<string>; onToggle: (itemId: string, soldOut: boolean) => void } | null;
 }
 
 export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
@@ -48,8 +51,25 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
   onAddItem,
   onUpdateItem,
   onDeleteItem,
-  onRestoreMenu
+  onRestoreMenu,
+  canEdit = true,
+  storeSoldOut = null,
 }) => {
+  const renderSwitch = (item: MenuItem) => {
+    if (storeSoldOut) {
+      const offEverywhere = item.isAvailable === false;
+      const on = !offEverywhere && !storeSoldOut.ids.has(item.id);
+      return offEverywhere ? (
+        <span className="px-2 py-1 rounded-lg text-[11px] font-black border bg-slate-100 text-slate-500 border-slate-200 whitespace-nowrap" title="Switched off for every store by the owner">
+          Off (owner)
+        </span>
+      ) : (
+        <AvailabilitySwitch on={on} where={storeSoldOut.storeName} onToggle={() => storeSoldOut.onToggle(item.id, on)} />
+      );
+    }
+    const on = item.isAvailable !== false;
+    return <AvailabilitySwitch on={on} onToggle={() => onUpdateItem({ ...item, isAvailable: !on })} />;
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -222,12 +242,16 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Add new pizzas, burgers, wraps, drinks and manage pricing & live availability
+            {canEdit
+              ? storeSoldOut
+                ? `Edit items and prices for every store · sold-out switches below apply to ${storeSoldOut.storeName} only`
+                : 'Add new pizzas, burgers, wraps, drinks and manage pricing & live availability'
+              : `Mark items sold out at ${storeSoldOut?.storeName || 'your store'} — they disappear from that store's menu until you switch them back`}
           </p>
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-        {menuItems.length === 0 && (
+        {canEdit && menuItems.length === 0 && (
           <button
             id="btn-admin-restore-menu"
             onClick={() => {
@@ -240,14 +264,14 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
             <span>Restore Full Menu</span>
           </button>
         )}
-        <button
+        {canEdit && <button
           id="btn-admin-add-item"
           onClick={handleOpenAdd}
           className="flex items-center justify-center gap-1.5 bg-[#ED1C24] hover:bg-[#c91430] text-white px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm shadow-red-500/20 active:scale-95 self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           <span>Add New Menu Item</span>
-        </button>
+        </button>}
         </div>
       </div>
 
@@ -364,8 +388,8 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                   {/* Actions */}
                   <td className="py-3 px-4 text-right">
                     <div className="flex items-center justify-end gap-1.5">
-                      <AvailabilitySwitch item={item} onUpdateItem={onUpdateItem} />
-                      <button
+                      {renderSwitch(item)}
+                      {canEdit && <><button
                         onClick={() => handleOpenEdit(item)}
                         className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
                         title="Edit Item"
@@ -382,7 +406,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                         title="Delete Item"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      </button></>}
                     </div>
                   </td>
                 </tr>
@@ -440,8 +464,8 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
               </div>
             </div>
             <div className="flex flex-col items-center gap-1.5 shrink-0">
-              <AvailabilitySwitch item={item} onUpdateItem={onUpdateItem} />
-              <button
+              {renderSwitch(item)}
+              {canEdit && <><button
                 onClick={() => handleOpenEdit(item)}
                 className="p-2 rounded-xl bg-slate-100 active:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
                 title="Edit Item"
@@ -460,7 +484,7 @@ export const AdminMenuManager: React.FC<AdminMenuManagerProps> = ({
                 aria-label={`Delete ${item.name}`}
               >
                 <Trash2 className="w-4 h-4" />
-              </button>
+              </button></>}
             </div>
           </div>
         ))}

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Receipt,
   UtensilsCrossed,
@@ -9,7 +9,6 @@ import {
   FileSpreadsheet,
   Printer,
   Download,
-  Plus,
   Trash2,
   Pencil,
   X,
@@ -17,11 +16,27 @@ import {
 } from 'lucide-react';
 import type { MenuItem } from '../../types';
 import type { AdminOrder } from './adminData';
-import { localDateIso, tableLabel } from './adminData';
-import { GST_RATE } from '../../lib/billing';
+import { localDateIso, tableLabel, newOrderId, itemBuildText } from './adminData';
+import { CounterAddOns } from './CounterAddOns';
+import { CounterCodes } from './CounterCodes';
+import { savePosCode, subscribeToPosCodes } from '../../lib/firebase';
+import {
+  addOnById,
+  addOnsPrice,
+  buildCodeIndex,
+  effectiveCodes,
+  isPizzaSize,
+  nameWithCrust,
+  posOptions,
+  resolveCode,
+  type AddOnChoice,
+  type PosAddOn,
+  type PosOption,
+} from '../../data/posCatalog';
 import type { Outlet } from './outlets';
 import {
   STORE_HEADER,
+  billHeaderFor,
   buildCustomerBillHtml,
   buildKotBillHtml,
   buildCombinedBillHtml,
@@ -30,7 +45,7 @@ import {
 } from './ThermalBills';
 
 type BillMode = 'SALE' | 'KOT' | 'HOME';
-type ModuleKey = BillMode | 'ITEM' | 'PARTY' | 'OFFER' | 'REPORT';
+type ModuleKey = BillMode | 'ITEM' | 'CODES' | 'PARTY' | 'OFFER' | 'REPORT';
 type ReportView = 'detail' | 'summary' | 'category' | 'tax';
 
 interface Party {
@@ -60,7 +75,16 @@ interface BillLine {
   rate: number;
   disPct: number;
   taxPct: number;
+  /** Name and rate before add-ons; `rate` and `name` include them. */
+  baseName?: string;
+  baseRate?: number;
+  isVeg?: boolean;
+  crustId?: string;
+  extraCheese?: boolean;
+  toppingIds?: string[];
 }
+
+const toppingNames = (l: BillLine) => (l.toppingIds ?? []).map((id) => addOnById(id)?.name ?? '').filter(Boolean);
 
 interface ArchivedBill {
   orderId: string;
@@ -79,10 +103,17 @@ interface RushdaBillingProps {
   outlet: Outlet;
   orders: AdminOrder[];
   menuItems: MenuItem[];
+  /** Whole menu, including items sold out at this store (for the Item Codes screen). */
+  allMenuItems?: MenuItem[];
   onCreateOrder: (order: AdminOrder) => void;
-  onAddItem: (item: MenuItem) => void;
-  onUpdateItem: (item: MenuItem) => void;
-  onDeleteItem: (id: string) => void;
+  /** Item master (owner only). */
+  onAddItem?: (item: MenuItem) => void;
+  onUpdateItem?: (item: MenuItem) => void;
+  onDeleteItem?: (id: string) => void;
+  /** Logged-in person, printed as "Sold by" / "User". */
+  soldBy?: string;
+  /** Sale report (owner / manager). */
+  canReport?: boolean;
 }
 
 function load<T>(key: string, fallback: T): T {
@@ -143,10 +174,13 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
   outlet,
   orders,
   menuItems,
+  allMenuItems,
   onCreateOrder,
   onAddItem,
   onUpdateItem,
   onDeleteItem,
+  soldBy,
+  canReport = true,
 }) => {
   const [module, setModule] = useState<ModuleKey>('SALE');
   const billMode: BillMode = module === 'SALE' || module === 'KOT' || module === 'HOME' ? module : 'SALE';
@@ -174,10 +208,16 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
   const [extraFlat, setExtraFlat] = useState(0);
   const [discountFix, setDiscountFix] = useState(false);
   const [itemSearch, setItemSearch] = useState('');
-  const [catFilter, setCatFilter] = useState('all');
-  const [quickQty, setQuickQty] = useState(1);
-  const [quickRate, setQuickRate] = useState<number | ''>('');
-  const [quickItemId, setQuickItemId] = useState('');
+  // Tap flow, like the old counter screen: Category → Item → Size.
+  const [browseGroup, setBrowseGroup] = useState<string | null>(null);
+  const [browseItem, setBrowseItem] = useState<MenuItem | null>(null);
+  // Code entry: fhl + Enter adds Farm House Large.
+  const [savedCodes, setSavedCodes] = useState<Record<string, string>>({});
+  const [codeInput, setCodeInput] = useState('');
+  const [codeQty, setCodeQty] = useState(1);
+  const [codeNote, setCodeNote] = useState('');
+  const codeRef = useRef<HTMLInputElement>(null);
+  const [addOnKey, setAddOnKey] = useState<string | null>(null);
   const [lastBillNo, setLastBillNo] = useState<string | null>(null);
   const [lastBill, setLastBill] = useState<ThermalBillData | null>(null);
 
@@ -192,47 +232,138 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
   const safeOrders = Array.isArray(orders) ? orders : [];
   const safeArchive = Array.isArray(archive) ? archive : [];
 
+  const fullMenu = Array.isArray(allMenuItems) ? allMenuItems : safeMenu;
+  useEffect(() => subscribeToPosCodes(setSavedCodes), []);
+  const codes = useMemo(() => effectiveCodes(savedCodes), [savedCodes]);
+  const codeIndex = useMemo(() => buildCodeIndex(codes, fullMenu), [codes, fullMenu]);
+  const codeHit = resolveCode(codeInput, codeIndex);
+
   const categories = useMemo(
     () => Array.from(new Set(safeMenu.map((m) => m.category))).sort(),
     [safeMenu]
   );
 
+  const groupOf = (m: MenuItem) => m.subCategoryTitle || m.category;
+  const groups = useMemo(() => Array.from(new Set(safeMenu.map(groupOf))), [safeMenu]);
+
   const filteredMenu = useMemo(() => {
     const q = itemSearch.trim().toLowerCase();
-    return safeMenu.filter((m) => {
-      if (catFilter !== 'all' && m.category !== catFilter) return false;
-      if (!q) return true;
-      return (
-        m.name.toLowerCase().includes(q) ||
-        m.id.toLowerCase().includes(q) ||
-        m.description.toLowerCase().includes(q)
-      );
-    }).slice(0, 60);
-  }, [safeMenu, itemSearch, catFilter]);
+    if (!q) return browseGroup ? safeMenu.filter((m) => groupOf(m) === browseGroup) : [];
+    return safeMenu
+      .filter(
+        (m) =>
+          m.name.toLowerCase().includes(q) ||
+          (codes[m.id] || '').toLowerCase().includes(q) ||
+          m.description.toLowerCase().includes(q),
+      )
+      .slice(0, 60);
+  }, [safeMenu, itemSearch, browseGroup, codes]);
 
-  const addLine = (menu: MenuItem, qty = 1, rateOverride?: number) => {
-    const rate = rateOverride ?? menu.price;
-    const size = menu.defaultSize ?? 'NA';
+  const addLine = (menu: MenuItem, option: PosOption, qty = 1) => {
+    const rate = option.price;
     setLines((prev) => {
-      const idx = prev.findIndex((l) => l.menuId === menu.id && l.rate === rate && l.size === size);
+      const idx = prev.findIndex(
+        (l) =>
+          l.menuId === menu.id && l.name === option.name && l.rate === rate && l.size === option.size &&
+          !l.crustId && !l.extraCheese && !l.toppingIds?.length,
+      );
       if (idx > -1) {
         const next = [...prev];
         next[idx] = { ...next[idx], qty: next[idx].qty + qty };
         return next;
       }
       return [...prev, {
-        key: `${menu.id}-${Date.now()}`,
+        key: `${menu.id}-${Date.now()}-${prev.length}`,
         menuId: menu.id,
-        name: menu.name,
+        name: option.name,
+        baseName: option.name,
+        baseRate: rate,
+        isVeg: option.isVeg,
         category: menu.category,
-        size,
+        size: option.size,
         unit: unitMap[menu.id] ?? 'NA',
         qty,
         rate,
         disPct: 0,
-        taxPct: taxMap[menu.id] ?? GST_RATE * 100,
+        taxPct: taxMap[menu.id] ?? outlet.gstRate * 100,
       }];
     });
+  };
+
+  // Tap an item: add it, or ask which size / version first.
+  const pickItem = (m: MenuItem) => {
+    const options = posOptions(m);
+    if (options.length === 1) {
+      addLine(m, options[0]);
+      return;
+    }
+    setBrowseItem(m);
+  };
+  const pickOption = (option: PosOption) => {
+    if (browseItem) addLine(browseItem, option);
+    setBrowseItem(null);
+    setBrowseGroup(null);
+    setItemSearch('');
+    codeRef.current?.focus();
+  };
+
+  const setLineAddOns = (key: string, choice: AddOnChoice) =>
+    setLines((prev) =>
+      prev.map((l) => {
+        if (l.key !== key) return l;
+        const baseRate = l.baseRate ?? l.rate;
+        const baseName = l.baseName ?? l.name;
+        return {
+          ...l,
+          ...choice,
+          baseRate,
+          baseName,
+          name: nameWithCrust(baseName, choice.crustId),
+          rate: baseRate + addOnsPrice(l.size, choice),
+        };
+      }),
+    );
+
+  // An add-on code goes on the last pizza on the bill.
+  const applyAddOnCode = (addon: PosAddOn) => {
+    const line = [...lines].reverse().find((l) => isPizzaSize(l.size));
+    if (!line) {
+      setCodeNote(`Add a pizza first, then ${addon.name}`);
+      return false;
+    }
+    const toppingIds = line.toppingIds ?? [];
+    setLineAddOns(line.key, {
+      crustId: addon.kind === 'crust' ? addon.id : line.crustId,
+      extraCheese: addon.kind === 'cheese' ? true : line.extraCheese,
+      toppingIds: addon.kind.endsWith('topping') && !toppingIds.includes(addon.id) ? [...toppingIds, addon.id] : toppingIds,
+    });
+    return true;
+  };
+
+  const submitCode = () => {
+    const typed = codeInput.trim();
+    if (!typed) {
+      setCodeNote('Type an item code, or pick a category below');
+      codeRef.current?.focus();
+      return;
+    }
+    if (!codeHit) {
+      setCodeNote(`No item with code ${typed.toUpperCase()}`);
+      return;
+    }
+    if (codeHit.kind === 'addon') {
+      if (!applyAddOnCode(codeHit.addon)) return;
+    } else {
+      if (!safeMenu.some((m) => m.id === codeHit.item.id)) {
+        setCodeNote(`${codeHit.item.name} is sold out at this store`);
+        return;
+      }
+      addLine(codeHit.item, codeHit.option, codeQty);
+    }
+    setCodeInput('');
+    setCodeQty(1);
+    setCodeNote('');
+    codeRef.current?.focus();
   };
 
   const totals = useMemo(() => {
@@ -265,9 +396,11 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
     setPhoneNo('');
     setCustName('');
     setTableNo('');
-    setQuickItemId('');
-    setQuickRate('');
-    setQuickQty(1);
+    setCodeInput('');
+    setCodeQty(1);
+    setCodeNote('');
+    setBrowseGroup(null);
+    setBrowseItem(null);
   };
 
   const handleSaveBill = (printKot: boolean) => {
@@ -281,9 +414,10 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
     const billCustomerName =
       custName.trim() || activeParty?.name || 'CASH SALE';
     const order: AdminOrder = {
-      id: `ord-${Date.now()}`,
+      id: newOrderId(),
       orderNumber,
       outletId: outlet.id,
+      soldBy: soldBy || undefined,
       customerName: billCustomerName,
       customerPhone: phoneNo || activeParty?.phone || '',
       orderType,
@@ -293,8 +427,10 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
         name: l.name,
         quantity: l.qty,
         price: l.rate,
-        isVeg: safeMenu.find((m) => m.id === l.menuId)?.isVeg ?? true,
+        isVeg: l.isVeg ?? safeMenu.find((m) => m.id === l.menuId)?.isVeg ?? true,
         size: l.size,
+        extraCheese: l.extraCheese || undefined,
+        toppings: l.toppingIds?.length ? toppingNames(l) : undefined,
       })),
       subtotal: Math.round(totals.gross),
       deliveryFee: 0,
@@ -342,21 +478,31 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
       customerName: billCustomerName.toUpperCase(),
       address: tableNo ? tableLabel(tableNo) : (activeParty?.address ?? ''),
       phone: phoneNo || activeParty?.phone || '',
-      soldBy: STORE_HEADER.soldBy,
+      soldBy: (soldBy || STORE_HEADER.soldBy).toUpperCase(),
+      header: billHeaderFor(outlet.id),
+      gstRate: outlet.gstRate,
       lines: lines.map((l) => {
         const amt = l.qty * l.rate;
         const dis = discountFix ? 0 : (amt * l.disPct) / 100;
         const tax = ((amt - dis) * l.taxPct) / 100;
-        return { name: l.name.toUpperCase(), size: l.size, qty: l.qty, rate: l.rate, disPct: discountFix ? 0 : l.disPct, amt: amt - dis + tax };
+        return {
+          name: l.name.toUpperCase(),
+          size: l.size,
+          build: itemBuildText({ size: l.size, extraCheese: l.extraCheese, toppings: toppingNames(l) }),
+          qty: l.qty,
+          rate: l.rate,
+          disPct: discountFix ? 0 : l.disPct,
+          amt: amt - dis + tax,
+        };
       }),
       totalQty: lines.reduce((s, l) => s + l.qty, 0),
       totalAmt: totals.gross - totals.lineDis + totals.tax,
       gstTotal: totals.tax,
       grandTotal: Math.round(totals.net),
       cgstBase: base,
-      cgstAmt: (base * GST_RATE) / 2,
+      cgstAmt: (base * outlet.gstRate) / 2,
       sgstBase: base,
-      sgstAmt: (base * GST_RATE) / 2,
+      sgstAmt: (base * outlet.gstRate) / 2,
     };
     setLastBill(thermal);
     clearBill();
@@ -393,8 +539,8 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
       image: existing?.image ?? '/images/seven_cheese_pizza_1788869697088.jpg',
       isCustomizable: existing?.isCustomizable ?? false,
     };
-    if (existing) onUpdateItem(payload);
-    else onAddItem(payload);
+    if (existing) onUpdateItem?.(payload);
+    else onAddItem?.(payload);
     const nu = { ...unitMap, [code]: fUnit };
     const nt = { ...taxMap, [code]: Number(fTax) || 0 };
     setUnitMap(nu); setTaxMap(nt);
@@ -497,12 +643,12 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
         if (repSize !== 'all' && size !== repSize) return;
         if (repItem && !it.name.toLowerCase().includes(repItem.toLowerCase())) return;
         const amount = it.quantity * it.price;
-        const tax = (amount * GST_RATE * 100) / 100;
+        const tax = (amount * outlet.gstRate * 100) / 100;
         rows.push({
           date: iso, sno: o.orderNumber, party: o.customerName,
           category: cat, item: it.name, size,
           qty: it.quantity, rate: it.price, amount,
-          disPct: 0, taxPct: GST_RATE * 100, tax, net: amount + tax,
+          disPct: 0, taxPct: outlet.gstRate * 100, tax, net: amount + tax,
         });
       });
     });
@@ -541,13 +687,16 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
     downloadCsv(`sale-report-${repFrom}-to-${repTo}.csv`, [header, ...body]);
   };
 
+  const addOnLine = lines.find((l) => l.key === addOnKey);
+
   const nav: { id: ModuleKey; label: string }[] = [
     { id: 'SALE', label: 'Sale' },
     { id: 'KOT', label: 'KOT' },
     { id: 'HOME', label: 'Home Delivery' },
+    { id: 'CODES', label: 'Item Codes' },
     { id: 'PARTY', label: 'Customers' },
     { id: 'OFFER', label: 'Counter discounts' },
-    { id: 'REPORT', label: 'Sale Report' },
+    ...(canReport ? [{ id: 'REPORT' as ModuleKey, label: 'Sale Report' }] : []),
   ];
 
   return (
@@ -556,7 +705,7 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
       <div className="bg-white rounded-lg border border-slate-200 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <div className="text-base font-bold text-slate-900">Counter Billing</div>
-          <div className="text-xs text-slate-500">{outlet.area}</div>
+          <div className="text-xs text-slate-500">{outlet.shortName}{outlet.gstRate ? ' · GST 5%' : ''}</div>
         </div>
         {lastBillNo && (
           <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
@@ -581,7 +730,7 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                   onClick={() => printThermal(buildCombinedBillHtml(lastBill))}
                   className="flex items-center gap-1 bg-emerald-600 text-white px-3 py-1.5 rounded-lg cursor-pointer"
                 >
-                  <Printer className="w-3.5 h-3.5" /> Both Together
+                  <Printer className="w-3.5 h-3.5" /> Bill + KOT
                 </button>
               </>
             )}
@@ -610,57 +759,120 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
               {/* items */}
               <div className="xl:col-span-2 bg-white rounded-lg border border-slate-200 p-4">
-                <div className="flex flex-col sm:flex-row gap-2 mb-3">
-                  <div className="relative flex-1">
-                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                      value={itemSearch}
-                      onChange={(e) => setItemSearch(e.target.value)}
-                      placeholder="Search item / code…"
-                      className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
-                    />
-                  </div>
-                  <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)} className="px-3 py-2 rounded-lg border border-slate-200 text-xs font-bold">
-                    <option value="all">All categories</option>
-                    {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
+                {/* code entry */}
+                <div className="flex gap-2">
+                  <input
+                    id="pos-code-input"
+                    ref={codeRef}
+                    autoFocus
+                    autoCapitalize="none"
+                    autoComplete="off"
+                    value={codeInput}
+                    onChange={(e) => {
+                      setCodeInput(e.target.value);
+                      setCodeNote('');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        submitCode();
+                      }
+                    }}
+                    placeholder="Item code, e.g. FHL, then Enter"
+                    aria-label="Item code"
+                    className="flex-1 min-w-0 px-3 py-2.5 rounded-lg border-2 border-slate-900 font-mono text-sm font-bold uppercase placeholder:normal-case placeholder:font-sans placeholder:font-medium focus:outline-none focus:ring-2 focus:ring-slate-300"
+                  />
+                  <input
+                    id="pos-code-qty"
+                    type="number"
+                    min={1}
+                    value={codeQty}
+                    onChange={(e) => setCodeQty(Math.max(1, Number(e.target.value) || 1))}
+                    aria-label="Quantity"
+                    className="w-16 px-2 py-2.5 rounded-lg border border-slate-200 text-sm font-bold text-center"
+                  />
+                  <button id="btn-pos-code-add" onClick={submitCode} className="px-4 rounded-lg bg-slate-900 text-white text-xs font-bold cursor-pointer">Add</button>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-96 overflow-y-auto">
-                  {filteredMenu.map((m) => (
-                    <button
-                      key={m.id}
-                      onClick={() => addLine(m, 1)}
-                      className="text-left p-2.5 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
-                    >
-                      <div className="text-xs font-medium text-slate-900 truncate">{m.name}</div>
-                      <div className="text-xs font-bold text-slate-900 mt-0.5">₹{m.price}</div>
-                    </button>
-                  ))}
+                <div id="pos-code-hint" className="min-h-5 mt-1 mb-2 text-xs font-bold">
+                  {codeNote ? (
+                    <span role="alert" className="text-red-600">{codeNote}</span>
+                  ) : codeHit ? (
+                    <span className="text-emerald-700">
+                      {codeHit.kind === 'item'
+                        ? `${codeHit.option.name} · ${codeHit.option.size === 'NA' ? '' : codeHit.option.size.toUpperCase() + ' · '}₹${codeHit.option.price}`
+                        : `Add-on: ${codeHit.addon.name}`}
+                    </span>
+                  ) : codeInput.trim() ? (
+                    <span className="text-slate-400">Keep typing…</span>
+                  ) : null}
                 </div>
 
-                {/* quick add like right panel */}
-                <div className="mt-3 p-2 rounded-lg border border-slate-200 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
-                  <select value={quickItemId} onChange={(e) => {
-                    const id = e.target.value;
-                    setQuickItemId(id);
-                    const m = menuItems.find((x) => x.id === id);
-                    if (m) setQuickRate(m.price);
-                  }} className="px-2 py-1.5 rounded-lg border border-slate-200 font-bold col-span-2">
-                    <option value="">Quick item…</option>
-                    {menuItems.slice(0, 200).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                  </select>
-                  <input type="number" min={1} value={quickQty} onChange={(e) => setQuickQty(Math.max(1, Number(e.target.value) || 1))} className="px-2 py-1.5 rounded-lg border border-slate-200" placeholder="Qty" />
-                  <input type="number" value={quickRate} onChange={(e) => setQuickRate(e.target.value === '' ? '' : Number(e.target.value))} className="px-2 py-1.5 rounded-lg border border-slate-200" placeholder="Rate" />
-                  <button
-                    onClick={() => {
-                      const m = menuItems.find((x) => x.id === quickItemId);
-                      if (m) addLine(m, quickQty, quickRate === '' ? undefined : Number(quickRate));
+                <div className="relative mb-3">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    id="pos-item-search"
+                    value={itemSearch}
+                    onChange={(e) => {
+                      setItemSearch(e.target.value);
+                      setBrowseItem(null);
                     }}
-                    className="flex items-center justify-center gap-1 bg-slate-900 text-white rounded-lg font-bold py-1.5 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Add
-                  </button>
+                    placeholder="Search by item name…"
+                    className="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                  />
                 </div>
+
+                {(browseGroup || browseItem) && (
+                  <button
+                    id="btn-pos-back"
+                    onClick={() => (browseItem ? setBrowseItem(null) : setBrowseGroup(null))}
+                    className="mb-2 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-bold cursor-pointer"
+                  >
+                    ← Back
+                  </button>
+                )}
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-96 overflow-y-auto">
+                  {browseItem ? (
+                    posOptions(browseItem).map((o) => (
+                      <button
+                        key={o.label}
+                        data-pos-option={o.label}
+                        onClick={() => pickOption(o)}
+                        className="text-left p-3 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
+                      >
+                        <div className="text-sm font-bold text-slate-900">{o.label}</div>
+                        <div className="text-xs font-bold text-slate-600 mt-0.5">₹{o.price}</div>
+                      </button>
+                    ))
+                  ) : itemSearch.trim() || browseGroup ? (
+                    filteredMenu.map((m) => (
+                      <button
+                        key={m.id}
+                        data-pos-item={m.id}
+                        onClick={() => pickItem(m)}
+                        className="text-left p-2.5 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer"
+                      >
+                        <div className="text-xs font-medium text-slate-900 truncate">{m.name}</div>
+                        <div className="text-xs font-bold text-slate-900 mt-0.5">
+                          ₹{m.price}
+                          {codes[m.id] && <span className="ml-1.5 font-mono font-medium text-slate-400">{codes[m.id]}</span>}
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    groups.map((g) => (
+                      <button
+                        key={g}
+                        data-pos-group={g}
+                        onClick={() => setBrowseGroup(g)}
+                        className="text-left p-2.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-800 transition-colors cursor-pointer"
+                      >
+                        {g}
+                      </button>
+                    ))
+                  )}
+                </div>
+
               </div>
 
               {/* bill panel */}
@@ -697,18 +909,38 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                   <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 text-xs">
                     {lines.length === 0 && <div className="p-4 text-center text-slate-400">No items — tap items to add</div>}
                     {lines.map((l) => (
-                      <div key={l.key} className="p-2 flex items-center gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-bold text-slate-800 truncate">{l.name}</div>
-                          <div className="text-[11px] text-slate-500 font-mono">{l.size} • ₹{l.rate} • GST {l.taxPct}%</div>
+                      <div key={l.key} className="p-2 space-y-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-bold text-slate-800 leading-tight">{l.name}</div>
+                            <div className="text-[11px] text-slate-500">{l.size === 'NA' ? '' : `${l.size} • `}₹{l.rate}{l.taxPct ? ` • GST ${l.taxPct}%` : ''}</div>
+                            {(l.extraCheese || !!l.toppingIds?.length) && (
+                              <div className="text-[11px] text-slate-500">
+                                {[l.extraCheese ? 'Extra cheese' : '', ...toppingNames(l)].filter(Boolean).join(', ')}
+                              </div>
+                            )}
+                          </div>
+                          <button onClick={() => setLines((p) => p.filter((x) => x.key !== l.key))} aria-label={`Remove ${l.name}`} className="shrink-0 text-red-500 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => setLines((p) => p.map((x) => x.key === l.key ? { ...x, qty: Math.max(1, x.qty - 1) } : x))} className="w-6 h-6 rounded-lg bg-slate-100 font-bold cursor-pointer">−</button>
-                          <span className="w-6 text-center font-bold">{l.qty}</span>
-                          <button onClick={() => setLines((p) => p.map((x) => x.key === l.key ? { ...x, qty: x.qty + 1 } : x))} className="w-6 h-6 rounded-lg bg-slate-100 font-bold cursor-pointer">+</button>
+                        <div className="flex items-center justify-between gap-2">
+                          {isPizzaSize(l.size) ? (
+                            <button
+                              data-addon-line={l.menuId}
+                              onClick={() => setAddOnKey(l.key)}
+                              className="text-[11px] font-bold text-[#ED1C24] hover:underline cursor-pointer whitespace-nowrap"
+                            >
+                              + Add on
+                            </button>
+                          ) : <span />}
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => setLines((p) => p.map((x) => x.key === l.key ? { ...x, qty: Math.max(1, x.qty - 1) } : x))} aria-label="One less" className="w-6 h-6 rounded-lg bg-slate-100 font-bold cursor-pointer">−</button>
+                              <span className="w-6 text-center font-bold">{l.qty}</span>
+                              <button onClick={() => setLines((p) => p.map((x) => x.key === l.key ? { ...x, qty: x.qty + 1 } : x))} aria-label="One more" className="w-6 h-6 rounded-lg bg-slate-100 font-bold cursor-pointer">+</button>
+                            </div>
+                            <span className="font-mono font-bold w-14 text-right">₹{l.qty * l.rate}</span>
+                          </div>
                         </div>
-                        <span className="font-mono font-bold w-14 text-right">₹{l.qty * l.rate}</span>
-                        <button onClick={() => setLines((p) => p.filter((x) => x.key !== l.key))} className="text-red-500 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
                       </div>
                     ))}
                   </div>
@@ -828,7 +1060,7 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                               >
                                 <Pencil className="w-3 h-3" />
                               </button>
-                              <button onClick={() => onDeleteItem(m.id)} className="p-1 rounded-lg bg-red-50 text-red-600 cursor-pointer">
+                              <button onClick={() => onDeleteItem?.(m.id)} className="p-1 rounded-lg bg-red-50 text-red-600 cursor-pointer">
                                 <Trash2 className="w-3 h-3" />
                               </button>
                             </div>
@@ -840,6 +1072,17 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
                 </div>
               </div>
             </div>
+          )}
+
+          {module === 'CODES' && (
+            <CounterCodes
+              menuItems={fullMenu}
+              codes={codes}
+              onSave={async (id, code) => {
+                await savePosCode(id, code);
+                setSavedCodes((prev) => ({ ...prev, [id]: code }));
+              }}
+            />
           )}
 
           {module === 'PARTY' && (
@@ -996,6 +1239,20 @@ export const RushdaBilling: React.FC<RushdaBillingProps> = ({
           )}
         </div>
       </div>
+
+      {addOnLine && (
+        <CounterAddOns
+          name={addOnLine.baseName ?? addOnLine.name}
+          size={addOnLine.size}
+          baseRate={addOnLine.baseRate ?? addOnLine.rate}
+          choice={{ crustId: addOnLine.crustId, extraCheese: addOnLine.extraCheese, toppingIds: addOnLine.toppingIds }}
+          onChange={(choice) => setLineAddOns(addOnLine.key, choice)}
+          onClose={() => {
+            setAddOnKey(null);
+            codeRef.current?.focus();
+          }}
+        />
+      )}
     </div>
   );
 };

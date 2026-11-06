@@ -1,0 +1,99 @@
+rules_version = '2';
+
+// 7 Cheese Pizza — who can read and write what.
+// Paste into Firebase console → Firestore Database → Rules → Publish.
+// Roles live in /staff/{uid}: owner (all stores), manager / staff / rider (one store, outletId).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function staffDoc() { return /databases/$(database)/documents/staff/$(request.auth.uid); }
+    function me() { return get(staffDoc()).data; }
+    function isStaff() { return signedIn() && exists(staffDoc()) && me().active == true; }
+    function isOwner() { return isStaff() && me().role == 'owner'; }
+    // Anyone working at this store (the owner counts for every store).
+    function worksAt(outletId) { return isStaff() && (me().role == 'owner' || me().outletId == outletId); }
+    // Owner, or the manager of this store.
+    function runs(outletId) { return isStaff() && (me().role == 'owner' || (me().role == 'manager' && me().outletId == outletId)); }
+    function onlyChanges(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+
+    // ---------- Staff logins ----------
+    match /staff/{uid} {
+      allow read: if signedIn() && (
+        request.auth.uid == uid ||
+        isOwner() ||
+        (isStaff() && me().role == 'manager' && resource.data.outletId == me().outletId));
+
+      // The owner login creates its own profile on first sign-in.
+      allow create: if signedIn() && request.auth.uid == uid &&
+        request.auth.token.email == 'owner@staff.7cheesepizza.com' &&
+        request.resource.data.role == 'owner' && request.resource.data.active == true;
+      // Owner adds managers / staff / riders anywhere; a manager adds staff / riders at their own store.
+      allow create: if
+        (isOwner() && request.resource.data.role in ['manager', 'staff', 'rider']) ||
+        (isStaff() && me().role == 'manager' &&
+          request.resource.data.role in ['staff', 'rider'] &&
+          request.resource.data.outletId == me().outletId);
+
+      // Remove / restore (and the owner may change anything except an owner's profile). Nobody edits their own role.
+      allow update: if
+        (isOwner() && resource.data.role != 'owner' && request.resource.data.role in ['manager', 'staff', 'rider']) ||
+        (isStaff() && me().role == 'manager' && resource.data.outletId == me().outletId &&
+          resource.data.role in ['staff', 'rider'] && onlyChanges(['active']));
+      allow delete: if isOwner() && resource.data.role != 'owner';
+    }
+
+    // ---------- Stores ----------
+    match /outlets/{outletId} {
+      allow read: if true; // customers need the list, pins and hours
+      allow create, delete: if isOwner();
+      // Owner edits everything; a manager may only change their store's tables and QR code.
+      allow update: if isOwner() || (runs(outletId) && onlyChanges(['tables', 'qrToken']));
+    }
+
+    // Items sold out at one store (owner, manager, counter staff of that store).
+    match /outletMenu/{outletId} {
+      allow read: if true;
+      allow write: if worksAt(outletId) && me().role in ['owner', 'manager', 'staff'] &&
+        request.resource.data.keys().hasOnly(['soldOut']);
+    }
+
+    // ---------- Menu, offers, banners (owner only, same for every store) ----------
+    match /menuItems/{itemId} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isOwner();
+    }
+
+    // Counter item codes: one list for all stores, editable by everyone except riders.
+    match /posCodes/{docId} {
+      allow read: if isStaff();
+      allow write: if isStaff() && me().role in ['owner', 'manager', 'staff'];
+    }
+
+    // ---------- Orders ----------
+    match /orders/{orderId} {
+      // Customers (no login) place new orders for a real store; store staff save counter bills.
+      allow create: if
+        request.resource.data.id == orderId &&
+        request.resource.data.outletId is string &&
+        request.resource.data.outletId.matches('^[a-z0-9-]{3,40}$') &&
+        request.resource.data.total is number &&
+        request.resource.data.total >= 0 && request.resource.data.total < 100000 &&
+        (request.resource.data.status == 'NEW' || worksAt(request.resource.data.outletId));
+
+      // The customer's tracker reads its own order by id (new ids can't be guessed).
+      allow get: if true;
+      // Staff see their own store's orders; the owner sees all.
+      allow list: if isOwner() || (isStaff() && resource.data.outletId == me().outletId);
+
+      // Manager / owner change anything; staff and riders only move the status along.
+      allow update: if runs(resource.data.outletId) ||
+        (worksAt(resource.data.outletId) && onlyChanges(['status']));
+      allow delete: if runs(resource.data.outletId);
+    }
+  }
+}
