@@ -1,0 +1,29 @@
+{
+  "package_name": "com.sevencheese.pizza",
+  "package_id": "com.sevencheese.pizza",
+  "start_url": "https://order.7cheesepizza.com",
+  "name": "7 Cheese Pizza",
+  "short_name": "7 Cheese Pizza",
+  "theme_color": "#ED1C24",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "https://order.7cheesepizza.com/",
+  "description": "Order fresh pizzas from 7 Cheese Pizza - Delivery, Takeaway & Dine-in",
+  "icons": [
+    {
+      "src": "https://order.7cheesepizza.com/images/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://order.7cheesepizza.com/images/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": []
+}
