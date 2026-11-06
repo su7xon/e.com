@@ -322,7 +322,7 @@ export const BillingPage: React.FC<BillingPageProps> = ({
                               + Extra Mozzarella Cheese
                             </p>
                           )}
-                          {item.extraToppings.length > 0 && (
+                          {item.extraToppings?.length > 0 && (
                             <p className="text-[10px] text-slate-500">
                               + {item.extraToppings.map((t) => t.name).join(', ')}
                             </p>

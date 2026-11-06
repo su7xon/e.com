@@ -51,7 +51,7 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
   // The plain (uncustomised) cart line for a product — what Add / + / − act on.
   const lineFor = (productId: string) =>
     cartItems.find(
-      (c) => c.productId === productId && !c.size && !c.crust && !c.extraCheese && c.extraToppings.length === 0,
+      (c) => c.productId === productId && !c.size && !c.crust && !c.extraCheese && !c.extraToppings?.length,
     );
 
   // Also Try — things that go with this item, not random picks:

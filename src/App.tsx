@@ -957,7 +957,16 @@ export default function App() {
     const saved = localStorage.getItem('seven_cheese_cart') || localStorage.getItem('dominos_cart');
     if (!saved) return [];
     try {
-      return migrateItems(JSON.parse(saved));
+      const parsed = JSON.parse(saved) as Partial<CartItem>[];
+      if (!Array.isArray(parsed)) return [];
+      // Purane saved carts me extraToppings/extraCheese missing ho sakte hain.
+      return migrateItems(
+        parsed.map((it) => ({
+          ...it,
+          extraToppings: Array.isArray(it.extraToppings) ? it.extraToppings : [],
+          extraCheese: it.extraCheese === true,
+        })) as CartItem[],
+      );
     } catch {
       return [];
     }
@@ -1271,7 +1280,7 @@ export default function App() {
 
   const handleSimpleAddToCart = (item: MenuItem) => {
     const existingIndex = cartItems.findIndex(
-      (c) => c.productId === item.id && !c.size && !c.crust && !c.extraCheese && c.extraToppings.length === 0
+      (c) => c.productId === item.id && !c.size && !c.crust && !c.extraCheese && !c.extraToppings?.length
     );
 
     if (existingIndex > -1) {
