@@ -116,7 +116,7 @@ export const CRAVING_CATEGORIES: CategoryItem[] = [
     tag: 'OFFER',
     startingPrice: 279,
     image: '/images/craving-party-combo.png',
-    bannerImage: '/images/lunch-time-special-combos.jpg',
+    bannerImage: '/images/menu/p-combo-2-persons-veg.jpg',
     filterKey: 'combos',
   },
 ];

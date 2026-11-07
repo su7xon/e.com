@@ -325,7 +325,7 @@ export default function App() {
         .map((c: CategoryItem) => {
           const d = defaultsById.get(c.id);
           if (!d) return c;
-          return { ...d, ...c, name: c.name === 'Desserts & Dips' ? d.name : c.name, image: (c.image === '/images/menu/p-dip-cheese.jpg' || c.image === '/images/dips.svg' || c.image === '/images/desert.png' ? d.image : c.image) || d.image, bannerImage: (c as CategoryItem).bannerImage || d.bannerImage || d.image };
+          return { ...d, ...c, name: c.name === 'Desserts & Dips' ? d.name : c.name, image: (c.image === '/images/menu/p-dip-cheese.jpg' || c.image === '/images/dips.svg' || c.image === '/images/desert.png' ? d.image : c.image) || d.image, bannerImage: ((c as CategoryItem).bannerImage === '/images/lunch-time-special-combos.jpg' ? d.bannerImage : (c as CategoryItem).bannerImage) || d.bannerImage || d.image };
         })
         .concat(CRAVING_CATEGORIES.filter((d) => !parsed.some((c: CategoryItem) => c.id === d.id)));
     } catch {
