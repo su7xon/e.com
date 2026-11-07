@@ -232,7 +232,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     const code = couponInput.trim().toUpperCase();
     const found = couponList.find((c) => c.code === code);
     if (!found) {
-      setCouponError('Invalid coupon code. Try 7CHEESE50 or CHEESEFEST');
+      setCouponError('Invalid coupon code.');
       return;
     }
     if (subtotal < found.minOrder) {

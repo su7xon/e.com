@@ -5,10 +5,21 @@ export interface LocationFix {
   accuracy: number;
 }
 
-const read = (options: PositionOptions) =>
+// How long a customer gets to answer the browser's location popup.
+const ANSWER_WAIT_MS = 60_000;
+
+const permissionState = async (): Promise<PermissionState | 'unknown'> => {
+  try {
+    return (await navigator.permissions.query({ name: 'geolocation' })).state;
+  } catch {
+    return 'unknown';
+  }
+};
+
+const read = (options: PositionOptions, waitMs: number) =>
   new Promise<LocationFix>((resolve, reject) => {
     // Some iPhone web apps never answer at all, so the wait has its own limit.
-    const giveUp = window.setTimeout(() => reject(new Error('No location answer')), (options.timeout ?? 0) + 2_000);
+    const giveUp = window.setTimeout(() => reject(new Error('No location answer')), waitMs);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         window.clearTimeout(giveUp);
@@ -34,14 +45,32 @@ const read = (options: PositionOptions) =>
  */
 export async function getFreshLocation(): Promise<LocationFix | null> {
   if (!('geolocation' in navigator)) return null;
+  const permission = await permissionState();
+  if (permission === 'denied') return null;
+  // The browser's own timeout only starts after the popup is answered, so ours must allow for it.
+  const extraWait = permission === 'granted' ? 2_000 : ANSWER_WAIT_MS;
   try {
-    return await read({ enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 });
+    return await read({ enableHighAccuracy: true, timeout: 10_000, maximumAge: 0 }, 10_000 + extraWait);
   } catch (err) {
     if ((err as GeolocationPositionError)?.code === 1) return null;
   }
   try {
-    return await read({ enableHighAccuracy: false, timeout: 8_000, maximumAge: 0 });
+    return await read({ enableHighAccuracy: false, timeout: 8_000, maximumAge: 0 }, 8_000 + extraWait);
   } catch {
     return null;
+  }
+}
+
+/** Calls back when the customer allows location later on, however long they took. Returns a stop function. */
+export async function onLocationAllowed(callback: () => void): Promise<() => void> {
+  try {
+    const status = await navigator.permissions.query({ name: 'geolocation' });
+    const onChange = () => {
+      if (status.state === 'granted') callback();
+    };
+    status.addEventListener('change', onChange);
+    return () => status.removeEventListener('change', onChange);
+  } catch {
+    return () => {};
   }
 }

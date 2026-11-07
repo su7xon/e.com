@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, MapPin, Plus, Check, Home, Briefcase, Navigation, Compass, Pencil, Trash2 } from 'lucide-react';
 import { UserAddress } from '../types';
+import { CURRENT_LOCATION_ID } from '../data/mockData';
 import { InteractiveMapPicker } from './InteractiveMapPicker';
 import { findDeliveryOutlet, findNearestOutlet } from './admin/outlets';
 
@@ -69,9 +70,11 @@ export const AddressModal: React.FC<AddressModalProps> = ({
     if (editingId) {
       const existing = addresses.find((a) => a.id === editingId);
       const base: UserAddress = existing ?? { id: editingId, address: '', city: '', pincode: '' } as UserAddress;
+      // Editing "Current location" makes it a saved address, and that id only lasts one visit.
+      const savedId = editingId === CURRENT_LOCATION_ID ? `addr-${Date.now()}` : editingId;
       const updated: UserAddress = {
         ...base,
-        id: editingId,
+        id: savedId,
         label,
         address: addressLine,
         city,
@@ -82,7 +85,12 @@ export const AddressModal: React.FC<AddressModalProps> = ({
       if (typeof base.lat === 'number' && typeof base.lng === 'number') {
         updated.distanceKm = findNearestOutlet(base.lat, base.lng).distanceKm;
       }
-      onUpdateAddress(updated);
+      if (savedId === editingId) {
+        onUpdateAddress(updated);
+      } else {
+        onAddNewAddress(updated);
+        onDeleteAddress(editingId);
+      }
       if (currentAddress.id === editingId) onSelectAddress(updated);
     } else {
       const newAddr: UserAddress = {

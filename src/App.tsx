@@ -18,13 +18,14 @@ import {
   CRAVING_CATEGORIES,
   DEFAULT_ADDRESSES,
   NO_ADDRESS,
+  CURRENT_LOCATION_ID,
   isDemoAddress,
   COUPONS,
   SIZE_PRICE_MODIFIERS,
   CRUST_PRICE_MODIFIERS
 } from './data/mockData';
 import { reverseGeocode } from './lib/reverseGeocode';
-import { getFreshLocation } from './lib/freshLocation';
+import { getFreshLocation, onLocationAllowed } from './lib/freshLocation';
 import { taxesAndChargesFor, bestDiscount, freeGiftEligible, FREE_GIFT_PRODUCT_ID, FREE_GIFT_NAME } from './lib/billing';
 import { computeDayDeal, offerByKey, isDayDealDay } from './lib/deals';
 import { isOfferActive, isScheduleActive, SLIDE_SCHEDULES, LUNCH, OFFER_SCHEDULES, describeSchedule } from './utils/offerSchedule';
@@ -138,9 +139,10 @@ class AdminErrorBoundary extends React.Component<
   }
 }
 
-const CURRENT_LOCATION_ID = 'addr-current-location';
 // Back after this long counts as opening the app again.
 const REOPEN_AFTER_MS = 15 * 60 * 1000;
+// A reading rougher than this is too far off to deliver to or to match a saved address.
+const MAX_ADDRESS_ACCURACY_M = 500;
 
 export default function App() {
   // Migration: old cached image URLs pointed at /src/assets (never served in dist).
@@ -579,7 +581,8 @@ export default function App() {
       const parsed = JSON.parse(saved);
       // Free delivery above ₹99 is automatic, and Tuesday / Friday deals are worked out in the cart,
       // so the old FREEDEL / TUESDAYTREAT / FUNDAYFRIDAY coupons are retired.
-      const retired = ['FREEDEL', 'TUESDAYTREAT', 'FUNDAYFRIDAY'];
+      // 7CHEESE50 and CHEESEFEST were demo codes.
+      const retired = ['FREEDEL', 'TUESDAYTREAT', 'FUNDAYFRIDAY', '7CHEESE50', 'CHEESEFEST'];
       return Array.isArray(parsed) ? parsed.filter((c: Coupon) => !retired.includes(c.code)) : COUPONS;
     } catch {
       return COUPONS;
@@ -1159,24 +1162,30 @@ export default function App() {
       if (!alive || addressPicked.current) return false;
       return (!s.isCartOpen && s.currentView === 'home') || s.currentAddress.id === NO_ADDRESS.id;
     };
-    const refresh = async () => {
+    const applyLocation = async () => {
       const fix = await getFreshLocation();
       if (!fix || !alive) return;
       setUserGps({ lat: fix.lat, lng: fix.lng });
-      if (!canApply()) return;
+      if (fix.accuracy > MAX_ADDRESS_ACCURACY_M || !canApply()) return;
 
-      // At a saved address: use it, it has the house details.
-      const reach = Math.min(1, Math.max(0.2, fix.accuracy / 1000));
-      const saved = locationState.current.addresses.find(
-        (a) =>
-          a.id !== CURRENT_LOCATION_ID &&
-          typeof a.lat === 'number' &&
-          typeof a.lng === 'number' &&
-          geoDistanceKm(fix.lat, fix.lng, a.lat, a.lng) <= reach,
-      );
-      if (saved) {
+      const reach = Math.max(0.2, fix.accuracy / 1000);
+      const kmTo = (a: UserAddress) =>
+        typeof a.lat === 'number' && typeof a.lng === 'number' ? geoDistanceKm(fix.lat, fix.lng, a.lat, a.lng) : Infinity;
+      const { addresses: saved, currentAddress: chosen } = locationState.current;
+      // A blank or GPS address can update itself. A saved one only changes if the customer says so.
+      const canReplace = chosen.id === NO_ADDRESS.id || chosen.id === CURRENT_LOCATION_ID;
+      if (!canReplace && kmTo(chosen) <= reach) {
         setLocationOffer(null);
-        setCurrentAddress(saved);
+        return;
+      }
+
+      // At a saved address: prefer it, it has the house details.
+      const nearest = saved
+        .filter((a) => a.id !== CURRENT_LOCATION_ID && kmTo(a) <= reach)
+        .sort((a, b) => kmTo(a) - kmTo(b))[0];
+      if (nearest) {
+        if (canReplace) setCurrentAddress(nearest);
+        else setLocationOffer(nearest);
         return;
       }
 
@@ -1192,16 +1201,31 @@ export default function App() {
         lng: fix.lng,
         distanceKm: findDeliveryOutlet(fix.lat, fix.lng).distanceKm,
       };
-      // A saved address stays until the customer says otherwise; only a blank or GPS one updates itself.
-      const { id } = locationState.current.currentAddress;
-      if (id !== NO_ADDRESS.id && id !== CURRENT_LOCATION_ID) {
+      if (!canReplace) {
         setLocationOffer(here);
         return;
       }
       setAddresses((prev) => [here, ...prev.filter((a) => a.id !== here.id)]);
       setCurrentAddress(here);
     };
+    let reading = false;
+    const refresh = async () => {
+      if (reading) return;
+      reading = true;
+      try {
+        await applyLocation();
+      } finally {
+        reading = false;
+      }
+    };
     void refresh();
+
+    // Someone who answers the location popup late still gets their location.
+    let stopWatching = () => {};
+    void onLocationAllowed(() => void refresh()).then((stop) => {
+      if (alive) stopWatching = stop;
+      else stop();
+    });
 
     let hiddenAt = 0;
     const onVisibility = () => {
@@ -1220,6 +1244,7 @@ export default function App() {
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       alive = false;
+      stopWatching();
       document.removeEventListener('visibilitychange', onVisibility);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2517,7 +2542,8 @@ export default function App() {
       {locationOffer && !isCartOpen && !isAddressModalOpen && (
         <div id="location-offer" role="status" className="fixed left-3 right-3 top-20 z-[60] mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
           <p className="text-sm font-bold text-slate-900">
-            {addressPinned ? `You're not near ${currentAddress.label}.` : `Delivering to ${currentAddress.label}.`} Deliver to your current location?
+            {addressPinned ? `You're not near ${currentAddress.label}.` : `Delivering to ${currentAddress.label}.`}{' '}
+            {locationOffer.id === CURRENT_LOCATION_ID ? 'Deliver to your current location?' : `Deliver to ${locationOffer.label}?`}
           </p>
           <p className="mt-0.5 truncate text-xs text-slate-600">
             {locationOffer.address}, {locationOffer.city}
@@ -2532,7 +2558,7 @@ export default function App() {
               }}
               className="flex-1 rounded-full bg-[#ED1C24] px-3 py-2 text-xs font-bold text-white cursor-pointer"
             >
-              Use current location
+              {locationOffer.id === CURRENT_LOCATION_ID ? 'Use current location' : `Use ${locationOffer.label}`}
             </button>
             <button
               id="btn-keep-address"

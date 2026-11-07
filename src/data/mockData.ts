@@ -2091,30 +2091,13 @@ export const REMOVED_MENU_IDS: string[] = [
   'p-dessert-sweet-boba',
 ];
 
-export const COUPONS: Coupon[] = [
-  {
-    code: '7CHEESE50',
-    discountType: 'percentage',
-    value: 50,
-    maxDiscount: 100,
-    minOrder: 199,
-    title: '50% OFF up to ₹100',
-    description: 'Valid on all 7 Cheese Pizza orders above ₹199',
-    tag: 'MOST POPULAR',
-  },
-  {
-    code: 'CHEESEFEST',
-    discountType: 'flat',
-    value: 75,
-    minOrder: 299,
-    title: 'Flat ₹75 OFF on 7 Cheese Special',
-    description: 'Special discount on our signature 7 Cheese blend orders above ₹299',
-    tag: 'SIGNATURE DEAL',
-  },
-];
+export const COUPONS: Coupon[] = [];
 
 /** New customers start with no saved address. */
 export const DEFAULT_ADDRESSES: UserAddress[] = [];
+
+/** The address filled in from the phone's location. It lasts one visit. */
+export const CURRENT_LOCATION_ID = 'addr-current-location';
 
 /** Placeholder until the customer chooses a location. Never an order's address. */
 export const NO_ADDRESS: UserAddress = {
