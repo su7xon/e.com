@@ -262,7 +262,8 @@ export function parseOutletQrParam(): string | null {
     const p = new URLSearchParams(window.location.search);
     const oid = p.get('outlet');
     if (oid && getOutletById(oid)) return oid;
-    const stored = localStorage.getItem('seven_cheese_qr_outlet');
+    localStorage.removeItem('seven_cheese_qr_outlet'); // older versions kept this forever
+    const stored = sessionStorage.getItem('seven_cheese_qr_outlet');
     if (stored && getOutletById(stored)) return stored;
     return null;
   } catch {
@@ -330,7 +331,7 @@ export function resolveOutletForOrder(lat?: number, lng?: number): NearestOutlet
 /** QR lock clear karo (customer dusre outlet ka menu dekhna chahe to). */
 export function clearOutletQrLock(): void {
   try {
-    localStorage.removeItem('seven_cheese_qr_outlet');
+    sessionStorage.removeItem('seven_cheese_qr_outlet');
     localStorage.removeItem('seven_cheese_qr_table');
   } catch {
     // ignore

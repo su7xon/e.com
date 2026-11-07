@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, MapPin, Plus, Check, Home, Briefcase, Navigation, Compass, Pencil, Trash2 } from 'lucide-react';
 import { UserAddress } from '../types';
 import { InteractiveMapPicker } from './InteractiveMapPicker';
-import { findNearestOutlet } from './admin/outlets';
+import { findDeliveryOutlet, findNearestOutlet } from './admin/outlets';
 
 interface AddressModalProps {
   isOpen: boolean;
@@ -184,6 +184,8 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                       typeof addr.lat === 'number' && typeof addr.lng === 'number'
                         ? findNearestOutlet(addr.lat, addr.lng).distanceKm
                         : addr.distanceKm;
+                    const outsideArea =
+                      typeof addr.lat === 'number' && typeof addr.lng === 'number' && !findDeliveryOutlet(addr.lat, addr.lng).inZone;
 
                     return (
                       <div
@@ -220,6 +222,9 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                                 </span>
                               )}
                             </div>
+                            {outsideArea && (
+                              <p className="text-xs font-bold text-red-700 mt-0.5">We don't deliver here yet. You can pick up from a store.</p>
+                            )}
                             <p className="text-xs text-slate-600 truncate mt-0.5">
                               {addr.address}, {addr.city} - {addr.pincode}
                             </p>

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { UserAddress } from '../types';
 import { reverseGeocode as reverseGeocodeAddress } from '../lib/reverseGeocode';
-import { findNearestOutlet } from './admin/outlets';
+import { findDeliveryOutlet, findNearestOutlet } from './admin/outlets';
 
 interface InteractiveMapPickerProps {
   isOpen: boolean;
@@ -248,6 +248,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
   const mapEmbedSrc = `https://maps.google.com/maps?q=${coords.lat},${coords.lng}&z=18&output=embed`;
   const gmapsLink = `https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`;
   const outletKm = findNearestOutlet(coords.lat, coords.lng).distanceKm.toFixed(1);
+  const outsideArea = !findDeliveryOutlet(coords.lat, coords.lng).inZone;
 
   return (
     <div className="fixed inset-0 z-[70] overflow-hidden bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
@@ -439,6 +440,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
               <p className="text-[11px] text-slate-600 font-medium">
                 {city} - {pincode} • <span className="font-black text-amber-700">{outletKm} km from outlet</span>
               </p>
+              {outsideArea && <p className="text-xs font-bold text-red-700 mt-0.5">We don't deliver here yet.</p>}
             </div>
           </div>
 

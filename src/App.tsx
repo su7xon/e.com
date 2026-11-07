@@ -24,6 +24,7 @@ import {
   CRUST_PRICE_MODIFIERS
 } from './data/mockData';
 import { reverseGeocode } from './lib/reverseGeocode';
+import { getFreshLocation } from './lib/freshLocation';
 import { taxesAndChargesFor, bestDiscount, freeGiftEligible, FREE_GIFT_PRODUCT_ID, FREE_GIFT_NAME } from './lib/billing';
 import { computeDayDeal, offerByKey, isDayDealDay } from './lib/deals';
 import { isOfferActive, isScheduleActive, SLIDE_SCHEDULES, LUNCH, OFFER_SCHEDULES, describeSchedule } from './utils/offerSchedule';
@@ -137,6 +138,10 @@ class AdminErrorBoundary extends React.Component<
   }
 }
 
+const CURRENT_LOCATION_ID = 'addr-current-location';
+// Back after this long counts as opening the app again.
+const REOPEN_AFTER_MS = 15 * 60 * 1000;
+
 export default function App() {
   // Migration: old cached image URLs pointed at /src/assets (never served in dist).
   // Rewrite them to /images (public folder) so blank images never show.
@@ -245,11 +250,11 @@ export default function App() {
   }, [staff?.role, remoteStoreCount]);
 
   // QR-locked outlet: customer ne outlet QR scan kiya to order hamesha usi outlet ka.
-  // URL ?outlet=xxx aate hi lock + persist, taaki refresh pe bhi lock rahe.
+  // Lasts for this visit only: a refresh keeps it, but an old scan can't follow the customer around.
   const [qrOutletId, setQrOutletId] = useState<string | null>(() => {
     const parsed = parseOutletQrParam();
     try {
-      if (parsed) localStorage.setItem('seven_cheese_qr_outlet', parsed);
+      if (parsed) sessionStorage.setItem('seven_cheese_qr_outlet', parsed);
     } catch {
       // ignore
     }
@@ -774,7 +779,8 @@ export default function App() {
     const saved = localStorage.getItem('seven_cheese_addresses') || localStorage.getItem('dominos_addresses');
     if (!saved) return DEFAULT_ADDRESSES;
     try {
-      const parsed = dropTrainAddresses(JSON.parse(saved));
+      // "Current location" belongs to one visit; only addresses the customer saved carry over.
+      const parsed = dropTrainAddresses(JSON.parse(saved)).filter((a) => a.id !== CURRENT_LOCATION_ID);
       return parsed.length > 0 ? parsed : DEFAULT_ADDRESSES;
     } catch {
       return DEFAULT_ADDRESSES;
@@ -782,18 +788,17 @@ export default function App() {
   });
   const [currentAddress, setCurrentAddress] = useState<UserAddress>(() => addresses[0] || NO_ADDRESS);
 
-  // User's GPS fix (only set when they manually allow location — not on app open).
-  const [userGps, setUserGps] = useState<{ lat: number; lng: number } | null>(() => {
-    try {
-      const saved = localStorage.getItem('seven_cheese_user_gps');
-      if (!saved) return null;
-      const p = JSON.parse(saved);
-      if (typeof p?.lat === 'number' && typeof p?.lng === 'number') return p;
-    } catch {
-      // ignore
-    }
-    return null;
-  });
+  // Where the phone is on this visit. Kept in memory only, so it can never go stale between visits.
+  const [userGps, setUserGps] = useState<{ lat: number; lng: number } | null>(null);
+  // Set once the customer picks an address, so a location reading never overrides their choice.
+  const addressPicked = React.useRef(false);
+  // The phone is away from the chosen address: the customer decides, it never switches by itself.
+  const [locationOffer, setLocationOffer] = useState<UserAddress | null>(null);
+  const chooseAddress = (addr: UserAddress) => {
+    addressPicked.current = true;
+    setLocationOffer(null);
+    setCurrentAddress(addr);
+  };
 
   // Signed-out phones keep only their own orders (older versions saved every order on every phone).
   useEffect(() => {
@@ -827,9 +832,10 @@ export default function App() {
   const [isStorePickerOpen, setIsStorePickerOpen] = useState(false);
   const pickupOutlet = pickupStoreId ? getOutletById(pickupStoreId) ?? null : null;
 
-  // The store this customer's order goes to: a QR scan wins, then pick-up, then delivery.
+  // The store this customer's order goes to: a QR scan wins for table and pick-up orders.
+  // Delivery always goes by the address, so the radius check can't be skipped.
   // Before a location is known the first store only fills in the menu; checkout stays blocked.
-  const customerOutlet = qrOutlet ?? (orderType === 'TAKEAWAY' ? pickupOutlet : null) ?? outletInfo?.outlet ?? OUTLETS[0];
+  const customerOutlet = (orderType !== 'DELIVERY' ? qrOutlet : null) ?? (orderType === 'TAKEAWAY' ? pickupOutlet : null) ?? outletInfo?.outlet ?? OUTLETS[0];
 
   // Delivery needs a real, pinned address inside a store's delivery radius.
   const deliveryBlock =
@@ -839,7 +845,7 @@ export default function App() {
         ? { message: 'Choose your delivery location to place the order.' }
         : !addressPinned
           ? { message: 'Pin this address on the map so we can find your nearest store.', canPin: true }
-          : !qrOutlet && outletInfo && !outletInfo.inZone
+          : outletInfo && !outletInfo.inZone
             ? { message: `We don't deliver to this address yet. Nearest store: ${outletInfo.outlet.shortName} (${outletInfo.distanceKm} km).` }
             : null;
 
@@ -1122,6 +1128,95 @@ export default function App() {
   }, []);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isDealsModalOpen, setIsDealsModalOpen] = useState(false);
+
+  // Latest values for the location refresh, which runs outside render.
+  const locationState = React.useRef({ addresses, currentAddress, currentView, isCartOpen });
+  locationState.current = { addresses, currentAddress, currentView, isCartOpen };
+
+  // Read the phone's location on every open, and again when it comes back after a long gap
+  // (a phone often resumes the app instead of reloading it). QR orders already know their store.
+  useEffect(() => {
+    try {
+      localStorage.removeItem('seven_cheese_user_gps');
+    } catch {
+      // ignore
+    }
+    if (qrOutletId) return;
+    const { currentView: firstView } = locationState.current;
+    if (firstView === 'admin' || firstView === 'delivery') return;
+
+    let alive = true;
+    // Mid-checkout the address only changes if there isn't one yet.
+    const canApply = () => {
+      const s = locationState.current;
+      if (!alive || addressPicked.current) return false;
+      return (!s.isCartOpen && s.currentView === 'home') || s.currentAddress.id === NO_ADDRESS.id;
+    };
+    const refresh = async () => {
+      const fix = await getFreshLocation();
+      if (!fix || !alive) return;
+      setUserGps({ lat: fix.lat, lng: fix.lng });
+      if (!canApply()) return;
+
+      // At a saved address: use it, it has the house details.
+      const reach = Math.min(1, Math.max(0.2, fix.accuracy / 1000));
+      const saved = locationState.current.addresses.find(
+        (a) =>
+          a.id !== CURRENT_LOCATION_ID &&
+          typeof a.lat === 'number' &&
+          typeof a.lng === 'number' &&
+          geoDistanceKm(fix.lat, fix.lng, a.lat, a.lng) <= reach,
+      );
+      if (saved) {
+        setLocationOffer(null);
+        setCurrentAddress(saved);
+        return;
+      }
+
+      const place = await reverseGeocode(fix.lat, fix.lng);
+      if (!canApply()) return;
+      const here: UserAddress = {
+        id: CURRENT_LOCATION_ID,
+        label: 'Current location',
+        address: place.address,
+        city: place.city,
+        pincode: place.pincode,
+        lat: fix.lat,
+        lng: fix.lng,
+        distanceKm: findDeliveryOutlet(fix.lat, fix.lng).distanceKm,
+      };
+      // A saved address stays until the customer says otherwise; only a blank or GPS one updates itself.
+      const { id } = locationState.current.currentAddress;
+      if (id !== NO_ADDRESS.id && id !== CURRENT_LOCATION_ID) {
+        setLocationOffer(here);
+        return;
+      }
+      setAddresses((prev) => [here, ...prev.filter((a) => a.id !== here.id)]);
+      setCurrentAddress(here);
+    };
+    void refresh();
+
+    let hiddenAt = 0;
+    const onVisibility = () => {
+      if (document.hidden) {
+        hiddenAt = Date.now();
+        return;
+      }
+      const away = hiddenAt ? Date.now() - hiddenAt : 0;
+      hiddenAt = 0;
+      const { currentView: view, isCartOpen: cartOpen } = locationState.current;
+      if (away < REOPEN_AFTER_MS || cartOpen || view !== 'home') return;
+      addressPicked.current = false;
+      setLocationOffer(null);
+      void refresh();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      alive = false;
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Persist State
   useEffect(() => {
@@ -1560,7 +1655,7 @@ export default function App() {
           currentAddress={currentAddress}
           onOpenAddressModal={() => setIsAddressModalOpen(true)}
           onSelectAddress={(addr) => {
-            setCurrentAddress(addr);
+            chooseAddress(addr);
             setAddresses((prev) => [addr, ...prev.filter((a) => a.id !== addr.id)]);
           }}
           onPlaceOrder={(notes, method, delivery) => {
@@ -1580,7 +1675,7 @@ export default function App() {
           onClose={() => setIsAddressModalOpen(false)}
           addresses={addresses}
           currentAddress={currentAddress}
-          onSelectAddress={(addr) => setCurrentAddress(addr)}
+          onSelectAddress={chooseAddress}
           onAddNewAddress={(newAddr) => setAddresses((prev) => [newAddr, ...prev])}
           onUpdateAddress={handleUpdateAddress}
           onDeleteAddress={handleDeleteAddress}
@@ -2366,7 +2461,7 @@ export default function App() {
         currentAddress={currentAddress}
         onOpenAddressModal={() => setIsAddressModalOpen(true)}
         onSelectAddress={(addr) => {
-          setCurrentAddress(addr);
+          chooseAddress(addr);
           setAddresses((prev) => [addr, ...prev.filter((a) => a.id !== addr.id)]);
         }}
         onPlaceOrder={(notes, method, delivery) => handlePlaceOrder(notes, method, delivery)}
@@ -2407,12 +2502,46 @@ export default function App() {
         }}
       />
 
+      {locationOffer && !isCartOpen && !isAddressModalOpen && (
+        <div id="location-offer" role="status" className="fixed left-3 right-3 top-20 z-[60] mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-3 shadow-xl">
+          <p className="text-sm font-bold text-slate-900">
+            {addressPinned ? `You're not near ${currentAddress.label}.` : `Delivering to ${currentAddress.label}.`} Deliver to your current location?
+          </p>
+          <p className="mt-0.5 truncate text-xs text-slate-600">
+            {locationOffer.address}, {locationOffer.city}
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              id="btn-use-current-location"
+              onClick={() => {
+                const here = locationOffer;
+                setAddresses((prev) => [here, ...prev.filter((a) => a.id !== here.id)]);
+                chooseAddress(here);
+              }}
+              className="flex-1 rounded-full bg-[#ED1C24] px-3 py-2 text-xs font-bold text-white cursor-pointer"
+            >
+              Use current location
+            </button>
+            <button
+              id="btn-keep-address"
+              onClick={() => {
+                addressPicked.current = true;
+                setLocationOffer(null);
+              }}
+              className="flex-1 rounded-full border border-slate-300 px-3 py-2 text-xs font-bold text-slate-800 cursor-pointer"
+            >
+              Keep {currentAddress.label}
+            </button>
+          </div>
+        </div>
+      )}
+
       <AddressModal
         isOpen={isAddressModalOpen}
         onClose={() => setIsAddressModalOpen(false)}
         addresses={addresses}
         currentAddress={currentAddress}
-        onSelectAddress={(addr) => setCurrentAddress(addr)}
+        onSelectAddress={chooseAddress}
         onAddNewAddress={(newAddr) => setAddresses((prev) => [newAddr, ...prev])}
         onUpdateAddress={handleUpdateAddress}
         onDeleteAddress={handleDeleteAddress}
