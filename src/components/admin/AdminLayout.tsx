@@ -70,8 +70,8 @@ interface AdminLayoutProps {
   onDeleteItem: (itemId: string) => void;
   onRestoreMenu: () => void;
   onCreateOrder: (order: AdminOrder) => void;
-  onAddCoupon: (coupon: Coupon) => void;
-  onDeleteCoupon: (code: string) => void;
+  onAddCoupon: (coupon: Coupon) => Promise<void>;
+  onDeleteCoupon: (code: string) => Promise<void>;
   onBackToStore: () => void;
   onLogout: () => void;
   slides: BannerSlide[];

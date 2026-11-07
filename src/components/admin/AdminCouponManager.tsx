@@ -17,8 +17,8 @@ import { Coupon } from '../../types';
 
 interface AdminCouponManagerProps {
   coupons: Coupon[];
-  onAddCoupon: (coupon: Coupon) => void;
-  onDeleteCoupon: (code: string) => void;
+  onAddCoupon: (coupon: Coupon) => Promise<void>;
+  onDeleteCoupon: (code: string) => Promise<void>;
 }
 
 export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({
@@ -28,6 +28,9 @@ export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({
 }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
 
   // Form state
   const [formData, setFormData] = useState<Partial<Coupon>>({
@@ -47,13 +50,28 @@ export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({
     setTimeout(() => setCopiedCode(null), 1500);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleDelete = async (code: string) => {
+    setDeleteError('');
+    try {
+      await onDeleteCoupon(code);
+    } catch {
+      setDeleteError(`Could not delete ${code}. Check the internet and that you are logged in as owner.`);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.code?.trim() || !formData.value) return;
 
+    const code = formData.code.trim().toUpperCase();
+    if (coupons.some((c) => c.code === code)) {
+      setFormError(`${code} already exists. Delete it first or use another code.`);
+      return;
+    }
+
     const newCoupon: Coupon = {
-      code: formData.code.trim().toUpperCase(),
-      title: formData.title?.trim() || `${formData.value}% Flat Off on 7 Cheese`,
+      code,
+      title: formData.title?.trim() || (formData.discountType === 'flat' ? `₹${formData.value} Off on 7 Cheese` : `${formData.value}% Off on 7 Cheese`),
       description: formData.description?.trim() || `Valid on all pizzas above ₹${formData.minOrder || 199}.`,
       discountType: formData.discountType as 'percentage' | 'flat',
       value: Number(formData.value),
@@ -62,8 +80,16 @@ export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({
       tag: formData.tag?.trim() || 'EXCLUSIVE',
     };
 
-    onAddCoupon(newCoupon);
-    setIsAddModalOpen(false);
+    setSaving(true);
+    setFormError('');
+    try {
+      await onAddCoupon(newCoupon);
+      setIsAddModalOpen(false);
+    } catch {
+      setFormError('Could not save this code. Check the internet and that you are logged in as owner.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -97,6 +123,7 @@ export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({
               maxDiscount: 150,
               tag: 'SPECIAL OFFER',
             });
+            setFormError('');
             setIsAddModalOpen(true);
           }}
           className="flex items-center justify-center gap-1.5 bg-[#ED1C24] hover:bg-[#c91430] text-white px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm shadow-red-500/20 active:scale-95 self-start sm:self-auto"
@@ -105,6 +132,12 @@ export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({
           <span>Create New Coupon</span>
         </button>
       </div>
+
+      {deleteError && (
+        <p id="coupon-delete-error" className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-3 py-2 text-xs font-bold">
+          {deleteError}
+        </p>
+      )}
 
       {/* Coupons Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -130,7 +163,7 @@ export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({
                 <button
                   onClick={() => {
                     if (window.confirm(`Delete coupon "${c.code}"?`)) {
-                      onDeleteCoupon(c.code);
+                      void handleDelete(c.code);
                     }
                   }}
                   className="p-1 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
@@ -221,6 +254,7 @@ export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({
                     type="number"
                     required
                     min={1}
+                    max={formData.discountType === 'percentage' ? 100 : undefined}
                     value={formData.value || ''}
                     onChange={(e) => setFormData({ ...formData, value: Number(e.target.value) })}
                     placeholder={formData.discountType === 'percentage' ? '20' : '100'}
@@ -291,13 +325,21 @@ export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({
                 />
               </div>
 
+              {formError && (
+                <p id="coupon-form-error" className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-3 py-2 text-xs font-bold">
+                  {formError}
+                </p>
+              )}
+
               {/* Buttons */}
               <div className="flex gap-2 pt-2 border-t border-slate-100">
                 <button
+                  id="btn-coupon-save"
                   type="submit"
-                  className="flex-1 bg-[#ED1C24] hover:bg-[#c91430] text-white py-2.5 rounded-xl text-xs font-black shadow-md shadow-red-500/20 transition-all cursor-pointer"
+                  disabled={saving}
+                  className="flex-1 bg-[#ED1C24] hover:bg-[#c91430] disabled:opacity-60 text-white py-2.5 rounded-xl text-xs font-black shadow-md shadow-red-500/20 transition-all cursor-pointer"
                 >
-                  Activate Coupon
+                  {saving ? 'Saving...' : 'Activate Coupon'}
                 </button>
                 <button
                   type="button"

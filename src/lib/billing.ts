@@ -31,9 +31,9 @@ export function couponDiscountFor(subtotal: number, coupon: Coupon | null | unde
   if (!coupon || subtotal < coupon.minOrder) return 0;
   if (coupon.discountType === 'percentage') {
     const calc = Math.round((subtotal * coupon.value) / 100);
-    return coupon.maxDiscount ? Math.min(calc, coupon.maxDiscount) : calc;
+    return Math.min(coupon.maxDiscount ? Math.min(calc, coupon.maxDiscount) : calc, subtotal);
   }
-  return coupon.value;
+  return Math.min(coupon.value, subtotal);
 }
 
 /** Day deal (Tuesday / Friday) and coupons don't stack — the bigger saving applies. */

@@ -5,6 +5,7 @@ import {
   doc,
   setDoc,
   deleteDoc,
+  deleteField,
   getDocs,
   onSnapshot,
   query,
@@ -23,7 +24,7 @@ import {
   type User as FirebaseUser,
 } from 'firebase/auth';
 import { getAnalytics, isSupported as isAnalyticsSupported, type Analytics } from 'firebase/analytics';
-import type { MenuItem } from '../types';
+import type { Coupon, MenuItem } from '../types';
 import type { AdminOrder } from '../components/admin/adminData';
 import type { Outlet } from '../components/admin/outlets';
 
@@ -306,6 +307,47 @@ export function subscribeToPosCodes(onCodes: (codes: Record<string, string>) => 
 
 export async function savePosCode(id: string, code: string): Promise<void> {
   await setDoc(doc(db, ...POS_CODES_DOC), { codes: { [id]: code } }, { merge: true });
+}
+
+// ---------- Firestore: promo codes (one list for every store and customer) ----------
+
+const COUPONS_DOC = ['settings', 'coupons'] as const;
+const SAVE_WAIT_MS = 10_000;
+
+/** A save with no internet waits forever, so the admin screen gets an answer in time. */
+function withinSaveWait(save: Promise<void>): Promise<void> {
+  return Promise.race([
+    save,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Save timed out')), SAVE_WAIT_MS)),
+  ]);
+}
+
+/** Every promo code, live. With no connection the app keeps the codes it last saw. */
+export function subscribeToCoupons(onCoupons: (coupons: Coupon[]) => void): () => void {
+  try {
+    return onSnapshot(
+      doc(db, ...COUPONS_DOC),
+      // Without this, the server confirming "no codes" after a slow start raises no event.
+      { includeMetadataChanges: true },
+      (snap) => {
+        // Nothing from the server yet is not the same as "there are no codes".
+        if (snap.metadata.fromCache && !snap.exists()) return;
+        const codes = (snap.data() as { codes?: Record<string, Coupon> } | undefined)?.codes ?? {};
+        onCoupons(Object.values(codes).sort((a, b) => a.code.localeCompare(b.code)));
+      },
+      () => {}
+    );
+  } catch {
+    return () => {};
+  }
+}
+
+export function saveCoupon(coupon: Coupon): Promise<void> {
+  return withinSaveWait(setDoc(doc(db, ...COUPONS_DOC), { codes: { [coupon.code]: toPlain(coupon) } }, { merge: true }));
+}
+
+export function deleteCoupon(code: string): Promise<void> {
+  return withinSaveWait(setDoc(doc(db, ...COUPONS_DOC), { codes: { [code]: deleteField() } }, { merge: true }));
 }
 
 export { app, firebaseConfig };

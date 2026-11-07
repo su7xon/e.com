@@ -75,6 +75,9 @@ import {
   subscribeToOutletSoldOut,
   patchOrderInFirestore,
   subscribeToAuth,
+  subscribeToCoupons,
+  saveCoupon,
+  deleteCoupon,
 } from './lib/firebase';
 import { needsCustomize } from './lib/customize';
 import { 
@@ -593,6 +596,9 @@ export default function App() {
     safeSet('seven_cheese_coupons', JSON.stringify(coupons));
   }, [coupons]);
 
+  // The owner's Promo Codes screen saves to the database, so every customer gets the same list.
+  useEffect(() => subscribeToCoupons(setCoupons), []);
+
   // Delete tombstones: delete kiya order Firestore fail / dusre device retry se wapas na aaye.
   // Permanent list — merge/subscription har jagah ise filter karta hai.
   const readTombstones = (): string[] => {
@@ -916,11 +922,13 @@ export default function App() {
     const generic = heroSlides.filter((s) => !isDeal(s));
     return generic.length > 0 ? generic : heroSlides;
   }, [heroSlides, now, dayDealDay]);
-  // An applied coupon that goes out of its window is dropped automatically.
+  // An applied coupon that goes out of its window, or that the owner deletes, is dropped automatically.
   // On Tuesday/Friday, only the day deal works — coupons are dropped.
   useEffect(() => {
-    if (appliedCoupon && (!isOfferActive(appliedCoupon, now) || dayDealDay)) setAppliedCoupon(null);
-  }, [appliedCoupon, now, dayDealDay]);
+    if (!appliedCoupon) return;
+    const deleted = !coupons.some((c) => c.code === appliedCoupon.code);
+    if (deleted || !isOfferActive(appliedCoupon, now) || dayDealDay) setAppliedCoupon(null);
+  }, [appliedCoupon, coupons, now, dayDealDay]);
 
   // Past Orders & Active Order
   const [pastOrders, setPastOrders] = useState<ActiveOrder[]>(() => {
@@ -1752,7 +1760,7 @@ export default function App() {
         />
         <ChatAssistant
           menuItems={menuItems}
-          coupons={coupons}
+          coupons={effectiveCoupons}
           hasCart={cartItemCount > 0}
         suppressed={isCartOpen || isCustomizeOpen || isQuickViewOpen}
           onAddToCart={handleSimpleAddToCart}
@@ -1821,12 +1829,8 @@ export default function App() {
           setAdminOrders((prev) => [order, ...prev]);
           saveOrderToFirestore(order).catch(() => {});
         }}
-        onAddCoupon={(coupon) => {
-          setCoupons((prev) => [coupon, ...prev]);
-        }}
-        onDeleteCoupon={(code) => {
-          setCoupons((prev) => prev.filter((c) => c.code !== code));
-        }}
+        onAddCoupon={saveCoupon}
+        onDeleteCoupon={deleteCoupon}
         onBackToStore={() => goView('home')}
         onLogout={handleAdminLogout}
         slides={heroSlides}
@@ -2419,7 +2423,7 @@ export default function App() {
           now={now}
           slides={heroSlides}
           lunchCombos={menuItems.filter((m) => m.id.startsWith('p-offer-lunch-') && m.isAvailable !== false)}
-          coupons={activeCoupons}
+          coupons={effectiveCoupons}
           appliedCode={appliedCoupon?.code}
           cartQty={(pid) => cartItems.filter((c) => c.productId === pid).reduce((s, c) => s + c.quantity, 0)}
           onAddCombo={handleSimpleAddToCart}
@@ -2593,13 +2597,13 @@ export default function App() {
           setIsCartOpen(true);
         }}
         appliedCouponCode={appliedCoupon?.code}
-        coupons={activeCoupons}
+        coupons={effectiveCoupons}
       />
 
       {/* Floating pizza assistant (Groq) */}
       <ChatAssistant
         menuItems={activeMenuItems}
-        coupons={activeCoupons}
+        coupons={effectiveCoupons}
         hasCart={cartItemCount > 0}
         suppressed={isCartOpen || isCustomizeOpen || isQuickViewOpen}
         onAddToCart={handleSimpleAddToCart}
