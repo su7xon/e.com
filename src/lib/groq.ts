@@ -1,5 +1,6 @@
 // Groq chatbot helper — fast free-tier models with automatic fallback.
-// Key resolution: VITE_GROQ_API_KEY env wins, else bundled fallback (replace via env).
+// No key is bundled: without one, ChatAssistant answers from its offline replies.
+// A VITE_ key ends up in the public site code, so a new key belongs behind a server function.
 // Endpoint: OpenAI-compatible https://api.groq.com/openai/v1/chat/completions (CORS enabled).
 
 export interface GroqChatMessage {
@@ -16,11 +17,9 @@ export const GROQ_MODELS = [
   'openai/gpt-oss-20b',
 ] as const;
 
-const FALLBACK_KEY = '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';
-
 export function getGroqKey(): string {
   const envKey = (import.meta as any)?.env?.VITE_GROQ_API_KEY as string | undefined;
-  return (envKey && envKey.trim()) || FALLBACK_KEY;
+  return (envKey && envKey.trim()) || '';
 }
 
 export async function chatWithGroq(
