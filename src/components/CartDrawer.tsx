@@ -53,7 +53,7 @@ interface CartDrawerProps {
   /** Set when the store is closed / not taking orders: shown on top and blocks checkout. */
   storeClosedNote?: string;
   /** Delivery can't go ahead yet: shown on top with what to do, and blocks checkout. */
-  deliveryBlock?: { message: string; canPin?: boolean } | null;
+  deliveryBlock?: { message: string; canPin?: boolean; outsideArea?: boolean } | null;
   /** The store this order goes to. */
   storeName?: string;
   /** Opens the store list to collect the order. */
@@ -434,7 +434,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         {/* Delivery needs a location / not delivered here */}
         {cartItems.length > 0 && deliveryBlock && (
           <div role="alert" id="cart-delivery-block" className="px-[max(0.875rem,calc((100%_-_48rem)/2))] py-2.5 text-xs border-b bg-amber-50 border-amber-300 text-amber-900">
-            <p className="font-bold">📍 {deliveryBlock.message}</p>
+            <p className="font-bold">{deliveryBlock.message}</p>
             <div className="mt-1.5 flex flex-wrap gap-2">
               <button
                 type="button"
@@ -444,7 +444,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               >
                 {deliveryBlock.canPin ? 'Pin on map' : 'Choose location'}
               </button>
-              {onPickupInstead && (
+              {onPickupInstead && !deliveryBlock.outsideArea && (
                 <button type="button" id="btn-cart-pickup" onClick={onPickupInstead} className="px-3 py-1.5 rounded-lg bg-white border border-amber-400 font-bold cursor-pointer">
                   Pick up from a store
                 </button>

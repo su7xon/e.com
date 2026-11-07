@@ -440,7 +440,7 @@ export const InteractiveMapPicker: React.FC<InteractiveMapPickerProps> = ({
               <p className="text-[11px] text-slate-600 font-medium">
                 {city} - {pincode} • <span className="font-black text-amber-700">{outletKm} km from outlet</span>
               </p>
-              {outsideArea && <p className="text-xs font-bold text-red-700 mt-0.5">We don't deliver here yet.</p>}
+              {outsideArea && <p className="text-xs font-bold text-red-700 mt-0.5">Sorry, we don't deliver here yet.</p>}
             </div>
           </div>
 

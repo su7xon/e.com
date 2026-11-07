@@ -404,14 +404,6 @@ export const ProfileDrawer: React.FC<ProfileDrawerProps> = ({
           >
             <X className="w-4 h-4" /> Close
           </button>
-          {isGoogleUser && (
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-1 text-xs font-bold text-red-600 hover:text-red-700 cursor-pointer"
-            >
-              <LogOut className="w-3.5 h-3.5" /> Sign out
-            </button>
-          )}
         </div>
       </aside>
     </div>

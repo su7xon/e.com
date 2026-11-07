@@ -223,7 +223,7 @@ export const AddressModal: React.FC<AddressModalProps> = ({
                               )}
                             </div>
                             {outsideArea && (
-                              <p className="text-xs font-bold text-red-700 mt-0.5">We don't deliver here yet. You can pick up from a store.</p>
+                              <p className="text-xs font-bold text-red-700 mt-0.5">Sorry, we don't deliver here yet.</p>
                             )}
                             <p className="text-xs text-slate-600 truncate mt-0.5">
                               {addr.address}, {addr.city} - {addr.pincode}

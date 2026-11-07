@@ -846,7 +846,7 @@ export default function App() {
         : !addressPinned
           ? { message: 'Pin this address on the map so we can find your nearest store.', canPin: true }
           : outletInfo && !outletInfo.inZone
-            ? { message: `We don't deliver to this address yet. Nearest store: ${outletInfo.outlet.shortName} (${outletInfo.distanceKm} km).` }
+            ? { message: "Sorry, we don't deliver here yet.", outsideArea: true }
             : null;
 
   // Items that store has marked sold out.
@@ -1078,7 +1078,14 @@ export default function App() {
   const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(() => {
     try {
       const saved = localStorage.getItem('seven_cheese_customer');
-      return saved ? (JSON.parse(saved) as CustomerProfile) : null;
+      if (!saved) return null;
+      const parsed = JSON.parse(saved) as CustomerProfile;
+      // Older versions saved staff logins as customers; this clears them without signing staff out.
+      if (isStaffEmail(parsed.email)) {
+        localStorage.removeItem('seven_cheese_customer');
+        return null;
+      }
+      return parsed;
     } catch {
       return null;
     }
