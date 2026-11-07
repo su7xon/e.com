@@ -1928,6 +1928,11 @@ export default function App() {
         userPhoto={customerProfile?.photoURL}
         userName={customerProfile?.name}
       />
+      {deliveryBlock?.outsideArea && (
+        <div id="out-of-area-notice" role="status" className="bg-red-50 border-b border-red-200 px-4 py-2 text-center text-sm font-bold text-red-700">
+          {deliveryBlock.message}
+        </div>
+      )}
       <ProfileDrawer
         isOpen={isProfileOpen}
         onClose={() => setIsProfileOpen(false)}
