@@ -6,7 +6,6 @@ import {
   setDoc,
   deleteDoc,
   deleteField,
-  getDocs,
   onSnapshot,
   query,
   where,
@@ -107,15 +106,6 @@ export async function deleteMenuItemFromFirestore(itemId: string): Promise<void>
   await deleteDoc(doc(db, MENU_COLLECTION, itemId));
 }
 
-export async function fetchMenuItemsFromFirestore(): Promise<MenuItem[] | null> {
-  const snap = await getDocs(collection(db, MENU_COLLECTION));
-  if (snap.empty) return null;
-  const items: MenuItem[] = [];
-  snap.forEach((d) => {
-    items.push({ ...(d.data() as MenuItem), id: d.id });
-  });
-  return items;
-}
 
 /**
  * Live subscription for menuItems (har device, har outlet).
@@ -313,12 +303,14 @@ export async function savePosCode(id: string, code: string): Promise<void> {
 
 const COUPONS_DOC = ['settings', 'coupons'] as const;
 const SAVE_WAIT_MS = 10_000;
+/** The save is still queued and will be sent when the connection allows; it has not been refused. */
+export const SAVE_STILL_WAITING = 'Save still waiting';
 
 /** A save with no internet waits forever, so the admin screen gets an answer in time. */
 function withinSaveWait(save: Promise<void>): Promise<void> {
   return Promise.race([
     save,
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Save timed out')), SAVE_WAIT_MS)),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error(SAVE_STILL_WAITING)), SAVE_WAIT_MS)),
   ]);
 }
 

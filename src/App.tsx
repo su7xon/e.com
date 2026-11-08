@@ -61,7 +61,6 @@ import { getOutletById, findDeliveryOutlet, geoDistanceKm, OUTLETS, parseOutletQ
 import {
   saveMenuItemToFirestore,
   deleteMenuItemFromFirestore,
-  fetchMenuItemsFromFirestore,
   subscribeToFirestoreMenu,
   FIREBASE_PROJECT_ID,
   FIREBASE_API_KEY,
@@ -433,12 +432,8 @@ export default function App() {
         return Array.from(byId.values());
       });
     };
-    fetchMenuItemsFromFirestore()
-      .then((remote) => {
-        if (cancelled || !remote) return;
-        mergeRemote(remote);
-      })
-      .catch(() => {});
+    // The live listener's first answer is the full menu, so there is no separate one-time read:
+    // that read every menu item a second time on each visit.
     const unsub = subscribeToFirestoreMenu(
       (remote) => {
         if (cancelled) return;

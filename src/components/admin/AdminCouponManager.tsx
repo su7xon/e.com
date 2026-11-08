@@ -14,6 +14,9 @@ import {
   Clock
 } from 'lucide-react';
 import { Coupon } from '../../types';
+import { SAVE_STILL_WAITING } from '../../lib/firebase';
+
+const stillWaiting = (e: unknown) => e instanceof Error && e.message === SAVE_STILL_WAITING;
 
 interface AdminCouponManagerProps {
   coupons: Coupon[];
@@ -30,7 +33,7 @@ export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
-  const [deleteError, setDeleteError] = useState('');
+  const [notice, setNotice] = useState('');
 
   // Form state
   const [formData, setFormData] = useState<Partial<Coupon>>({
@@ -51,11 +54,15 @@ export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({
   };
 
   const handleDelete = async (code: string) => {
-    setDeleteError('');
+    setNotice('');
     try {
       await onDeleteCoupon(code);
-    } catch {
-      setDeleteError(`Could not delete ${code}. Check the internet and that you are logged in as owner.`);
+    } catch (e) {
+      setNotice(
+        stillWaiting(e)
+          ? `No answer from the server yet. ${code} will finish deleting when the connection allows. If it comes back in the list, try again.`
+          : `Could not delete ${code}. Check the internet and that you are logged in as owner.`
+      );
     }
   };
 
@@ -85,8 +92,14 @@ export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({
     try {
       await onAddCoupon(newCoupon);
       setIsAddModalOpen(false);
-    } catch {
-      setFormError('Could not save this code. Check the internet and that you are logged in as owner.');
+    } catch (e) {
+      if (stillWaiting(e)) {
+        // The code is already in the list and is still being sent, so nothing to re-enter.
+        setIsAddModalOpen(false);
+        setNotice(`No answer from the server yet. ${code} will finish saving when the connection allows. If it disappears from the list, add it again.`);
+      } else {
+        setFormError('Could not save this code. Check the internet and that you are logged in as owner.');
+      }
     } finally {
       setSaving(false);
     }
@@ -124,6 +137,7 @@ export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({
               tag: 'SPECIAL OFFER',
             });
             setFormError('');
+            setNotice('');
             setIsAddModalOpen(true);
           }}
           className="flex items-center justify-center gap-1.5 bg-[#ED1C24] hover:bg-[#c91430] text-white px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm shadow-red-500/20 active:scale-95 self-start sm:self-auto"
@@ -133,9 +147,9 @@ export const AdminCouponManager: React.FC<AdminCouponManagerProps> = ({
         </button>
       </div>
 
-      {deleteError && (
-        <p id="coupon-delete-error" className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-3 py-2 text-xs font-bold">
-          {deleteError}
+      {notice && (
+        <p id="coupon-notice" className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-3 py-2 text-xs font-bold">
+          {notice}
         </p>
       )}
 
