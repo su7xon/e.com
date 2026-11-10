@@ -26,12 +26,18 @@ export interface OfferInfo {
   terms: string[];
 }
 
-const DAY_DEAL_TERMS = [
-  'Medium & Large Hand Tossed pizzas only (not Pan Pizzas)',
-  'Upgrade to your favourite crust — charges extra',
-  'Not on Simply Veg or Simply Non-Veg pizzas',
-  'Applied automatically in the cart; coupons don’t stack — the bigger saving applies',
+const HAND_TOSSED_TERM = 'Medium & Large Hand Tossed pizzas only (not Pan Pizzas)';
+const CRUST_TERM = 'Upgrade to your favourite crust — charges extra';
+const AUTO_TERM = 'Applied automatically in the cart; coupons don’t stack — the bigger saving applies';
+
+const TUESDAY_TERMS = [
+  HAND_TOSSED_TERM,
+  'The free pizza is from the same group as the one you buy, or a cheaper group (veg or non-veg)',
+  CRUST_TERM,
+  AUTO_TERM,
 ];
+
+const FRIDAY_TERMS = [HAND_TOSSED_TERM, CRUST_TERM, 'Not on Simply Veg or Simply Non-Veg pizzas', AUTO_TERM];
 
 /** Offers as printed on the store banners. Shown on the Offers page and in the deal pop-ups. */
 export const OFFERS: OfferInfo[] = [
@@ -43,7 +49,7 @@ export const OFFERS: OfferInfo[] = [
     slideSchedule: 'tuesday',
     summary: 'Medium pizza FREE with a Large, Small pizza FREE with a Medium.',
     perks: ['Medium pizza FREE with every Large pizza', 'Small (Regular) pizza FREE with every Medium pizza'],
-    terms: DAY_DEAL_TERMS,
+    terms: TUESDAY_TERMS,
   },
   {
     key: 'friday',
@@ -53,7 +59,7 @@ export const OFFERS: OfferInfo[] = [
     slideSchedule: 'friday',
     summary: 'Buy One Get One pizza on Medium & Large pizzas.',
     perks: ['Buy 1 Medium pizza, get 1 Medium FREE', 'Buy 1 Large pizza, get 1 Large FREE'],
-    terms: DAY_DEAL_TERMS,
+    terms: FRIDAY_TERMS,
   },
   {
     key: 'lunch',
@@ -96,16 +102,88 @@ export interface DayDealResult {
   hint?: string;
 }
 
-/** Tuesday Treat / Funday Friday pizzas: hand-tossed veg & non-veg pizzas, not Simply Veg / Non-Veg. */
-const isDealPizza = (item: MenuItem) =>
+/** Day deal pizzas: veg & non-veg pizzas. Simply Veg / Non-Veg count on Tuesday only. */
+const isDealPizza = (item: MenuItem, allowSimple: boolean) =>
   (item.category === 'veg-pizza' || item.category === 'non-veg-pizza') &&
   item.id !== 'p-make-your-own' &&
-  !(item.subCategoryTitle || '').startsWith('Simple');
+  (allowSimple || !(item.subCategoryTitle || '').startsWith('Simple'));
 
 interface Unit {
   cartItemId: string;
+  item: MenuItem;
   size: PizzaSize;
+  /** What this pizza takes off the bill when it's free. */
   value: number;
+}
+
+/**
+ * Tuesday: a free pizza may cost at most what the pizza that unlocks it costs at the free size.
+ * So a Large Simple Veg frees a Simple Veg Medium (₹229 or less), while a Large Veg Special frees
+ * any Medium up to ₹449: same group or a cheaper one, veg or non-veg.
+ */
+const priceAt = (u: Unit, size: PizzaSize) => pizzaSizePrice(u.item, size);
+
+/**
+ * Pairs each free pizza with a paid one that covers it, using the smallest cover that works so the
+ * biggest covers stay open. Returns the covers left over, or null when the free pizzas can't all be paired.
+ */
+function pairFree(paid: Unit[], free: Unit[], freeSize: PizzaSize): number[] | null {
+  const covers = paid.map((p) => priceAt(p, freeSize)).sort((a, b) => a - b);
+  const needs = free.map((f) => priceAt(f, freeSize)).sort((a, b) => b - a);
+  for (const need of needs) {
+    const i = covers.findIndex((c) => c >= need);
+    if (i < 0) return null;
+    covers.splice(i, 1);
+  }
+  return covers;
+}
+
+/** The free pizzas worth the most that the paid ones can cover: most valuable first, kept if they still all pair. */
+function pickFree(paid: Unit[], candidates: Unit[], freeSize: PizzaSize): Unit[] {
+  const chosen: Unit[] = [];
+  [...candidates]
+    .sort((a, b) => b.value - a.value)
+    .forEach((c) => {
+      if (pairFree(paid, [...chosen, c], freeSize)) chosen.push(c);
+    });
+  return chosen;
+}
+
+const sum = (list: Unit[]) => list.reduce((s, u) => s + u.value, 0);
+
+/** Tuesday: Medium free with a Large, Small free with a Medium, each by the price rule above. */
+function tuesdayDeal(large: Unit[], medium: Unit[], regular: Unit[]): { free: Unit[]; hint?: string } {
+  // A Medium is either free (with a Large) or paid (and can free a Small), so try every split.
+  // Carts with a lot of Mediums use the plain best-first pick instead.
+  const splits: Unit[][] = [];
+  if (medium.length <= 10) {
+    for (let mask = 0; mask < 1 << medium.length; mask++) {
+      const freeMedium = medium.filter((_, i) => mask & (1 << i));
+      if (pairFree(large, freeMedium, 'Medium')) splits.push(freeMedium);
+    }
+  } else {
+    splits.push(pickFree(large, medium, 'Medium'));
+  }
+
+  let best = { freeMedium: [] as Unit[], freeRegular: [] as Unit[], total: -1 };
+  for (const freeMedium of splits) {
+    const paidMedium = medium.filter((m) => !freeMedium.includes(m));
+    const freeRegular = pickFree(paidMedium, regular, 'Regular');
+    const total = sum(freeMedium) + sum(freeRegular);
+    if (total > best.total) best = { freeMedium, freeRegular, total };
+  }
+
+  const { freeMedium, freeRegular } = best;
+  const paidMedium = medium.filter((m) => !freeMedium.includes(m));
+  const openLarge = pairFree(large, freeMedium, 'Medium') ?? [];
+  const openMedium = pairFree(paidMedium, freeRegular, 'Regular') ?? [];
+  let hint: string | undefined;
+  if (openLarge.length > 0) {
+    hint = `Add a Medium pizza up to ₹${Math.max(...openLarge)} — it’s FREE with your Large today`;
+  } else if (openMedium.length > 0) {
+    hint = `Add a Small (Regular) pizza up to ₹${Math.max(...openMedium)} — it’s FREE with your Medium today`;
+  }
+  return { free: [...freeMedium, ...freeRegular], hint };
 }
 
 /** Works out today's Tuesday / Friday pizza deal for the cart, or null when none is running. */
@@ -117,10 +195,12 @@ export function computeDayDeal(cart: CartItem[], menu: MenuItem[], now: Date): D
   const units: Unit[] = [];
   cart.forEach((line) => {
     const item = menu.find((m) => m.id === line.productId);
-    if (!item || !line.size || !isDealPizza(item)) return;
+    // Pan Pizzas are their own category and never count; the Pan crust on a normal pizza doesn't either.
+    // Cheese Burst / Thin Crust still count (the upgrade is charged on top).
+    if (!item || !line.size || !isDealPizza(item, tuesday) || line.crust === 'Fresh Pan Pizza') return;
     // Never more than the line itself costs (e.g. an old cart saved before a price change).
     const value = Math.min(pizzaSizePrice(item, line.size), line.price);
-    for (let i = 0; i < line.quantity; i++) units.push({ cartItemId: line.cartItemId, size: line.size, value });
+    for (let i = 0; i < line.quantity; i++) units.push({ cartItemId: line.cartItemId, item, size: line.size, value });
   });
   if (units.length === 0) return null;
 
@@ -129,17 +209,9 @@ export function computeDayDeal(cart: CartItem[], menu: MenuItem[], now: Date): D
   let hint: string | undefined;
 
   if (tuesday) {
-    // The cheapest pizzas are the free ones.
-    const cheapestFirst = (a: Unit, b: Unit) => a.value - b.value;
-    const large = ofSize('Large');
-    const medium = ofSize('Medium').sort(cheapestFirst);
-    const regular = ofSize('Regular').sort(cheapestFirst);
-    const freeMedium = medium.slice(0, Math.min(large.length, medium.length));
-    const paidMedium = medium.length - freeMedium.length;
-    const freeRegular = regular.slice(0, Math.min(paidMedium, regular.length));
-    freeUnits.push(...freeMedium, ...freeRegular);
-    if (large.length > freeMedium.length) hint = 'Add a Medium pizza — it’s FREE with your Large today';
-    else if (paidMedium > freeRegular.length) hint = 'Add a Small (Regular) pizza — it’s FREE with your Medium today';
+    const result = tuesdayDeal(ofSize('Large'), ofSize('Medium'), ofSize('Regular'));
+    freeUnits.push(...result.free);
+    hint = result.hint;
   } else {
     // Buy one get one: pair pizzas of the same size, the cheaper of each pair is free.
     (['Medium', 'Large'] as PizzaSize[]).forEach((size) => {
