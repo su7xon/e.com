@@ -30,14 +30,17 @@ const HAND_TOSSED_TERM = 'Medium & Large Hand Tossed pizzas only (not Pan Pizzas
 const CRUST_TERM = 'Upgrade to your favourite crust — charges extra';
 const AUTO_TERM = 'Applied automatically in the cart; coupons don’t stack — the bigger saving applies';
 
+const SIMPLE_TERM = 'Not on Simply Veg or Simply Non-Veg pizzas';
+
 const TUESDAY_TERMS = [
   HAND_TOSSED_TERM,
   'The free pizza is from the same group as the one you buy, or a cheaper group (veg or non-veg)',
   CRUST_TERM,
+  SIMPLE_TERM,
   AUTO_TERM,
 ];
 
-const FRIDAY_TERMS = [HAND_TOSSED_TERM, CRUST_TERM, 'Not on Simply Veg or Simply Non-Veg pizzas', AUTO_TERM];
+const FRIDAY_TERMS = [HAND_TOSSED_TERM, CRUST_TERM, SIMPLE_TERM, AUTO_TERM];
 
 /** Offers as printed on the store banners. Shown on the Offers page and in the deal pop-ups. */
 export const OFFERS: OfferInfo[] = [
@@ -102,11 +105,11 @@ export interface DayDealResult {
   hint?: string;
 }
 
-/** Day deal pizzas: veg & non-veg pizzas. Simply Veg / Non-Veg count on Tuesday only. */
-const isDealPizza = (item: MenuItem, allowSimple: boolean) =>
+/** Tuesday Treat / Funday Friday pizzas: hand-tossed veg & non-veg pizzas, not Simply Veg / Non-Veg. */
+const isDealPizza = (item: MenuItem) =>
   (item.category === 'veg-pizza' || item.category === 'non-veg-pizza') &&
   item.id !== 'p-make-your-own' &&
-  (allowSimple || !(item.subCategoryTitle || '').startsWith('Simple'));
+  !(item.subCategoryTitle || '').startsWith('Simple');
 
 interface Unit {
   cartItemId: string;
@@ -118,8 +121,8 @@ interface Unit {
 
 /**
  * Tuesday: a free pizza may cost at most what the pizza that unlocks it costs at the free size.
- * So a Large Simple Veg frees a Simple Veg Medium (₹229 or less), while a Large Veg Special frees
- * any Medium up to ₹449: same group or a cheaper one, veg or non-veg.
+ * So a Large Classic Veg frees a Classic Veg Medium (₹349 or less), while a Large Veg Special frees
+ * any Medium up to ₹449: same group or a cheaper one, veg or non-veg. Simple pizzas never count.
  */
 const priceAt = (u: Unit, size: PizzaSize) => pizzaSizePrice(u.item, size);
 
@@ -197,7 +200,7 @@ export function computeDayDeal(cart: CartItem[], menu: MenuItem[], now: Date): D
     const item = menu.find((m) => m.id === line.productId);
     // Pan Pizzas are their own category and never count; the Pan crust on a normal pizza doesn't either.
     // Cheese Burst / Thin Crust still count (the upgrade is charged on top).
-    if (!item || !line.size || !isDealPizza(item, tuesday) || line.crust === 'Fresh Pan Pizza') return;
+    if (!item || !line.size || !isDealPizza(item) || line.crust === 'Fresh Pan Pizza') return;
     // Never more than the line itself costs (e.g. an old cart saved before a price change).
     const value = Math.min(pizzaSizePrice(item, line.size), line.price);
     for (let i = 0; i < line.quantity; i++) units.push({ cartItemId: line.cartItemId, item, size: line.size, value });
